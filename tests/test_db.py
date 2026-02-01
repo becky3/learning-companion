@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.db.models import Article, Base, Conversation, Feed, UserProfile
+from src.db import session as session_mod
 
 
 @pytest.fixture
@@ -67,3 +68,34 @@ async def test_ac4_conversation(session: AsyncSession) -> None:
     result = await session.execute(select(Conversation))
     c = result.scalar_one()
     assert c.role == "user"
+
+
+async def test_ac5_init_db_and_get_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AC5: init_db/get_session 経由でテーブル作成とセッション取得ができる."""
+    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+
+    # グローバル状態をリセット
+    session_mod._engine = None
+    session_mod._session_factory = None
+    from src.config.settings import get_settings
+    get_settings.cache_clear()
+
+    try:
+        await session_mod.init_db()
+
+        gen = session_mod.get_session()
+        s = await gen.__anext__()
+        try:
+            s.add(Feed(url="https://test.com/rss", name="Test"))
+            await s.commit()
+            result = await s.execute(select(Feed))
+            assert result.scalar_one().name == "Test"
+        finally:
+            await gen.aclose()
+    finally:
+        # クリーンアップ
+        if session_mod._engine is not None:
+            await session_mod._engine.dispose()
+        session_mod._engine = None
+        session_mod._session_factory = None
+        get_settings.cache_clear()

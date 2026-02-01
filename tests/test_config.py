@@ -4,19 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from src.config.settings import Settings, load_assistant_config
 
 
-def test_ac1_settings_loads_from_env(monkeypatch: object) -> None:
+def test_ac1_settings_loads_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """AC1: pydantic-settingsで.envから全設定値を読み込める."""
-    import pytest
-
-    mp = pytest.MonkeyPatch()
-    mp.setenv("SLACK_BOT_TOKEN", "xoxb-test")
-    mp.setenv("OPENAI_API_KEY", "sk-test")
-    mp.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
-    mp.setenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
-    mp.setenv("ONLINE_LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
+    monkeypatch.setenv("ONLINE_LLM_PROVIDER", "anthropic")
 
     s = Settings()
     assert s.slack_bot_token == "xoxb-test"
@@ -24,7 +23,6 @@ def test_ac1_settings_loads_from_env(monkeypatch: object) -> None:
     assert s.anthropic_api_key == "sk-ant-test"
     assert s.database_url == "sqlite+aiosqlite:///./test.db"
     assert s.online_llm_provider == "anthropic"
-    mp.undo()
 
 
 def test_ac2_all_config_sections_present() -> None:
