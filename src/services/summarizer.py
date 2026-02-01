@@ -32,7 +32,11 @@ class Summarizer:
             response = await self._llm.complete([
                 Message(role="user", content=prompt),
             ])
-            return response.content.strip()
+            content = response.content.strip()
+            if not content:
+                logger.warning("LLM returned empty summary for article: %s", url)
+                return title
+            return content
         except Exception:
             logger.exception("Failed to summarize article: %s", url)
-            return ""
+            return title

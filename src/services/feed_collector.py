@@ -4,8 +4,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from time import mktime
 
 import feedparser
@@ -57,28 +58,32 @@ class FeedCollector:
 
     async def _collect_feed(self, feed: Feed) -> list[Article]:
         """単一フィードから記事を収集する."""
-        parsed = feedparser.parse(feed.url)
+        parsed = await asyncio.to_thread(feedparser.parse, feed.url)
         articles: list[Article] = []
 
         async with self._session_factory() as session:
+            # エントリ内の全URLを収集し、一括で既存記事を取得する
+            urls = [entry.get("link", "") for entry in parsed.entries if entry.get("link")]
+            existing_urls: set[str] = set()
+            if urls:
+                result = await session.execute(
+                    select(Article.url).where(Article.url.in_(urls))
+                )
+                existing_urls = set(result.scalars().all())
+
+            new_articles: list[Article] = []
             for entry in parsed.entries:
                 url = entry.get("link", "")
-                if not url:
-                    continue
-
-                # 重複チェック
-                existing = await session.execute(
-                    select(Article).where(Article.url == url)
-                )
-                if existing.scalar_one_or_none() is not None:
+                if not url or url in existing_urls:
                     continue
 
                 title = entry.get("title", "")
                 published_at = None
                 if hasattr(entry, "published_parsed") and entry.published_parsed:
-                    published_at = datetime.fromtimestamp(mktime(entry.published_parsed))
+                    published_at = datetime.fromtimestamp(
+                        mktime(entry.published_parsed), tz=timezone.utc
+                    )
 
-                # 要約生成
                 summary = await self._summarizer.summarize(title, url)
 
                 article = Article(
@@ -89,8 +94,9 @@ class FeedCollector:
                     published_at=published_at,
                 )
                 session.add(article)
-                articles.append(article)
+                new_articles.append(article)
 
             await session.commit()
+            articles.extend(new_articles)
 
         return articles

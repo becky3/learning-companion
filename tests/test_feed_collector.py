@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -53,7 +52,8 @@ async def test_ac1_rss_feed_is_fetched_and_parsed(db_factory) -> None:  # type: 
     ])
 
     with patch("src.services.feed_collector.feedparser.parse", return_value=parsed):
-        articles = await collector.collect_all()
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            articles = await collector.collect_all()
 
     assert len(articles) == 1
     assert articles[0].title == "Article 1"
@@ -79,7 +79,8 @@ async def test_ac2_duplicate_articles_skipped(db_factory) -> None:  # type: igno
     ])
 
     with patch("src.services.feed_collector.feedparser.parse", return_value=parsed):
-        articles = await collector.collect_all()
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            articles = await collector.collect_all()
 
     assert len(articles) == 1
     assert articles[0].url == "https://example.com/new"
@@ -97,7 +98,8 @@ async def test_ac3_articles_are_summarized_by_local_llm(db_factory) -> None:  # 
     ])
 
     with patch("src.services.feed_collector.feedparser.parse", return_value=parsed):
-        await collector.collect_all()
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            await collector.collect_all()
 
     summarizer.summarize.assert_called_once_with("Test", "https://example.com/a")
 
@@ -129,7 +131,8 @@ async def test_ac8_rss_failure_continues_other_feeds(db_factory) -> None:  # typ
         return good_parsed
 
     with patch("src.services.feed_collector.feedparser.parse", side_effect=mock_parse):
-        articles = await collector.collect_all()
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            articles = await collector.collect_all()
 
     # bad フィードが失敗しても good フィードの記事は収集される
     assert len(articles) == 1

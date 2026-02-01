@@ -5,7 +5,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
@@ -16,13 +17,19 @@ from src.services.feed_collector import FeedCollector
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_TZ = ZoneInfo("Asia/Tokyo")
 
-def format_daily_digest(articles: list[Article], feeds: dict[int, Feed]) -> str:
+
+def format_daily_digest(
+    articles: list[Article],
+    feeds: dict[int, Feed],
+    tz: ZoneInfo = DEFAULT_TZ,
+) -> str:
     """カテゴリ別にフォーマットされた配信メッセージを生成する."""
     if not articles:
         return ""
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = datetime.now(tz=tz).strftime("%Y-%m-%d")
     lines = [f":newspaper: 今日の学習ニュース ({today})", ""]
 
     # カテゴリ別にグループ化
@@ -35,7 +42,11 @@ def format_daily_digest(articles: list[Article], feeds: dict[int, Feed]) -> str:
     for category, cat_articles in by_category.items():
         lines.append(f"【{category}】")
         for a in cat_articles:
-            summary = a.summary[:100] + "..." if len(a.summary) > 100 else a.summary
+            raw_summary = (a.summary or "").strip()
+            if not raw_summary:
+                summary = "要約なし"
+            else:
+                summary = raw_summary[:100] + "..." if len(raw_summary) > 100 else raw_summary
             lines.append(f"• *{a.title}* - {summary}")
             lines.append(f"  :link: {a.url}")
         lines.append("")
@@ -53,29 +64,31 @@ async def daily_collect_and_deliver(
     """毎朝の収集・配信ジョブ."""
     logger.info("Starting daily feed collection and delivery")
 
-    # 記事収集
-    articles = await collector.collect_all()
+    try:
+        # 記事収集（副作用でDBに保存される）
+        await collector.collect_all()
 
-    # 直近24時間の記事を取得してフォーマット
-    since = datetime.now() - timedelta(hours=24)
-    async with session_factory() as session:
-        result = await session.execute(
-            select(Article).where(Article.collected_at >= since)
-        )
-        recent_articles = list(result.scalars().all())
+        # 直近24時間の記事を取得してフォーマット
+        since = datetime.now(tz=timezone.utc) - timedelta(hours=24)
+        async with session_factory() as session:
+            result = await session.execute(
+                select(Article).where(Article.collected_at >= since)
+            )
+            recent_articles = list(result.scalars().all())
 
-        # フィード情報を取得
-        feed_result = await session.execute(select(Feed))
-        feeds = {f.id: f for f in feed_result.scalars().all()}
+            feed_result = await session.execute(select(Feed))
+            feeds = {f.id: f for f in feed_result.scalars().all()}
 
-    if not recent_articles:
-        logger.info("No new articles to deliver")
-        return
+        if not recent_articles:
+            logger.info("No new articles to deliver")
+            return
 
-    message = format_daily_digest(recent_articles, feeds)
-    if message:
-        await slack_client.chat_postMessage(channel=channel_id, text=message)  # type: ignore[union-attr]
-        logger.info("Delivered %d articles to %s", len(recent_articles), channel_id)
+        message = format_daily_digest(recent_articles, feeds)
+        if message:
+            await slack_client.chat_postMessage(channel=channel_id, text=message)  # type: ignore[union-attr]
+            logger.info("Delivered %d articles to %s", len(recent_articles), channel_id)
+    except Exception:
+        logger.exception("Error in daily_collect_and_deliver job")
 
 
 def setup_scheduler(
