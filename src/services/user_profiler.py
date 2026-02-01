@@ -54,9 +54,35 @@ class UserProfiler:
             logger.warning("Failed to parse LLM response as JSON: %s", response.content)
             return
 
-        interests: list[str] = data.get("interests", [])
-        skills: list[dict[str, str]] = data.get("skills", [])
-        goals: list[str] = data.get("goals", [])
+        if not isinstance(data, dict):
+            logger.warning("LLM response JSON is not an object: %r", data)
+            return
+
+        # 型バリデーション付きで抽出
+        raw_interests = data.get("interests", [])
+        interests: list[str] = (
+            [v for v in raw_interests if isinstance(v, str)]
+            if isinstance(raw_interests, list)
+            else []
+        )
+
+        raw_skills = data.get("skills", [])
+        skills: list[dict[str, str]] = []
+        if isinstance(raw_skills, list):
+            for item in raw_skills:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name")
+                level = item.get("level")
+                if isinstance(name, str) and isinstance(level, str):
+                    skills.append({"name": name, "level": level})
+
+        raw_goals = data.get("goals", [])
+        goals: list[str] = (
+            [v for v in raw_goals if isinstance(v, str)]
+            if isinstance(raw_goals, list)
+            else []
+        )
 
         if not interests and not skills and not goals:
             return
@@ -118,16 +144,20 @@ class UserProfiler:
         if not interests and not skills and not goals:
             return None
 
-        skills_str = ", ".join(
-            f"{s['name']} ({s['level']})" for s in skills
+        interests_str = ", ".join(interests) if interests else "なし"
+        skills_str = (
+            ", ".join(f"{s['name']} ({s['level']})" for s in skills)
+            if skills
+            else "なし"
         )
+        goals_str = "、".join(goals) if goals else "なし"
 
         return (
             ":bust_in_silhouette: あなたのプロファイル\n"
             "\n"
-            f"【興味】{', '.join(interests)}\n"
+            f"【興味】{interests_str}\n"
             f"【スキル】{skills_str}\n"
-            f"【目標】{'、'.join(goals)}\n"
+            f"【目標】{goals_str}\n"
             "\n"
             ":pencil2: 修正したい場合は教えてね！"
         )
@@ -148,7 +178,15 @@ def _merge_skills(
     existing: list[dict[str, str]], new: list[dict[str, str]]
 ) -> list[dict[str, str]]:
     """スキルリストをマージする。同名スキルはレベルを更新する."""
-    by_name: dict[str, dict[str, str]] = {s["name"]: s for s in existing}
+    by_name: dict[str, dict[str, str]] = {}
+    for s in existing:
+        name = s.get("name")
+        if not name:
+            continue
+        by_name[name] = s
     for skill in new:
-        by_name[skill["name"]] = skill
+        name = skill.get("name")
+        if not name:
+            continue
+        by_name[name] = skill
     return list(by_name.values())

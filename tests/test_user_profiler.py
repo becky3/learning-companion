@@ -166,6 +166,45 @@ async def test_ac5_json_parse_failure_skips(db_session_factory) -> None:  # type
         assert result.scalar_one_or_none() is None
 
 
+async def test_ac5_malformed_types_are_filtered(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC5: LLMがJSON構造は正しいが型が不正な場合、不正データをフィルタする."""
+    llm = AsyncMock()
+    llm.complete.return_value = _make_llm_response({
+        "interests": {"not": "a list"},
+        "skills": ["not a dict", {"name": "Python"}],  # level missing
+        "goals": [123, "有効な目標"],
+    })
+
+    profiler = UserProfiler(llm=llm, session_factory=db_session_factory)
+    await profiler.extract_profile("U999", "test")
+
+    async with db_session_factory() as session:
+        result = await session.execute(
+            select(UserProfile).where(UserProfile.slack_user_id == "U999")
+        )
+        profile = result.scalar_one()
+        assert json.loads(profile.interests) == []
+        assert json.loads(profile.skills) == []
+        assert json.loads(profile.goals) == ["有効な目標"]
+
+
+async def test_ac4_get_profile_returns_none_for_empty_arrays(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC4: DBにプロファイルが存在するが全フィールドが空配列の場合Noneを返す."""
+    async with db_session_factory() as session:
+        session.add(UserProfile(
+            slack_user_id="UEMPTY",
+            interests=json.dumps([]),
+            skills=json.dumps([]),
+            goals=json.dumps([]),
+        ))
+        await session.commit()
+
+    llm = AsyncMock()
+    profiler = UserProfiler(llm=llm, session_factory=db_session_factory)
+    result = await profiler.get_profile("UEMPTY")
+    assert result is None
+
+
 async def test_ac4_profile_keyword_handler() -> None:
     """AC4: プロファイル確認キーワードでget_profileが呼ばれる."""
     from src.slack.handlers import register_handlers
