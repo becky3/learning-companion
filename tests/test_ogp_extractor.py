@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import aiohttp
-import pytest
-
 from src.services.ogp_extractor import OgpExtractor
 
 

@@ -43,6 +43,9 @@ def _build_category_blocks(
         summary = (a.summary or "").strip()
         if not summary:
             summary = "要約なし"
+        # Slack Block Kit mrkdwnテキスト上限 (3000文字)
+        if len(summary) > 2900:
+            summary = summary[:2900] + "..."
 
         # 記事番号付きタイトル（リンク付き）
         blocks.append({
@@ -166,17 +169,23 @@ async def daily_collect_and_deliver(
                     text=f"【{category}】",
                     blocks=blocks,
                 )
-            except Exception:
-                # 画像ブロックが原因の場合、画像を除去してリトライ
-                blocks_without_images = [b for b in blocks if b.get("type") != "image"]
-                logger.warning(
-                    "Failed to post %s with images, retrying without images", category
-                )
-                await slack_client.chat_postMessage(  # type: ignore[attr-defined]
-                    channel=channel_id,
-                    text=f"【{category}】",
-                    blocks=blocks_without_images,
-                )
+            except Exception as exc:
+                error_msg = str(exc)
+                if "invalid_blocks" in error_msg or "downloading image" in error_msg:
+                    # 画像ダウンロード失敗の場合、画像を除去してリトライ
+                    blocks_without_images = [b for b in blocks if b.get("type") != "image"]
+                    logger.warning(
+                        "Failed to post %s with images, retrying without images: %s",
+                        category, error_msg,
+                    )
+                    await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+                        channel=channel_id,
+                        text=f"【{category}】",
+                        blocks=blocks_without_images,
+                    )
+                else:
+                    logger.error("Failed to post %s: %s", category, error_msg)
+                    raise
 
         # フッターメッセージ
         await slack_client.chat_postMessage(  # type: ignore[attr-defined]

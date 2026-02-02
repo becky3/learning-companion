@@ -76,7 +76,7 @@ class OgpExtractor:
         enclosures = entry.get("enclosures")
         if enclosures and isinstance(enclosures, list):
             for enc in enclosures:
-                if isinstance(enc, dict) and enc.get("type", "").startswith("image"):
+                if isinstance(enc, dict) and str(enc.get("type") or "").startswith("image"):
                     if enc.get("href"):
                         return str(enc["href"])
 
