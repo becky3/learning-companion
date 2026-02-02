@@ -72,7 +72,6 @@ def _build_category_blocks(
 def format_daily_digest(
     articles: list[Article],
     feeds: dict[int, Feed],
-    tz: ZoneInfo = DEFAULT_TZ,
     max_articles_per_category: int = 10,
 ) -> dict[str, list[dict[str, Any]]]:
     """カテゴリ別にBlock Kit blocksを生成する.

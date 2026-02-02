@@ -116,7 +116,8 @@ async def test_deliver_keyword_triggers_manual_delivery() -> None:
         await handlers["app_mention"](event=event, say=say)
 
     mock_deliver.assert_called_once_with(
-        collector, session_factory, slack_client, channel_id
+        collector, session_factory, slack_client, channel_id,
+        max_articles_per_category=10,
     )
     # First call: "配信を開始します...", second: "配信が完了しました"
     assert say.call_count == 2

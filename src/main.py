@@ -78,6 +78,7 @@ async def main() -> None:
         session_factory=session_factory,
         slack_client=slack_client,
         channel_id=settings.slack_news_channel_id,
+        max_articles_per_category=settings.feed_articles_per_category,
     )
 
     # Socket Mode で起動

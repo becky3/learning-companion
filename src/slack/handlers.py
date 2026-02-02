@@ -41,6 +41,7 @@ def register_handlers(
     session_factory: async_sessionmaker[AsyncSession] | None = None,
     slack_client: object | None = None,
     channel_id: str | None = None,
+    max_articles_per_category: int = 10,
 ) -> None:
     """app_mention ハンドラを登録する."""
 
@@ -81,7 +82,8 @@ def register_handlers(
             try:
                 await say(text="配信を開始します...", thread_ts=thread_ts)  # type: ignore[operator]
                 await daily_collect_and_deliver(
-                    collector, session_factory, slack_client, channel_id
+                    collector, session_factory, slack_client, channel_id,
+                    max_articles_per_category=max_articles_per_category,
                 )
                 await say(text="配信が完了しました", thread_ts=thread_ts)  # type: ignore[operator]
             except Exception:
