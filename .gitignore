@@ -33,6 +33,7 @@ Thumbs.db
 .claude/*
 !.claude/hooks.json
 !.claude/scripts/
+!.claude/skills/
 
 # Testing
 .pytest_cache/
