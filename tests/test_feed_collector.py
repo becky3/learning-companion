@@ -110,6 +110,25 @@ async def test_ac3_articles_are_summarized_by_local_llm(db_factory) -> None:  # 
         assert article.summary == "LLMによる要約"
 
 
+async def test_ac3_description_fallback_when_no_summary(db_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC3: summaryが無くdescriptionのみの場合、descriptionがSummarizerに渡される."""
+    summarizer = AsyncMock(spec=Summarizer)
+    summarizer.summarize.return_value = "LLMによる要約"
+
+    collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
+
+    # summaryキーなし、descriptionのみ
+    parsed = _make_parsed_feed([
+        {"link": "https://example.com/desc", "title": "Desc Test", "description": "descriptionの内容"},
+    ])
+
+    with patch("src.services.feed_collector.feedparser.parse", return_value=parsed):
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            await collector.collect_all()
+
+    summarizer.summarize.assert_called_once_with("Desc Test", "https://example.com/desc", "descriptionの内容")
+
+
 async def test_ac8_rss_failure_continues_other_feeds(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC8: RSS取得失敗時はログ記録し他フィードの処理を継続する."""
     # 2つ目のフィードを追加
