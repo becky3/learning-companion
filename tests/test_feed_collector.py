@@ -95,14 +95,14 @@ async def test_ac3_articles_are_summarized_by_local_llm(db_factory) -> None:  # 
     collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
 
     parsed = _make_parsed_feed([
-        {"link": "https://example.com/a", "title": "Test"},
+        {"link": "https://example.com/a", "title": "Test", "summary": "記事の概要"},
     ])
 
     with patch("src.services.feed_collector.feedparser.parse", return_value=parsed):
         with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
             await collector.collect_all()
 
-    summarizer.summarize.assert_called_once_with("Test", "https://example.com/a")
+    summarizer.summarize.assert_called_once_with("Test", "https://example.com/a", "記事の概要")
 
     async with db_factory() as session:
         result = await session.execute(select(Article).where(Article.url == "https://example.com/a"))
