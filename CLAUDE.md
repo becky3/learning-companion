@@ -171,6 +171,9 @@ PRに対するレビュー指摘（Copilot、人間問わず）を修正した�
 **詳細な仕様**: 各サブエージェントの仕様書を参照してください。
 
 **利用可能なサブエージェント**:
+- **planner**: Issue・提案内容から実装計画を立案
+  - 仕様: `docs/specs/planner-agent.md`
+  - 使用例: `plannerサブエージェントを使用してIssue #42 の実装計画を立ててください`
 - **doc-reviewer**: 仕様書（`docs/specs/*.md`）の品質レビュー
   - 仕様: `docs/specs/doc-review-agent.md`
   - 使用例: `doc-reviewerサブエージェントを使用して docs/specs/f1-chat.md をレビューしてください`
@@ -179,5 +182,6 @@ PRに対するレビュー指摘（Copilot、人間問わず）を修正した�
   - 使用例: `test-runnerサブエージェントで全テストを実行してください`
 
 **サブエージェント定義ファイル**:
+- `.claude/agents/planner.md`: plannerサブエージェント定義
 - `.claude/agents/doc-reviewer.md`: doc-reviewerサブエージェント定義
 - `.claude/agents/test-runner.md`: test-runnerサブエージェント定義
