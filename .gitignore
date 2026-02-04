@@ -30,7 +30,10 @@ ENV/
 Thumbs.db
 
 # Claude Code
-# .claude directory is tracked for project configuration (skills, hooks, scripts)
+.claude/
+!.claude/settings.json
+!.claude/scripts/
+!.claude/skills/
 
 # Testing
 .pytest_cache/
