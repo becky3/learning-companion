@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.db.models import Article, Base, Feed
-from src.services.feed_collector import FeedCollector
+from src.services.feed_collector import FeedCollector, strip_html
 from src.services.ogp_extractor import OgpExtractor
 from src.services.summarizer import Summarizer
 
@@ -413,3 +413,48 @@ async def test_ac7_13_add_feed_default_category(db_factory) -> None:  # type: ig
     feed = await collector.add_feed("https://default.com/rss", "Default Feed")
 
     assert feed.category == "一般"
+
+
+# --- strip_html テスト ---
+
+
+def test_strip_html_removes_tags() -> None:
+    """HTMLタグが除去されプレーンテキストになる."""
+    html = '<div class="item"><p>Hello</p><a href="https://example.com">link</a></div>'
+    assert strip_html(html) == "Hello link"
+
+
+def test_strip_html_decodes_entities() -> None:
+    """HTMLエンティティがデコードされる."""
+    assert strip_html("A &amp; B &lt; C") == "A & B < C"
+
+
+def test_strip_html_normalizes_whitespace() -> None:
+    """連続する空白が1つに正規化される."""
+    assert strip_html("  hello   world  ") == "hello world"
+
+
+def test_strip_html_plain_text_unchanged() -> None:
+    """プレーンテキストはそのまま返される."""
+    text = "これはプレーンテキストです。HTMLタグを含みません。"
+    assert strip_html(text) == text
+
+
+def test_strip_html_empty_string() -> None:
+    """空文字列は空文字列のまま返される."""
+    assert strip_html("") == ""
+
+
+def test_strip_html_medium_like_content() -> None:
+    """Medium RSS風のHTMLコンテンツからスニペットが抽出される."""
+    html = (
+        '<div class="medium-feed-item">'
+        '<p class="medium-feed-snippet">記事の概要テキスト</p>'
+        '<p class="medium-feed-link">'
+        '<a href="https://medium.com/article">Continue reading</a>'
+        "</p></div>"
+    )
+    result = strip_html(html)
+    assert "記事の概要テキスト" in result
+    assert "<" not in result
+    assert ">" not in result
