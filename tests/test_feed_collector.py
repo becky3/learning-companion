@@ -458,3 +458,35 @@ def test_strip_html_medium_like_content() -> None:
     assert "記事の概要テキスト" in result
     assert "<" not in result
     assert ">" not in result
+
+
+async def test_collect_feed_strips_html_from_description(db_factory) -> None:  # type: ignore[no-untyped-def]
+    """collect_all がHTMLを含むRSS summaryからHTMLを除去してsummarizerに渡す."""
+    summarizer = AsyncMock(spec=Summarizer)
+    summarizer.summarize.return_value = "LLMによる要約"
+
+    collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
+
+    html_summary = (
+        '<div class="medium-feed-item">'
+        '<p class="medium-feed-snippet">記事の概要テキスト</p>'
+        '<p class="medium-feed-link">'
+        '<a href="https://medium.com/article?source=rss">Continue reading</a>'
+        "</p></div>"
+    )
+    parsed = _make_parsed_feed([
+        {"link": "https://example.com/html-article", "title": "HTML Article", "summary": html_summary},
+    ])
+
+    with patch("src.services.feed_collector.feedparser.parse", return_value=parsed):
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            await collector.collect_all()
+
+    # summarizer に渡された description にHTMLタグが含まれないことを確認
+    summarizer.summarize.assert_called_once()
+    _title, _url, description = summarizer.summarize.call_args[0]
+    assert "<" not in description
+    assert ">" not in description
+    assert "medium-feed-item" not in description
+    assert "href=" not in description
+    assert "記事の概要テキスト" in description
