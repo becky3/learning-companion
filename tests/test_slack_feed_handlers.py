@@ -89,10 +89,11 @@ def test_parse_feed_command_invalid() -> None:
 
 
 def test_parse_feed_command_invalid_url_no_domain() -> None:
-    """feedコマンド解析: ドメインなしURLはURLとして認識されない."""
+    """feedコマンド解析: ドメインなしURLはURLとしてもカテゴリとしても認識されない."""
     subcommand, urls, category = _parse_feed_command("feed add https://")
     assert subcommand == "add"
     assert urls == []
+    assert category == "一般"
 
 
 def test_parse_feed_command_slack_url_format() -> None:
