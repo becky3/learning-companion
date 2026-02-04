@@ -71,14 +71,12 @@ uv run pytest -vv  # さらに詳細
 
 #### 5. カバレッジ測定
 
-カバレッジ測定やレポート生成の具体的なコマンドは、この仕様では固定しない。プロジェクトで採用しているカバレッジツール（例: pytest-cov）と、`pyproject.toml` や開発ドキュメントに記載されたコマンドに従って実行すること。
-
-**例（pytest-cov が導入されている場合）:**
+pytest-cov によるカバレッジレポート生成:
 ```bash
 uv run pytest --cov=src --cov-report=term-missing
 ```
 
-> **注意**: カバレッジ測定には別途 pytest-cov 等のパッケージが必要。未導入の場合はユーザーにその旨を報告すること。
+> **前提**: `pyproject.toml` の dev 依存に `pytest-cov>=5.0,<6` が含まれていること。
 
 ### 処理フロー
 
