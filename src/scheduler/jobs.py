@@ -28,6 +28,9 @@ def _build_category_blocks(
     layout: Literal["vertical", "horizontal"] = "horizontal",
 ) -> list[dict[str, Any]]:
     """1カテゴリ分の Block Kit blocks を構築する."""
+    if layout not in ("vertical", "horizontal"):
+        msg = f"Invalid layout: {layout!r}. Must be 'vertical' or 'horizontal'."
+        raise ValueError(msg)
     display_articles = articles[:max_articles]
     blocks: list[dict[str, Any]] = [
         {
@@ -44,17 +47,19 @@ def _build_category_blocks(
         summary = (a.summary or "").strip()
         if not summary:
             summary = "要約なし"
-        # Slack Block Kit mrkdwnテキスト上限 (3000文字)
-        if len(summary) > 2900:
-            summary = summary[:2900] + "..."
 
         if layout == "horizontal":
             # 横長形式: タイトル+要約を1つのsectionにまとめ、画像をaccessoryとして右側配置
+            # タイトル部分の長さも加味して mrkdwn 上限 (3000文字) を超えないようにする
+            title_part = f":newspaper: *<{a.url}|{a.title}>*\n\n"
+            max_summary = 3000 - len(title_part) - 10  # 余裕を持たせる
+            if len(summary) > max_summary:
+                summary = summary[:max_summary] + "..."
             section: dict[str, Any] = {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f":newspaper: *<{a.url}|{a.title}>*\n\n{summary}",
+                    "text": f"{title_part}{summary}",
                 },
             }
             if a.image_url:
@@ -66,6 +71,9 @@ def _build_category_blocks(
             blocks.append(section)
         else:
             # 縦長形式: タイトル→独立imageブロック→要約
+            # Slack Block Kit mrkdwnテキスト上限 (3000文字)
+            if len(summary) > 2900:
+                summary = summary[:2900] + "..."
             blocks.append({
                 "type": "section",
                 "text": {
@@ -198,7 +206,14 @@ async def daily_collect_and_deliver(
                 error_msg = str(exc)
                 if "invalid_blocks" in error_msg or "downloading image" in error_msg:
                     # 画像ダウンロード失敗の場合、画像を除去してリトライ
-                    blocks_without_images = [b for b in blocks if b.get("type") != "image"]
+                    # 独立imageブロック除去 + section accessory画像も除去
+                    blocks_without_images = []
+                    for b in blocks:
+                        if b.get("type") == "image":
+                            continue
+                        if "accessory" in b:
+                            b = {k: v for k, v in b.items() if k != "accessory"}
+                        blocks_without_images.append(b)
                     logger.warning(
                         "Failed to post %s with images, retrying without images: %s",
                         category, error_msg,

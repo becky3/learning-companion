@@ -441,16 +441,49 @@ def test_ac12_6_format_daily_digest_passes_layout() -> None:
     assert len(image_blocks) == 1
 
 
-def test_ac12_7_manual_deliver_uses_layout(db_factory) -> None:
-    """AC12.7: 手動配信コマンドも設定された形式で配信される（既存テストで暗黙的に確認）."""
-    # このテストは format_daily_digest のデフォルト layout が正しく動作することを検証
-    feeds = {1: Feed(id=1, url="https://a.com/rss", name="A", category="Python")}
-    articles = [
-        _make_article(1, "Title", "https://a.com/1", "summary"),
-    ]
-    # デフォルト（horizontal）で正常に動作する
-    result = format_daily_digest(articles, feeds)
-    assert "Python" in result
+async def test_ac12_7_manual_deliver_uses_layout() -> None:
+    """AC12.7: 手動配信コマンドで register_handlers の layout が daily_collect_and_deliver に渡される."""
+    from unittest.mock import patch
+
+    from src.slack.handlers import register_handlers
+
+    chat_service = AsyncMock()
+    collector = AsyncMock()
+    session_factory = AsyncMock()
+    slack_client = AsyncMock()
+    channel_id = "C_TEST"
+
+    app = AsyncMock()
+    handlers: dict = {}
+
+    def capture_event(event_type: str):  # type: ignore[no-untyped-def]
+        def decorator(func):  # type: ignore[no-untyped-def]
+            handlers[event_type] = func
+            return func
+        return decorator
+
+    app.event = capture_event
+    register_handlers(
+        app, chat_service,
+        collector=collector,
+        session_factory=session_factory,
+        slack_client=slack_client,
+        channel_id=channel_id,
+        feed_card_layout="vertical",
+    )
+
+    say = AsyncMock()
+    event = {"user": "U123", "text": "<@UBOT> deliver", "ts": "123.456"}
+
+    mock_deliver = AsyncMock()
+    with patch("src.scheduler.jobs.daily_collect_and_deliver", mock_deliver):
+        await handlers["app_mention"](event=event, say=say)
+
+    mock_deliver.assert_called_once_with(
+        collector, session_factory, slack_client, channel_id,
+        max_articles_per_category=10,
+        layout="vertical",
+    )
 
 
 def test_ac12_8_invalid_layout_raises_validation_error() -> None:
