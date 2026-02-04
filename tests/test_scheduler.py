@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import select
@@ -105,7 +105,7 @@ def test_ac4_scheduler_registers_cron_job() -> None:
         channel_id="C123",
         hour=7,
         minute=30,
-        timezone="Asia/Tokyo",
+        tz="Asia/Tokyo",
     )
 
     jobs = scheduler.get_jobs()
