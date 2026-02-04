@@ -8,6 +8,7 @@ import asyncio
 import logging
 import re
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 from slack_bolt.async_app import AsyncApp
 
@@ -41,7 +42,7 @@ def _parse_feed_command(text: str) -> tuple[str, list[str], str]:
 
     Returns:
         (サブコマンド, URLリスト, カテゴリ名) のタプル
-        カテゴリ名は add の場合のみ有効、それ以外は空文字列
+        カテゴリ名は add の場合のみ使用されるが、全コマンドで解析される。カテゴリトークンが無い場合は「一般」となる。
     """
     tokens = text.split()
     if len(tokens) < 2:
@@ -53,7 +54,11 @@ def _parse_feed_command(text: str) -> tuple[str, list[str], str]:
 
     for token in tokens[2:]:
         if token.startswith("http://") or token.startswith("https://"):
-            urls.append(token)
+            parsed = urlparse(token)
+            if parsed.netloc:
+                urls.append(token)
+            else:
+                category_tokens.append(token)
         else:
             category_tokens.append(token)
 
@@ -86,6 +91,9 @@ async def _handle_feed_list(collector: FeedCollector) -> str:
     """フィード一覧表示処理."""
     enabled, disabled = await collector.list_feeds()
 
+    if not enabled and not disabled:
+        return "フィードが登録されていません"
+
     lines: list[str] = []
     if enabled:
         lines.append("**有効なフィード:**")
@@ -99,7 +107,7 @@ async def _handle_feed_list(collector: FeedCollector) -> str:
         for feed in disabled:
             lines.append(f"• {feed.url} — {feed.category}")
 
-    return "\n".join(lines) if lines else "フィードが登録されていません"
+    return "\n".join(lines)
 
 
 async def _handle_feed_delete(collector: FeedCollector, urls: list[str]) -> str:
@@ -197,8 +205,9 @@ def register_handlers(
             return
 
         # feedコマンド (F2 - AC7)
+        lower_text = cleaned_text.lower().lstrip()
         if collector is not None and any(
-            kw in cleaned_text.lower() for kw in _FEED_KEYWORDS
+            re.match(rf"^{re.escape(kw)}\b", lower_text) for kw in _FEED_KEYWORDS
         ):
             subcommand, urls, category = _parse_feed_command(cleaned_text)
 

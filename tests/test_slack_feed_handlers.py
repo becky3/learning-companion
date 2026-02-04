@@ -88,6 +88,13 @@ def test_parse_feed_command_invalid() -> None:
     assert category == ""
 
 
+def test_parse_feed_command_invalid_url_no_domain() -> None:
+    """feedコマンド解析: ドメインなしURLはURLとして認識されない."""
+    subcommand, urls, category = _parse_feed_command("feed add https://")
+    assert subcommand == "add"
+    assert urls == []
+
+
 @pytest.mark.asyncio
 async def test_handle_feed_add_success() -> None:
     """feedハンドラ: add成功."""
@@ -164,7 +171,7 @@ async def test_handle_feed_list_empty() -> None:
 
     result = await _handle_feed_list(collector)
 
-    assert "有効なフィードはありません" in result
+    assert "フィードが登録されていません" in result
 
 
 @pytest.mark.asyncio
