@@ -2,7 +2,7 @@
 name: planner
 description: Issue・提案内容から実装計画を立案する専門家。仕様書テンプレートに基づき、技術仕様・受け入れ条件・テスト方針を含む詳細な実装計画を作成する。
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 permissionMode: default
 ---
 
