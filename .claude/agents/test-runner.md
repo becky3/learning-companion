@@ -44,9 +44,14 @@ uv run pytest -vv  # さらに詳細
 
 ### 5. カバレッジ測定
 
+カバレッジ測定にはプロジェクトで採用しているカバレッジツールを使用する。
+
+**例（pytest-cov が導入されている場合）:**
 ```bash
 uv run pytest --cov=src --cov-report=term-missing
 ```
+
+> **注意**: pytest-cov 等のカバレッジツールが未導入の場合は、ユーザーにその旨を報告すること。
 
 ## 実行プロセス
 
@@ -172,7 +177,7 @@ uv run pytest --cov=src --cov-report=term-missing
 
 ```python
 def test_ac1_rss_feed_is_fetched_and_parsed():  # AC1に対応
-def test_ac2_articles_are_summarized_by_local_llm():  # AC2に対応
+def test_ac2_duplicate_articles_skipped():  # AC2に対応
 ```
 
 失敗したテストのAC番号から、該当する仕様書（`docs/specs/`）の受け入れ条件を参照することで、テストの意図をより深く理解できる。
