@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.db.models import Base, Conversation
-from src.llm.base import LLMResponse, Message
+from src.llm.base import LLMResponse
 from src.services.chat import ChatService
 
 

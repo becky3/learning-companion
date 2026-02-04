@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -222,11 +222,11 @@ def setup_scheduler(
     channel_id: str,
     hour: int = 7,
     minute: int = 0,
-    timezone: str = "Asia/Tokyo",
+    tz: str = "Asia/Tokyo",
     max_articles_per_category: int = 10,
 ) -> AsyncIOScheduler:
     """スケジューラを設定して返す."""
-    scheduler = AsyncIOScheduler(timezone=timezone)
+    scheduler = AsyncIOScheduler(timezone=tz)
     scheduler.add_job(
         daily_collect_and_deliver,
         "cron",
