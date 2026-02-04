@@ -25,8 +25,20 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 ```json
 {
   "hooks": {
+    "Notification": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/scripts/notify.sh 入力待ち 確認が必要です"
+          }
+        ]
+      }
+    ],
     "PermissionRequest": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -37,6 +49,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
     ],
     "Stop": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
@@ -50,17 +63,25 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 ```
 
 **対応イベント（PascalCase）:**
-- `PermissionRequest`: ユーザーの確認・承認が必要な時（ツール実行許可、選択肢提示など）
+- `Notification`: ユーザー入力待ち時（選択肢提示、許可ダイアログ、アイドル状態など）
+- `PermissionRequest`: ツール実行の許可ダイアログ表示時のみ
 - `Stop`: Claude がタスク完了時
-- その他のイベント: `SessionStart`, `SessionEnd`, `PreToolUse`, `PostToolUse`, `Notification` など
+- その他のイベント: `SessionStart`, `SessionEnd`, `PreToolUse`, `PostToolUse` など
 
-**注意**: `Notification` イベントは通知の送信時に発火するが、許可ダイアログや選択肢には `PermissionRequest` を使用する。
+**注意**: 選択肢提示（AskUserQuestion）は `Notification` イベントで捕捉する。`PermissionRequest` はツール実行許可のみ。
 
 **設定形式のポイント:**
 - イベント名は PascalCase（例: `Stop`, `Notification`）
 - 各イベントは配列で、`matcher` と `hooks` を含むオブジェクトを持つ
 - `hooks` 配列内で `type: "command"` と `command` を指定
 - パスは相対パス `./.claude/scripts/...` を使用
+
+**Notification イベントの matcher 値:**
+- `*`: 全ての通知タイプをキャッチ
+- `permission_prompt`: ツール許可ダイアログ表示時
+- `idle_prompt`: アイドル状態で入力待機時
+- `elicitation_dialog`: 選択肢提示（AskUserQuestion）時
+- `auth_success`: 認証成功時
 
 ### 通知スクリプト
 
