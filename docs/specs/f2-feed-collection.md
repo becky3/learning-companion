@@ -116,6 +116,7 @@ uv run python scripts/test_delivery.py vertical     # 縦長形式を指定
 - `@bot feed delete <URL>` — フィード削除（関連記事もCASCADE削除、複数URL対応）
 - `@bot feed enable <URL>` — フィード有効化（複数URL対応）
 - `@bot feed disable <URL>` — フィード無効化（複数URL対応）
+- `@bot feed import` + CSV添付 — フィード一括インポート
 
 **コマンド解析ルール:**
 - `http://` または `https://` で始まり、ドメインを含むトークンをURLとして認識
@@ -125,6 +126,39 @@ uv run python scripts/test_delivery.py vertical     # 縦長形式を指定
 **出力:**
 - 操作結果をスレッド内で応答（成功: ✓ / 失敗: ✗）
 - 不明なサブコマンドの場合はヘルプメッセージを表示
+
+### フィード一括インポート（CSV）
+
+**入力:**
+- Slackでボットにメンション + `feed import` + CSVファイル添付
+
+**CSV形式:**
+```csv
+url,name,category
+https://example.com/feed,Example Feed,Tech
+https://another.com/rss,Another Feed,News
+```
+- `url` (必須): フィードURL
+- `name` (必須): フィード名
+- `category` (オプション): カテゴリ名（省略時は「一般」）
+
+**処理:**
+1. 添付ファイルの存在確認（なければエラー）
+2. CSVファイルのみ受付（MIMEタイプ or 拡張子で判定）
+3. Slack APIでファイルをダウンロード
+4. CSVをパースし、各行で `FeedCollector.add_feed()` を実行
+5. 重複URLはスキップ（他の行は継続処理）
+
+**出力例:**
+```
+フィードインポート完了
+✅ 成功: 25件
+❌ 失敗: 2件
+
+エラー詳細:
+  • 行5: 既に登録されています
+  • 行12: 無効なURL形式です（invalid-url）
+```
 
 ### 情報源探索
 
@@ -158,6 +192,14 @@ uv run python scripts/test_delivery.py vertical     # 縦長形式を指定
   - [ ] AC7.11: 存在しないURL有効化時にエラー通知
   - [ ] AC7.12: 存在しないURL無効化時にエラー通知
   - [ ] AC7.13: 不明なサブコマンド時にヘルプメッセージ表示
+- [ ] AC13: CSV添付によるフィード一括インポートができる
+  - [ ] AC13.1: `@bot feed import` + CSV添付でフィードを一括登録できる
+  - [ ] AC13.2: CSVに `url,name,category` ヘッダーが必要（なければエラー）
+  - [ ] AC13.3: category省略時は「一般」が設定される
+  - [ ] AC13.4: 重複URLはスキップしてエラー表示（他の行は継続処理）
+  - [ ] AC13.5: 添付ファイルがない場合はエラーメッセージを表示
+  - [ ] AC13.6: CSV以外のファイルはエラーメッセージを表示
+  - [ ] AC13.7: 処理結果のサマリー（成功数/失敗数/詳細）を返答
 - [ ] AC8: RSS取得失敗時はエラーをログに記録し、他のフィードの処理を継続する
 - [ ] AC9: Slackメンション+キーワードで手動配信テストを実行できる
 - [ ] AC10: 記事収集時にOGP画像URLを取得し、Block Kitカードにサムネイルとして表示する

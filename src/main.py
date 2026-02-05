@@ -82,6 +82,7 @@ async def main() -> None:
         max_articles_per_category=settings.feed_articles_per_category,
         feed_card_layout=settings.feed_card_layout,
         auto_reply_channels=settings.get_auto_reply_channels(),
+        bot_token=settings.slack_bot_token,
     )
 
     # Socket Mode で起動
