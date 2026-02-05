@@ -9,7 +9,7 @@ import logging
 
 from src.config.settings import get_settings, load_assistant_config
 from src.db.session import init_db, get_session_factory
-from src.llm.factory import create_local_provider, create_online_provider, get_provider_with_fallback
+from src.llm.factory import get_provider_for_service
 from src.services.chat import ChatService
 from src.services.feed_collector import FeedCollector
 from src.services.ogp_extractor import OgpExtractor
@@ -33,17 +33,16 @@ async def main() -> None:
     assistant = load_assistant_config()
     system_prompt = assistant.get("personality", "")
 
-    # LLM プロバイダー
-    online_llm = create_online_provider(settings)
-    local_llm = create_local_provider(settings)
-
-    # ユーザー情報抽出用LLM（ローカル優先、フォールバック）
-    profiler_llm = await get_provider_with_fallback(local_llm, online_llm)
+    # サービスごとのLLMプロバイダー（設定に基づいて選択）
+    chat_llm = get_provider_for_service(settings, settings.chat_llm_provider)
+    profiler_llm = get_provider_for_service(settings, settings.profiler_llm_provider)
+    topic_llm = get_provider_for_service(settings, settings.topic_llm_provider)
+    summarizer_llm = get_provider_for_service(settings, settings.summarizer_llm_provider)
 
     # チャットサービス
     session_factory = get_session_factory()
     chat_service = ChatService(
-        llm=online_llm,
+        llm=chat_llm,
         session_factory=session_factory,
         system_prompt=system_prompt,
     )
@@ -56,12 +55,11 @@ async def main() -> None:
 
     # トピック提案サービス
     topic_recommender = TopicRecommender(
-        llm=online_llm,
+        llm=topic_llm,
         session_factory=session_factory,
     )
 
     # 要約・収集サービス
-    summarizer_llm = await get_provider_with_fallback(local_llm, online_llm)
     summarizer = Summarizer(llm=summarizer_llm)
     ogp_extractor = OgpExtractor()
     feed_collector = FeedCollector(

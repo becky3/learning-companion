@@ -4,15 +4,13 @@
 
 from __future__ import annotations
 
-import logging
+from typing import Literal
 
 from src.config.settings import Settings
 from src.llm.anthropic_provider import AnthropicProvider
 from src.llm.base import LLMProvider
 from src.llm.lmstudio_provider import LMStudioProvider
 from src.llm.openai_provider import OpenAIProvider
-
-logger = logging.getLogger(__name__)
 
 
 def create_online_provider(settings: Settings) -> LLMProvider:
@@ -36,12 +34,19 @@ def create_local_provider(settings: Settings) -> LMStudioProvider:
     )
 
 
-async def get_provider_with_fallback(
-    local: LLMProvider,
-    online: LLMProvider,
+def get_provider_for_service(
+    settings: Settings,
+    service_llm_setting: Literal["local", "online"],
 ) -> LLMProvider:
-    """ローカル優先で、利用不可ならオンラインにフォールバックする."""
-    if await local.is_available():
-        return local
-    logger.info("Local LLM unavailable, falling back to online provider")
-    return online
+    """サービスごとの設定に基づいてLLMプロバイダーを返す.
+
+    Args:
+        settings: アプリケーション設定
+        service_llm_setting: サービスごとのLLM設定（"local" or "online"）
+
+    Returns:
+        対応するLLMプロバイダー
+    """
+    if service_llm_setting == "online":
+        return create_online_provider(settings)
+    return create_local_provider(settings)

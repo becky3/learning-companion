@@ -4,9 +4,13 @@
 
 ## LLM使い分けルール
 
-- **ローカル (LM Studio)**: 記事要約、ユーザー情報抽出 — 単純・定型タスク
-- **オンライン (OpenAI/Claude)**: チャット応答、情報源探索、トピック提案 — 推論力が必要なタスク
-- ローカル不可時はオンラインにフォールバック
+- **デフォルト**: 全サービスでローカルLLM（LM Studio）を使用
+- **設定変更**: `.env` で各サービスごとにLLMを変更可能
+  - `CHAT_LLM_PROVIDER` — ChatService用
+  - `PROFILER_LLM_PROVIDER` — UserProfiler用
+  - `TOPIC_LLM_PROVIDER` — TopicRecommender用
+  - `SUMMARIZER_LLM_PROVIDER` — Summarizer用
+- 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
 
 ## 開発ルール
 
