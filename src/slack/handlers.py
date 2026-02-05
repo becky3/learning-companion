@@ -207,13 +207,22 @@ async def _handle_feed_import(
     if not url_private or not isinstance(url_private, str):
         return "エラー: ファイルのダウンロードURLが取得できませんでした。"
 
+    # url_private_download を優先的に使用（より確実）
+    download_url = csv_file.get("url_private_download") or url_private
+    if not isinstance(download_url, str):
+        download_url = url_private
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                url_private,
+                download_url,
                 headers={"Authorization": f"Bearer {bot_token}"},
-                follow_redirects=True,
+                follow_redirects=False,
             )
+            # 302リダイレクトの場合は認証エラー
+            if response.status_code == 302:
+                logger.error("File download redirected - auth may have failed")
+                return "エラー: ファイルのダウンロードに失敗しました（認証エラー）。Bot権限を確認してください。"
             response.raise_for_status()
             content = response.text
     except httpx.HTTPError as e:
