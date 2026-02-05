@@ -12,6 +12,7 @@ from src.slack.handlers import (
     _handle_feed_delete,
     _handle_feed_disable,
     _handle_feed_enable,
+    _handle_feed_import,
     _handle_feed_list,
     _parse_feed_command,
 )
@@ -259,3 +260,189 @@ async def test_handle_feed_disable_no_url() -> None:
     collector = AsyncMock(spec=FeedCollector)
     result = await _handle_feed_disable(collector, [])
     assert "エラー" in result
+
+
+# --- feed import テスト (AC13) ---
+
+
+@pytest.mark.asyncio
+async def test_ac13_5_handle_feed_import_no_files() -> None:
+    """feedハンドラ: import ファイルなしエラー (AC13.5)."""
+    collector = AsyncMock(spec=FeedCollector)
+    result = await _handle_feed_import(collector, None, "xoxb-token")
+    assert "エラー" in result
+    assert "CSVファイルを添付" in result
+
+
+@pytest.mark.asyncio
+async def test_ac13_6_handle_feed_import_non_csv_file() -> None:
+    """feedハンドラ: import CSV以外のファイルエラー (AC13.6)."""
+    collector = AsyncMock(spec=FeedCollector)
+    files = [{"name": "image.png", "mimetype": "image/png", "url_private": "https://files.slack.com/test.png"}]
+    result = await _handle_feed_import(collector, files, "xoxb-token")
+    assert "エラー" in result
+    assert "CSVファイルが見つかりません" in result
+
+
+@pytest.mark.asyncio
+async def test_ac13_1_handle_feed_import_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    """feedハンドラ: import 成功 (AC13.1)."""
+    collector = AsyncMock(spec=FeedCollector)
+    mock_feed = MagicMock()
+    mock_feed.url = "https://example.com/rss"
+    mock_feed.name = "Example Feed"
+    mock_feed.category = "Tech"
+    collector.add_feed.return_value = mock_feed
+
+    csv_content = "url,name,category\nhttps://example.com/rss,Example Feed,Tech"
+
+    # httpx.AsyncClient をモック
+    mock_response = MagicMock()
+    mock_response.text = csv_content
+    mock_response.raise_for_status = MagicMock()
+
+    async def mock_get(*args: object, **kwargs: object) -> MagicMock:
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.get = mock_get
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", lambda: mock_client)
+
+    files = [{"name": "feeds.csv", "mimetype": "text/csv", "url_private": "https://files.slack.com/feeds.csv"}]
+    result = await _handle_feed_import(collector, files, "xoxb-token")
+
+    assert "成功: 1件" in result
+    collector.add_feed.assert_called_once_with("https://example.com/rss", "Example Feed", "Tech")
+
+
+@pytest.mark.asyncio
+async def test_ac13_3_handle_feed_import_default_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    """feedハンドラ: import カテゴリ省略時は「一般」(AC13.3)."""
+    collector = AsyncMock(spec=FeedCollector)
+    mock_feed = MagicMock()
+    mock_feed.url = "https://example.com/rss"
+    mock_feed.name = "Example Feed"
+    mock_feed.category = "一般"
+    collector.add_feed.return_value = mock_feed
+
+    csv_content = "url,name,category\nhttps://example.com/rss,Example Feed,"
+
+    mock_response = MagicMock()
+    mock_response.text = csv_content
+    mock_response.raise_for_status = MagicMock()
+
+    async def mock_get(*args: object, **kwargs: object) -> MagicMock:
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.get = mock_get
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", lambda: mock_client)
+
+    files = [{"name": "feeds.csv", "mimetype": "text/csv", "url_private": "https://files.slack.com/feeds.csv"}]
+    result = await _handle_feed_import(collector, files, "xoxb-token")
+
+    collector.add_feed.assert_called_once_with("https://example.com/rss", "Example Feed", "一般")
+    assert "成功: 1件" in result
+
+
+@pytest.mark.asyncio
+async def test_ac13_4_handle_feed_import_duplicate_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """feedハンドラ: import 重複スキップ (AC13.4)."""
+    collector = AsyncMock(spec=FeedCollector)
+    collector.add_feed.side_effect = ValueError("既に登録されています")
+
+    csv_content = "url,name,category\nhttps://duplicate.com/rss,Dup Feed,Tech"
+
+    mock_response = MagicMock()
+    mock_response.text = csv_content
+    mock_response.raise_for_status = MagicMock()
+
+    async def mock_get(*args: object, **kwargs: object) -> MagicMock:
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.get = mock_get
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", lambda: mock_client)
+
+    files = [{"name": "feeds.csv", "mimetype": "text/csv", "url_private": "https://files.slack.com/feeds.csv"}]
+    result = await _handle_feed_import(collector, files, "xoxb-token")
+
+    assert "成功: 0件" in result
+    assert "失敗: 1件" in result
+    assert "既に登録されています" in result
+
+
+@pytest.mark.asyncio
+async def test_ac13_2_handle_feed_import_invalid_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    """feedハンドラ: import 不正ヘッダーエラー (AC13.2)."""
+    collector = AsyncMock(spec=FeedCollector)
+
+    csv_content = "wrong,header,format\nhttps://example.com/rss,Example,Tech"
+
+    mock_response = MagicMock()
+    mock_response.text = csv_content
+    mock_response.raise_for_status = MagicMock()
+
+    async def mock_get(*args: object, **kwargs: object) -> MagicMock:
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.get = mock_get
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", lambda: mock_client)
+
+    files = [{"name": "feeds.csv", "mimetype": "text/csv", "url_private": "https://files.slack.com/feeds.csv"}]
+    result = await _handle_feed_import(collector, files, "xoxb-token")
+
+    assert "エラー" in result
+    assert "CSVヘッダーが不正" in result
+
+
+@pytest.mark.asyncio
+async def test_ac13_7_handle_feed_import_summary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """feedハンドラ: import サマリー表示 (AC13.7)."""
+    collector = AsyncMock(spec=FeedCollector)
+
+    # 1件目成功、2件目失敗
+    mock_feed = MagicMock(url="https://ok.com/rss", name="OK Feed", category="Tech")
+    collector.add_feed.side_effect = [mock_feed, ValueError("重複")]
+
+    csv_content = "url,name,category\nhttps://ok.com/rss,OK Feed,Tech\nhttps://dup.com/rss,Dup Feed,Tech"
+
+    mock_response = MagicMock()
+    mock_response.text = csv_content
+    mock_response.raise_for_status = MagicMock()
+
+    async def mock_get(*args: object, **kwargs: object) -> MagicMock:
+        return mock_response
+
+    mock_client = MagicMock()
+    mock_client.get = mock_get
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", lambda: mock_client)
+
+    files = [{"name": "feeds.csv", "mimetype": "text/csv", "url_private": "https://files.slack.com/feeds.csv"}]
+    result = await _handle_feed_import(collector, files, "xoxb-token")
+
+    assert "フィードインポート完了" in result
+    assert "成功: 1件" in result
+    assert "失敗: 1件" in result
+    assert "重複" in result

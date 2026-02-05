@@ -5,11 +5,14 @@
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import logging
 import re
 from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlparse
 
+import httpx
 from slack_bolt.async_app import AsyncApp
 
 from src.services.chat import ChatService
@@ -171,6 +174,111 @@ async def _handle_feed_disable(collector: FeedCollector, urls: list[str]) -> str
     return "\n".join(results)
 
 
+async def _handle_feed_import(
+    collector: FeedCollector,
+    files: list[dict[str, object]] | None,
+    bot_token: str,
+) -> str:
+    """CSVファイルからフィードを一括インポートする."""
+    if not files:
+        return (
+            "エラー: CSVファイルを添付してください。\n"
+            "使用方法: `@bot feed import` にCSVファイルを添付\n"
+            "CSV形式: `url,name,category`"
+        )
+
+    # CSVファイルを探す
+    csv_file = None
+    for f in files:
+        mimetype = str(f.get("mimetype", ""))
+        name = str(f.get("name", ""))
+        if mimetype == "text/csv" or name.endswith(".csv"):
+            csv_file = f
+            break
+
+    if not csv_file:
+        return (
+            "エラー: CSVファイルが見つかりません。\n"
+            "CSV形式のファイル（.csv）を添付してください。"
+        )
+
+    # ファイルをダウンロード
+    url_private = csv_file.get("url_private")
+    if not url_private or not isinstance(url_private, str):
+        return "エラー: ファイルのダウンロードURLが取得できませんでした。"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url_private,
+                headers={"Authorization": f"Bearer {bot_token}"},
+                follow_redirects=True,
+            )
+            response.raise_for_status()
+            content = response.text
+    except httpx.HTTPError as e:
+        logger.exception("Failed to download CSV file")
+        return f"エラー: ファイルのダウンロードに失敗しました: {e}"
+
+    # CSVをパース
+    try:
+        reader = csv.DictReader(io.StringIO(content))
+        # ヘッダー検証
+        fieldnames = reader.fieldnames or []
+        if "url" not in fieldnames or "name" not in fieldnames:
+            return (
+                "エラー: CSVヘッダーが不正です。\n"
+                "`url,name,category` の形式で記述してください。\n"
+                f"検出されたヘッダー: {', '.join(fieldnames)}"
+            )
+
+        rows = list(reader)
+    except csv.Error as e:
+        return f"エラー: CSVのパースに失敗しました: {e}"
+
+    if not rows:
+        return "エラー: CSVにデータがありません。"
+
+    # フィードを登録
+    success_count = 0
+    errors: list[str] = []
+
+    for row in rows:
+        url = row.get("url", "").strip()
+        name = row.get("name", "").strip()
+        category = row.get("category", "").strip() or "一般"
+
+        if not url or not name:
+            errors.append(f"スキップ: url または name が空です（行: {row}）")
+            continue
+
+        try:
+            await collector.add_feed(url, name, category)
+            success_count += 1
+        except ValueError as e:
+            errors.append(f"{url}: {e}")
+        except Exception:
+            logger.exception("Failed to add feed: %s", url)
+            errors.append(f"{url}: 追加中にエラーが発生しました")
+
+    # 結果サマリーを作成
+    result_lines = [
+        "*フィードインポート完了*",
+        f"✅ 成功: {success_count}件",
+        f"❌ 失敗: {len(errors)}件",
+    ]
+
+    if errors:
+        result_lines.append("\n*エラー詳細:*")
+        # 最大10件まで表示
+        for error in errors[:10]:
+            result_lines.append(f"  • {error}")
+        if len(errors) > 10:
+            result_lines.append(f"  ...他 {len(errors) - 10}件")
+
+    return "\n".join(result_lines)
+
+
 def register_handlers(
     app: AsyncApp,
     chat_service: ChatService,
@@ -183,6 +291,7 @@ def register_handlers(
     max_articles_per_category: int = 10,
     feed_card_layout: Literal["vertical", "horizontal"] = "horizontal",
     auto_reply_channels: list[str] | None = None,
+    bot_token: str | None = None,
 ) -> None:
     """app_mention および message ハンドラを登録する."""
 
@@ -191,6 +300,7 @@ def register_handlers(
         cleaned_text: str,
         thread_ts: str,
         say: object,
+        files: list[dict[str, object]] | None = None,
     ) -> None:
         """共通メッセージ処理ロジック（app_mention / message 共用）."""
         # プロファイル確認キーワード (F3-AC4, F6-AC4)
@@ -224,6 +334,13 @@ def register_handlers(
                 response_text = await _handle_feed_enable(collector, urls)
             elif subcommand == "disable":
                 response_text = await _handle_feed_disable(collector, urls)
+            elif subcommand == "import":
+                if not bot_token:
+                    response_text = "エラー: Bot Tokenが設定されていません。"
+                else:
+                    response_text = await _handle_feed_import(
+                        collector, files, bot_token
+                    )
             else:
                 response_text = (
                     "使用方法:\n"
@@ -232,6 +349,7 @@ def register_handlers(
                     "• `@bot feed delete <URL>` — フィード削除\n"
                     "• `@bot feed enable <URL>` — フィード有効化\n"
                     "• `@bot feed disable <URL>` — フィード無効化\n"
+                    "• `@bot feed import` + CSV添付 — フィード一括インポート\n"
                     "※ URL・カテゴリは複数指定可能（スペース区切り）"
                 )
 
@@ -305,12 +423,13 @@ def register_handlers(
         user_id: str = event.get("user", "")
         text: str = event.get("text", "")
         thread_ts: str = event.get("thread_ts") or event.get("ts", "")
+        files: list[dict[str, object]] | None = event.get("files")
 
         cleaned_text = strip_mention(text)
         if not cleaned_text:
             return
 
-        await _process_message(user_id, cleaned_text, thread_ts, say)
+        await _process_message(user_id, cleaned_text, thread_ts, say, files)
 
     @app.event("message")
     async def handle_message(event: dict, say: object) -> None:  # type: ignore[type-arg]
@@ -352,13 +471,14 @@ def register_handlers(
             return
 
         thread_ts: str = event.get("thread_ts") or event.get("ts", "")
+        files: list[dict[str, object]] | None = event.get("files")
 
         cleaned_text = text.strip()
         if not cleaned_text:
             return
 
         logger.info("Processing auto-reply message in channel %s", channel)
-        await _process_message(user_id, cleaned_text, thread_ts, say)
+        await _process_message(user_id, cleaned_text, thread_ts, say, files)
 
 
 async def _safe_extract_profile(
