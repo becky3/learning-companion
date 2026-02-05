@@ -1,14 +1,12 @@
-"""LLM抽象化層のテスト (Issue #4)."""
+"""LLM抽象化層のテスト (Issue #4, #75)."""
 
 from __future__ import annotations
-
-from unittest.mock import AsyncMock
 
 import pytest
 
 from src.config.settings import Settings
 from src.llm.base import LLMProvider
-from src.llm.factory import create_local_provider, create_online_provider, get_provider_with_fallback
+from src.llm.factory import create_local_provider, create_online_provider, get_provider_for_service
 from src.llm.lmstudio_provider import LMStudioProvider
 
 
@@ -65,25 +63,50 @@ def test_ac4_factory_creates_local_provider() -> None:
     assert isinstance(provider, LMStudioProvider)
 
 
-async def test_ac5_fallback_to_online_when_local_unavailable() -> None:
-    """AC5: ローカル不可時のフォールバック対応."""
-    local = AsyncMock(spec=LLMProvider)
-    local.is_available.return_value = False
-    online = AsyncMock(spec=LLMProvider)
-    online.is_available.return_value = True
-
-    result = await get_provider_with_fallback(local, online)
-    assert result is online
+def test_get_provider_for_service_returns_local_by_default() -> None:
+    """サービスLLM設定が'local'の場合、ローカルプロバイダーを返す."""
+    settings = Settings()
+    provider = get_provider_for_service(settings, "local")
+    assert isinstance(provider, LMStudioProvider)
 
 
-async def test_ac5_uses_local_when_available() -> None:
-    """AC5: ローカル利用可能時はローカルを返す."""
-    local = AsyncMock(spec=LLMProvider)
-    local.is_available.return_value = True
-    online = AsyncMock(spec=LLMProvider)
+def test_get_provider_for_service_returns_online_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """サービスLLM設定が'online'の場合、オンラインプロバイダーを返す."""
+    monkeypatch.setenv("ONLINE_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    settings = Settings()
+    provider = get_provider_for_service(settings, "online")
+    from src.llm.openai_provider import OpenAIProvider
+    assert isinstance(provider, OpenAIProvider)
 
-    result = await get_provider_with_fallback(local, online)
-    assert result is local
+
+def test_service_llm_settings_default_to_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    """各サービスのLLM設定はデフォルトで'local'."""
+    # 環境変数をクリア
+    monkeypatch.delenv("CHAT_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("PROFILER_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("TOPIC_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("SUMMARIZER_LLM_PROVIDER", raising=False)
+    settings = Settings()
+    assert settings.chat_llm_provider == "local"
+    assert settings.profiler_llm_provider == "local"
+    assert settings.topic_llm_provider == "local"
+    assert settings.summarizer_llm_provider == "local"
+
+
+def test_service_llm_settings_can_be_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """各サービスのLLM設定は環境変数で変更可能."""
+    monkeypatch.setenv("CHAT_LLM_PROVIDER", "online")
+    monkeypatch.setenv("PROFILER_LLM_PROVIDER", "online")
+    monkeypatch.setenv("TOPIC_LLM_PROVIDER", "local")
+    monkeypatch.setenv("SUMMARIZER_LLM_PROVIDER", "online")
+    settings = Settings()
+    assert settings.chat_llm_provider == "online"
+    assert settings.profiler_llm_provider == "online"
+    assert settings.topic_llm_provider == "local"
+    assert settings.summarizer_llm_provider == "online"
 
 
 def test_openai_message_role_mapping() -> None:

@@ -28,8 +28,14 @@ class Settings(BaseSettings):
     slack_app_token: str = ""
     slack_news_channel_id: str = ""
 
-    # LLM Provider Selection
+    # LLM Provider Selection (global online provider)
     online_llm_provider: Literal["openai", "anthropic"] = "openai"
+
+    # Per-service LLM selection ("local" or "online", default: local)
+    chat_llm_provider: Literal["local", "online"] = "local"
+    profiler_llm_provider: Literal["local", "online"] = "local"
+    topic_llm_provider: Literal["local", "online"] = "local"
+    summarizer_llm_provider: Literal["local", "online"] = "local"
 
     # OpenAI
     openai_api_key: str = ""

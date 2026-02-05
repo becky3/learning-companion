@@ -29,19 +29,37 @@ Learning Companionは、Slack上で動作するAI学習支援アシスタント�
 | RSS | feedparser |
 | 設定管理 | pydantic-settings (.env) + YAML (アシスタント性格) |
 
-## 4. LLM使い分けルール（タスクベース）
+## 4. LLM使い分けルール
 
-コスト最適化のため、タスクの性質に応じてLLMを使い分ける。
+全サービスでローカルLLM（LM Studio）をデフォルトで使用する。
+各サービスごとに `.env` ファイルで使用するLLMを変更可能。
 
-| タスク | プロバイダー | 理由 |
-|--------|-------------|------|
-| 記事要約 | ローカル (LM Studio) | 単純作業・大量処理向き |
-| ユーザー情報抽出 | ローカル | 定型的な抽出タスク |
-| 質問への回答 | オンライン (OpenAI/Claude) | 高品質な応答が必要 |
-| 情報源探索・提案 | オンライン | 推論力が必要 |
-| 学習トピック提案 | オンライン | パーソナライズに推論力が必要 |
+### サービスごとのLLM設定
 
-**フォールバック**: ローカルLLMが利用不可の場合、オンラインLLMにフォールバックする。
+| 環境変数 | 対象サービス | デフォルト | 説明 |
+|----------|-------------|-----------|------|
+| `CHAT_LLM_PROVIDER` | ChatService | local | チャット応答 |
+| `PROFILER_LLM_PROVIDER` | UserProfiler | local | ユーザー情報抽出 |
+| `TOPIC_LLM_PROVIDER` | TopicRecommender | local | トピック提案 |
+| `SUMMARIZER_LLM_PROVIDER` | Summarizer | local | 記事要約 |
+
+各設定には `"local"` または `"online"` を指定する。
+`"online"` の場合、`ONLINE_LLM_PROVIDER` の設定（`"openai"` or `"anthropic"`）が使用される。
+
+### 設定例
+
+```env
+# 全てローカル（デフォルト）
+CHAT_LLM_PROVIDER=local
+PROFILER_LLM_PROVIDER=local
+TOPIC_LLM_PROVIDER=local
+SUMMARIZER_LLM_PROVIDER=local
+
+# チャットとトピック提案のみオンライン
+CHAT_LLM_PROVIDER=online
+TOPIC_LLM_PROVIDER=online
+ONLINE_LLM_PROVIDER=openai
+```
 
 ## 5. DB設計
 
