@@ -342,10 +342,15 @@ def register_handlers(
         text: str = event.get("text", "")
 
         # F6-AC7: メンション付きメッセージは app_mention で処理されるためスキップ
-        if re.search(r"<@[A-Za-z0-9]+>", text):
+        # strip_mention と同じパターンを使用
+        if re.search(r"<@[A-Za-z0-9]+>\s*", text):
             return
 
         user_id: str = event.get("user", "")
+        # user_id が空の場合はスキップ（システムメッセージなどのエッジケース対応）
+        if not user_id:
+            return
+
         thread_ts: str = event.get("thread_ts") or event.get("ts", "")
 
         cleaned_text = text.strip()
