@@ -13,6 +13,7 @@ Learning Companionは、Slack上で動作するAI学習支援アシスタント�
 | F2 | 情報収集・配信 | RSS収集→要約→毎朝自動配信 | [f2-feed-collection.md](f2-feed-collection.md) |
 | F3 | ユーザー情報抽出 | 会話から興味・スキル・目標を抽出 | [f3-user-profiling.md](f3-user-profiling.md) |
 | F4 | トピック提案 | 収集情報+プロファイルから学習提案 | [f4-topic-recommend.md](f4-topic-recommend.md) |
+| F5 | MCP統合 | LLMが外部ツールを動的に呼び出すプロトコル統合 | [f5-mcp-integration.md](f5-mcp-integration.md) |
 
 ## 3. 技術スタック
 

@@ -105,7 +105,7 @@ dependencies = [
 
 > **注意**: `mcp` パッケージ（公式SDK）を使用する。standalone の `fastmcp` パッケージとは別物。
 > 公式SDKに内蔵の FastMCP を `from mcp.server.fastmcp import FastMCP` で使用する。
-> 現在の最新は v1.26.0、v2 は Q1 2026 予定のため `<2` で上限を設定。
+> 現在の最新は v1.26.0。将来リリースされる v2 との非互換性に備えて `<2` で上限を設定。
 
 ### ディレクトリ構成
 
@@ -253,6 +253,18 @@ MCPサーバーの接続設定を外部ファイルで管理する。
 
 > 初期実装では `stdio` のみサポートする。`MCPClientManager` は `transport` フィールドで分岐できる構造にしておき、`"http"` が指定された場合はエラーログを出して警告する。
 
+### MCP例外クラス (`src/mcp/client_manager.py`)
+
+```python
+class MCPToolNotFoundError(Exception):
+    """指定されたツールが見つからない場合の例外."""
+    pass
+
+class MCPToolExecutionError(Exception):
+    """ツール実行中にエラーが発生した場合の例外."""
+    pass
+```
+
 ### MCPサーバー設定型 (`src/mcp/client_manager.py`)
 
 ```python
@@ -290,8 +302,8 @@ class MCPClientManager:
         """指定ツールを実行し、結果を返す.
 
         Raises:
-            ToolExecutionError: ツール実行失敗時
-            ToolNotFoundError: 指定ツールが見つからない場合
+            MCPToolExecutionError: ツール実行失敗時
+            MCPToolNotFoundError: 指定ツールが見つからない場合
         """
 
     async def cleanup(self) -> None:
@@ -472,12 +484,12 @@ class Settings(BaseSettings):
 - [ ] **AC13**: ツール呼び出しが不要な通常の質問は、従来通り応答すること（後方互換性）
 - [ ] **AC14**: ツール実行中にエラーが発生した場合、エラー内容をLLMに伝え、適切な応答を生成すること
 - [ ] **AC15**: MCP無効時（`mcp_enabled=False`）は従来通りの動作をすること
-- [ ] **AC18**: ツール呼び出しが最大反復回数（10回）に達した場合、ループを打ち切りテキスト応答を返すこと
 
 ### 設定・運用
 
 - [ ] **AC16**: `config/mcp_servers.json` でMCPサーバーの追加・変更が可能であること
 - [ ] **AC17**: `MCP_ENABLED` 環境変数でMCP機能のON/OFFを制御できること
+- [ ] **AC18**: ツール呼び出しが最大反復回数（10回）に達した場合、ループを打ち切りテキスト応答を返すこと
 
 ## 使用LLMプロバイダー
 
@@ -512,6 +524,8 @@ class Settings(BaseSettings):
 | `test_ac13_chat_backward_compatible` | AC13 |
 | `test_ac14_tool_error_handled_gracefully` | AC14 |
 | `test_ac15_mcp_disabled_mode` | AC15 |
+| `test_ac16_mcp_server_config_changes` | AC16 |
+| `test_ac17_mcp_enabled_env_control` | AC17 |
 | `test_ac18_tool_loop_max_iterations` | AC18 |
 
 ### テスト戦略
