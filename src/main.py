@@ -34,8 +34,12 @@ def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
         logger.warning("MCP設定ファイル '%s' が見つかりません。", config_path)
         return []
 
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except json.JSONDecodeError:
+        logger.exception("MCP設定ファイル '%s' のJSON解析に失敗しました。", config_path)
+        return []
 
     configs: list[MCPServerConfig] = []
     for name, server_def in data.get("mcpServers", {}).items():

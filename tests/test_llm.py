@@ -84,12 +84,12 @@ def test_get_provider_for_service_returns_online_when_configured(
 
 def test_service_llm_settings_default_to_local(monkeypatch: pytest.MonkeyPatch) -> None:
     """各サービスのLLM設定はデフォルトで'local'."""
-    # 環境変数をクリア
+    # 環境変数をクリア (_env_file=Noneで.envファイルの影響を排除)
     monkeypatch.delenv("CHAT_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("PROFILER_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("TOPIC_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("SUMMARIZER_LLM_PROVIDER", raising=False)
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.chat_llm_provider == "local"
     assert settings.profiler_llm_provider == "local"
     assert settings.topic_llm_provider == "local"

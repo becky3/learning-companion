@@ -249,19 +249,19 @@ def test_ac17_mcp_enabled_env_control(monkeypatch: pytest.MonkeyPatch) -> None:
     """AC17: MCP_ENABLED 環境変数でMCP機能のON/OFFを制御できること."""
     from src.config.settings import Settings
 
-    # デフォルト: 無効
+    # デフォルト: 無効 (_env_file=Noneで.envファイルの影響を排除)
     monkeypatch.delenv("MCP_ENABLED", raising=False)
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.mcp_enabled is False
 
     # 有効化
     monkeypatch.setenv("MCP_ENABLED", "true")
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.mcp_enabled is True
 
     # 無効化
     monkeypatch.setenv("MCP_ENABLED", "false")
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.mcp_enabled is False
 
 

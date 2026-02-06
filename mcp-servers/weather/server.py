@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import urllib.request
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -98,16 +99,16 @@ def _find_office_code(location: str) -> tuple[str, str] | None:
     return None
 
 
-def _fetch_forecast(office_code: str) -> list[dict]:  # type: ignore[type-arg]
+def _fetch_forecast(office_code: str) -> list[dict[str, Any]]:
     """気象庁APIから天気予報データを取得する."""
     url = _FORECAST_URL.format(code=office_code)
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=10) as resp:
-        data: list[dict] = json.loads(resp.read().decode("utf-8"))  # type: ignore[type-arg]
+        data: list[dict[str, Any]] = json.loads(resp.read().decode("utf-8"))
     return data
 
 
-def _parse_short_forecast(forecast_data: list[dict]) -> dict[str, list]:  # type: ignore[type-arg]
+def _parse_short_forecast(forecast_data: list[dict[str, Any]]) -> dict[str, list[Any]]:
     """短期予報（3日間）を解析する.
 
     Returns:
@@ -120,7 +121,7 @@ def _parse_short_forecast(forecast_data: list[dict]) -> dict[str, list]:  # type
             "temp_labels": [...] # 気温ラベル
         }
     """
-    result: dict[str, list] = {  # type: ignore[type-arg]
+    result: dict[str, list[Any]] = {
         "dates": [],
         "weathers": [],
         "pops": [],
@@ -162,7 +163,7 @@ def _parse_short_forecast(forecast_data: list[dict]) -> dict[str, list]:  # type
     return result
 
 
-def _parse_week_forecast(forecast_data: list[dict]) -> dict[str, list]:  # type: ignore[type-arg]
+def _parse_week_forecast(forecast_data: list[dict[str, Any]]) -> dict[str, list[Any]]:
     """週間予報（7日間）を解析する.
 
     Returns:
@@ -174,7 +175,7 @@ def _parse_week_forecast(forecast_data: list[dict]) -> dict[str, list]:  # type:
             "temp_mins": [...],
         }
     """
-    result: dict[str, list] = {  # type: ignore[type-arg]
+    result: dict[str, list[Any]] = {
         "dates": [],
         "weather_codes": [],
         "pops": [],
@@ -232,6 +233,8 @@ async def get_weather(location: str, date: str = "today") -> str:
     """
     match = _find_office_code(location)
     if match is None:
+        if not _office_map:
+            return "気象庁の地域データの取得に失敗しました。しばらく待ってからもう一度お試しください。"
         return (
             f"地域 '{location}' が見つかりませんでした。"
             "都道府県名（東京、大阪、北海道など）で指定してください。"
@@ -255,7 +258,7 @@ async def get_weather(location: str, date: str = "today") -> str:
 
 
 def _format_short_forecast(
-    forecast_data: list[dict],  # type: ignore[type-arg]
+    forecast_data: list[dict[str, Any]],
     area_name: str,
     date: str,
 ) -> str:
@@ -305,7 +308,7 @@ def _format_short_forecast(
 
 
 def _format_week_forecast(
-    forecast_data: list[dict],  # type: ignore[type-arg]
+    forecast_data: list[dict[str, Any]],
     area_name: str,
 ) -> str:
     """週間予報をテキストに整形する."""

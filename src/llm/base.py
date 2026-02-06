@@ -42,8 +42,8 @@ class Message:
 
     role: Literal["system", "user", "assistant", "tool"]
     content: str
-    tool_call_id: str = ""
-    tool_calls: list[ToolCall] = field(default_factory=list)
+    tool_call_id: str = ""  # role="tool" 時: 対応するツール呼び出しID
+    tool_calls: list[ToolCall] = field(default_factory=list)  # role="assistant" 時: LLMが要求するツール呼び出し
 
 
 @dataclass
