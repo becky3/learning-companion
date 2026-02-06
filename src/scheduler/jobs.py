@@ -140,11 +140,15 @@ def format_daily_digest(
         by_feed.setdefault(article.feed_id, []).append(article)
 
     result: dict[int, tuple[list[dict[str, Any]], list[list[dict[str, Any]]]]] = {}
-    for feed_id, feed_articles in by_feed.items():
+    for feed_id in sorted(
+        by_feed,
+        key=lambda fid: (feeds[fid].url if fid in feeds else ""),
+        reverse=True,
+    ):
         feed = feeds.get(feed_id)
         feed_name = feed.name if feed else "不明なフィード"
 
-        display_articles = feed_articles[:max_articles_per_feed]
+        display_articles = by_feed[feed_id][:max_articles_per_feed]
         parent_blocks = _build_parent_message(feed_name, len(display_articles))
 
         article_blocks_list: list[list[dict[str, Any]]] = []
