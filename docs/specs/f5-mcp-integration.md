@@ -479,7 +479,7 @@ class Settings(BaseSettings):
 - [ ] **AC8**: `LLMProvider.complete_with_tools()` が `ToolDefinition` リストをLLMに渡せること
 - [ ] **AC9**: OpenAIProvider が Function Calling に対応し、`ToolDefinition` → OpenAI形式の変換ができること
 - [ ] **AC10**: AnthropicProvider が Tool Use に対応し、`ToolDefinition` → Anthropic形式の変換ができること
-- [ ] **AC11**: ツール非対応のプロバイダー（LMStudio等）は `complete_with_tools()` が従来の `complete()` にフォールバックすること
+- [ ] **AC11**: LMStudioProvider が OpenAI互換 Function Calling でツール呼び出しに対応すること（Qwen3等の対応モデル使用時）
 
 ### チャット統合
 
@@ -498,7 +498,7 @@ class Settings(BaseSettings):
 
 | タスク | プロバイダー | 理由 |
 |--------|-------------|------|
-| ツール呼び出し判断 + 応答生成 | オンライン (OpenAI/Anthropic) | tool_use / function_calling が必要 |
+| ツール呼び出し判断 + 応答生成 | オンライン (OpenAI/Anthropic) またはローカル (LMStudio + Qwen3等) | tool_use / function_calling が必要 |
 | 天気予報データ取得 | なし（HTTP API直接呼び出し） | LLM不要 |
 
 ## テスト方針
@@ -517,7 +517,8 @@ class Settings(BaseSettings):
 | `test_ac8_complete_with_tools_passes_tool_definitions` | AC8 |
 | `test_ac9_openai_function_calling` | AC9 |
 | `test_ac10_anthropic_tool_use` | AC10 |
-| `test_ac11_lmstudio_fallback_to_complete` | AC11 |
+| `test_ac11_lmstudio_complete_with_tools` | AC11 |
+| `test_ac11_lmstudio_complete_with_tools_no_tool_call` | AC11 |
 
 ### 統合テスト
 
