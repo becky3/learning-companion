@@ -1,5 +1,5 @@
 [project]
-name = "learning-companion"
+name = "ai-assistant"
 version = "0.1.0"
 description = "Slack AI learning assistant with intelligent LLM routing"
 readme = "README.md"

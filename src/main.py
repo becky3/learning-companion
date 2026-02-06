@@ -1,4 +1,4 @@
-"""Learning Companion エントリーポイント
+"""AI Assistant エントリーポイント
 仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md, docs/specs/f8-thread-support.md
 """
 
@@ -99,7 +99,7 @@ async def main() -> None:
     except Exception as e:
         raise RuntimeError(f"Failed to call Slack auth_test: {e}") from e
 
-    bot_user_id: str | None = auth_result.get("user_id")  # type: ignore[union-attr]
+    bot_user_id: str | None = auth_result.get("user_id")
     if not bot_user_id:
         raise RuntimeError("Slack auth_test response does not contain 'user_id'.")
 

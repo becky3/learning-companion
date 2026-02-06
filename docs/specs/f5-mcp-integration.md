@@ -7,7 +7,7 @@ Model Context Protocol (MCP) を活用して、チャットボットが外部ツ
 
 ## 背景
 
-- 現在のLearning Companionは、LLMに対して定型的なプロンプトを送信し応答を得るのみで、外部ツールとの連携機能がない
+- 現在のAI Assistantは、LLMに対して定型的なプロンプトを送信し応答を得るのみで、外部ツールとの連携機能がない
 - MCP (Model Context Protocol) はAnthropicが提唱し、OpenAI・Linux Foundation (AAIF) も採用したオープン標準プロトコル
 - MCPにより、LLMがツールを動的に発見・呼び出しできるようになり、エージェント的な振る舞いが可能になる
 - 天気予報APIをサンプルとすることで、MCPの基本的な統合パターンを検証する
@@ -30,7 +30,7 @@ MCPは3層のクライアント・サーバーモデルで構成される：
   └───────────┘  └───────────┘
 ```
 
-- **Host**: Learning Companion（Slackボット）がホストとして機能
+- **Host**: AI Assistant（Slackボット）がホストとして機能
 - **Client**: MCPサーバーごとに1つのクライアントインスタンスを管理
 - **Server**: 外部ツール・リソースを提供するプロセス（今回は天気予報サーバー）
 
@@ -110,7 +110,7 @@ dependencies = [
 ### ディレクトリ構成
 
 ```
-learning-companion/
+ai-assistant/
 ├── src/                         # ホストアプリケーション
 │   ├── mcp/                     # MCPクライアント（ホスト側）
 │   │   ├── __init__.py

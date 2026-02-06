@@ -1,4 +1,4 @@
-# Learning Companion
+# AI Assistant
 
 Slack上で動作するAI学習支援アシスタント。
 RSS記事の自動収集・要約配信、チャットでの質問応答、ユーザーの興味に基づく学習トピック提案を行う。
