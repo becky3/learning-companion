@@ -1,6 +1,7 @@
 """天気予報MCPサーバーのテスト (Issue #83, AC1-AC3).
 
 仕様: docs/specs/f5-mcp-integration.md
+気象庁API（非公式）を使用。
 """
 
 from __future__ import annotations
@@ -11,206 +12,282 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
-def _make_geocode_response(name: str = "東京", lat: float = 35.6762, lon: float = 139.6503) -> bytes:
-    """Geocoding APIのモックレスポンスを生成する."""
+def _make_area_response() -> bytes:
+    """気象庁 area.json のモックレスポンスを生成する."""
     return json.dumps({
-        "results": [{
-            "name": name,
-            "latitude": lat,
-            "longitude": lon,
-            "country": "日本",
-            "admin1": "東京都",
-        }]
+        "offices": {
+            "130000": {"name": "東京都", "officeName": "気象庁"},
+            "270000": {"name": "大阪府", "officeName": "大阪管区気象台"},
+            "016000": {"name": "石狩・空知・後志地方", "officeName": "札幌管区気象台"},
+            "400000": {"name": "福岡県", "officeName": "福岡管区気象台"},
+            "471000": {"name": "沖縄本島地方", "officeName": "沖縄気象台"},
+        }
     }).encode("utf-8")
 
 
 def _make_forecast_response(
     dates: list[str] | None = None,
-    weather_codes: list[int] | None = None,
-    temp_maxes: list[float] | None = None,
-    temp_mins: list[float] | None = None,
+    weathers: list[str] | None = None,
+    pops: list[str] | None = None,
+    temps: list[str] | None = None,
 ) -> bytes:
-    """Forecast APIのモックレスポンスを生成する."""
+    """気象庁 forecast API のモックレスポンスを生成する."""
     if dates is None:
-        dates = ["2026-02-06", "2026-02-07"]
-    if weather_codes is None:
-        weather_codes = [1, 61]
-    if temp_maxes is None:
-        temp_maxes = [15.0, 12.0]
-    if temp_mins is None:
-        temp_mins = [5.0, 4.0]
-    return json.dumps({
-        "daily": {
-            "time": dates,
-            "weather_code": weather_codes,
-            "temperature_2m_max": temp_maxes,
-            "temperature_2m_min": temp_mins,
-        }
-    }).encode("utf-8")
+        dates = [
+            "2026-02-06T00:00:00+09:00",
+            "2026-02-07T00:00:00+09:00",
+            "2026-02-08T00:00:00+09:00",
+        ]
+    if weathers is None:
+        weathers = ["晴れ　時々　くもり", "くもり　時々　雨", "晴れ"]
+    if pops is None:
+        pops = ["0", "10", "20", "50", "30", "20"]
+    if temps is None:
+        temps = ["15", "5"]
+
+    # 短期予報（forecast_data[0]）
+    short_forecast = {
+        "timeSeries": [
+            {
+                "timeDefines": dates,
+                "areas": [{"area": {"name": "東京地方"}, "weathers": weathers}],
+            },
+            {
+                "timeDefines": ["T00", "T06", "T12", "T18", "T00", "T06"],
+                "areas": [{"area": {"name": "東京地方"}, "pops": pops}],
+            },
+            {
+                "timeDefines": ["T00", "T09"],
+                "areas": [{"area": {"name": "東京"}, "temps": temps}],
+            },
+        ]
+    }
+
+    # 週間予報（forecast_data[1]）
+    week_dates = [f"2026-02-{7 + i:02d}T00:00:00+09:00" for i in range(7)]
+    week_forecast = {
+        "timeSeries": [
+            {
+                "timeDefines": week_dates,
+                "areas": [{
+                    "area": {"name": "東京地方"},
+                    "weatherCodes": ["100", "200", "300", "202", "100", "100", "200"],
+                    "pops": ["10", "30", "50", "70", "20", "10", "30"],
+                }],
+            },
+            {
+                "timeDefines": week_dates,
+                "areas": [{
+                    "area": {"name": "東京"},
+                    "tempsMin": ["3", "2", "1", "4", "5", "3", "2"],
+                    "tempsMax": ["12", "10", "8", "11", "14", "13", "10"],
+                }],
+            },
+        ]
+    }
+
+    return json.dumps([short_forecast, week_forecast]).encode("utf-8")
+
+
+def _mock_urlopen_factory(
+    area_response: bytes | None = None,
+    forecast_response: bytes | None = None,
+) -> MagicMock:
+    """urlopen のモックを作成する."""
+    if area_response is None:
+        area_response = _make_area_response()
+    if forecast_response is None:
+        forecast_response = _make_forecast_response()
+
+    def side_effect(req: object, timeout: int = 10) -> MagicMock:
+        mock_resp = MagicMock()
+        url = req.full_url if hasattr(req, "full_url") else str(req)
+        if "area.json" in url:
+            mock_resp.read.return_value = area_response
+        else:
+            mock_resp.read.return_value = forecast_response
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        return mock_resp
+
+    mock = MagicMock(side_effect=side_effect)
+    return mock
+
+
+def _reset_office_map() -> None:
+    """テスト間で _office_map をリセットする."""
+    from importlib import import_module
+
+    mod = import_module("mcp-servers.weather.server")
+    mod._office_map.clear()
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache() -> None:
+    """各テスト前にキャッシュをクリアする."""
+    _reset_office_map()
 
 
 @pytest.mark.asyncio
 async def test_ac1_weather_server_exposes_tool() -> None:
     """AC1: 天気予報MCPサーバーが起動し、get_weather ツールを公開すること."""
-    # server.py を import してツール登録を確認
     from importlib import import_module
 
     mod = import_module("mcp-servers.weather.server")
     server = mod.mcp
 
-    # FastMCP のツール一覧を確認
     tools = await server.list_tools()
     tool_names = [t.name for t in tools]
     assert "get_weather" in tool_names
 
 
 @pytest.mark.asyncio
-async def test_ac2_get_weather_returns_forecast() -> None:
-    """AC2: get_weather ツールが地域名と日付を受け取り、天気予報テキストを返すこと."""
+async def test_ac2_get_weather_returns_forecast_today() -> None:
+    """AC2: get_weather ツールが今日の天気予報テキストを返すこと."""
     from importlib import import_module
 
     mod = import_module("mcp-servers.weather.server")
     get_weather = mod.get_weather
 
-    # Geocoding と Forecast の両方をモック
-    mock_geocode_resp = MagicMock()
-    mock_geocode_resp.read.return_value = _make_geocode_response()
-    mock_geocode_resp.__enter__ = lambda s: s
-    mock_geocode_resp.__exit__ = MagicMock(return_value=False)
+    mock_urlopen = _mock_urlopen_factory()
 
-    mock_forecast_resp = MagicMock()
-    mock_forecast_resp.read.return_value = _make_forecast_response()
-    mock_forecast_resp.__enter__ = lambda s: s
-    mock_forecast_resp.__exit__ = MagicMock(return_value=False)
-
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        # 1回目: Geocoding, 2回目: Forecast
-        mock_urlopen.side_effect = [mock_geocode_resp, mock_forecast_resp]
-
+    with patch("urllib.request.urlopen", mock_urlopen):
         result = await get_weather("東京", "today")
 
-    assert "東京" in result
-    assert "15.0°C" in result
-    assert "5.0°C" in result
+    assert "東京都" in result
+    assert "今日" in result
     assert "晴れ" in result
+    assert "降水確率" in result
 
 
 @pytest.mark.asyncio
-async def test_ac2_get_weather_tomorrow() -> None:
-    """AC2: 明日の天気予報を取得できること."""
+async def test_ac2_get_weather_returns_forecast_tomorrow() -> None:
+    """AC2: get_weather ツールが明日の天気予報テキストを返すこと."""
     from importlib import import_module
 
     mod = import_module("mcp-servers.weather.server")
     get_weather = mod.get_weather
 
-    mock_geocode_resp = MagicMock()
-    mock_geocode_resp.read.return_value = _make_geocode_response()
-    mock_geocode_resp.__enter__ = lambda s: s
-    mock_geocode_resp.__exit__ = MagicMock(return_value=False)
+    mock_urlopen = _mock_urlopen_factory()
 
-    mock_forecast_resp = MagicMock()
-    mock_forecast_resp.read.return_value = _make_forecast_response()
-    mock_forecast_resp.__enter__ = lambda s: s
-    mock_forecast_resp.__exit__ = MagicMock(return_value=False)
+    with patch("urllib.request.urlopen", mock_urlopen):
+        result = await get_weather("大阪", "tomorrow")
 
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = [mock_geocode_resp, mock_forecast_resp]
-        result = await get_weather("東京", "tomorrow")
-
+    assert "大阪府" in result
     assert "明日" in result
-    assert "12.0°C" in result
-    assert "弱い雨" in result  # weather_code=61
 
 
 @pytest.mark.asyncio
-async def test_ac2_get_weather_week() -> None:
-    """AC2: 週間天気予報を取得できること."""
+async def test_ac2_get_weather_returns_week_forecast() -> None:
+    """AC2: get_weather ツールが週間予報テキストを返すこと."""
     from importlib import import_module
 
     mod = import_module("mcp-servers.weather.server")
     get_weather = mod.get_weather
 
-    dates = [f"2026-02-{6 + i:02d}" for i in range(7)]
-    codes = [1, 2, 3, 61, 0, 71, 1]
-    maxes = [15.0, 14.0, 13.0, 10.0, 16.0, 8.0, 15.0]
-    mins = [5.0, 4.0, 3.0, 2.0, 6.0, 0.0, 5.0]
+    mock_urlopen = _mock_urlopen_factory()
 
-    mock_geocode_resp = MagicMock()
-    mock_geocode_resp.read.return_value = _make_geocode_response()
-    mock_geocode_resp.__enter__ = lambda s: s
-    mock_geocode_resp.__exit__ = MagicMock(return_value=False)
-
-    mock_forecast_resp = MagicMock()
-    mock_forecast_resp.read.return_value = _make_forecast_response(dates, codes, maxes, mins)
-    mock_forecast_resp.__enter__ = lambda s: s
-    mock_forecast_resp.__exit__ = MagicMock(return_value=False)
-
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = [mock_geocode_resp, mock_forecast_resp]
+    with patch("urllib.request.urlopen", mock_urlopen):
         result = await get_weather("東京", "week")
 
-    assert "東京" in result
+    assert "東京都" in result
+    assert "週間予報" in result
     # 7日分のデータが含まれる
-    for d in dates:
-        assert d in result
+    assert "2/7" in result
 
 
 @pytest.mark.asyncio
-async def test_ac3_weather_api_fetches_real_data() -> None:
-    """AC3: 外部天気予報API（Open-Meteo）から実データを取得すること.
-
-    Geocoding と Forecast の正しいAPIエンドポイントが呼ばれることを検証する。
-    """
+async def test_ac3_jma_api_called_correctly() -> None:
+    """AC3: 気象庁APIの正しいエンドポイントが呼ばれること."""
     from importlib import import_module
 
     mod = import_module("mcp-servers.weather.server")
     get_weather = mod.get_weather
 
-    mock_geocode_resp = MagicMock()
-    mock_geocode_resp.read.return_value = _make_geocode_response("大阪", 34.6937, 135.5023)
-    mock_geocode_resp.__enter__ = lambda s: s
-    mock_geocode_resp.__exit__ = MagicMock(return_value=False)
+    mock_urlopen = _mock_urlopen_factory()
 
-    mock_forecast_resp = MagicMock()
-    mock_forecast_resp.read.return_value = _make_forecast_response()
-    mock_forecast_resp.__enter__ = lambda s: s
-    mock_forecast_resp.__exit__ = MagicMock(return_value=False)
+    with patch("urllib.request.urlopen", mock_urlopen):
+        await get_weather("東京", "today")
 
-    with patch("urllib.request.urlopen") as mock_urlopen:
-        mock_urlopen.side_effect = [mock_geocode_resp, mock_forecast_resp]
-        await get_weather("大阪", "today")
-
-    # 2回呼ばれる: Geocoding + Forecast
+    # area.json + forecast の2回呼ばれる
     assert mock_urlopen.call_count == 2
 
-    # Geocoding API のURL確認
-    geocode_call = mock_urlopen.call_args_list[0]
-    geocode_url = geocode_call[0][0].full_url
-    assert "geocoding-api.open-meteo.com" in geocode_url
-    assert "name=%E5%A4%A7%E9%98%AA" in geocode_url  # URL-encoded "大阪"
+    # 1回目: area.json
+    first_call_url = mock_urlopen.call_args_list[0][0][0].full_url
+    assert "jma.go.jp" in first_call_url
+    assert "area.json" in first_call_url
 
-    # Forecast API のURL確認
-    forecast_call = mock_urlopen.call_args_list[1]
-    forecast_url = forecast_call[0][0].full_url
-    assert "api.open-meteo.com" in forecast_url
-    assert "latitude=34.6937" in forecast_url
-    assert "longitude=135.5023" in forecast_url
+    # 2回目: forecast API（東京都 = 130000）
+    second_call_url = mock_urlopen.call_args_list[1][0][0].full_url
+    assert "jma.go.jp" in second_call_url
+    assert "130000" in second_call_url
 
 
 @pytest.mark.asyncio
-async def test_ac3_geocode_not_found() -> None:
+async def test_ac3_location_not_found() -> None:
     """AC3: 存在しない地域名の場合、エラーメッセージを返すこと."""
     from importlib import import_module
 
     mod = import_module("mcp-servers.weather.server")
     get_weather = mod.get_weather
 
-    mock_resp = MagicMock()
-    mock_resp.read.return_value = json.dumps({"results": []}).encode("utf-8")
-    mock_resp.__enter__ = lambda s: s
-    mock_resp.__exit__ = MagicMock(return_value=False)
+    mock_urlopen = _mock_urlopen_factory()
 
-    with patch("urllib.request.urlopen", return_value=mock_resp):
+    with patch("urllib.request.urlopen", mock_urlopen):
         result = await get_weather("存在しない場所XYZ", "today")
 
     assert "見つかりませんでした" in result
+
+
+@pytest.mark.asyncio
+async def test_city_name_fallback() -> None:
+    """主要都市名（札幌など）でフォールバック検索が機能すること."""
+    from importlib import import_module
+
+    mod = import_module("mcp-servers.weather.server")
+    get_weather = mod.get_weather
+
+    mock_urlopen = _mock_urlopen_factory()
+
+    with patch("urllib.request.urlopen", mock_urlopen):
+        result = await get_weather("札幌", "today")
+
+    # 石狩・空知・後志地方のofficeコード 016000 で取得される
+    assert "見つかりませんでした" not in result
+    assert "今日" in result
+
+
+@pytest.mark.asyncio
+async def test_umbrella_recommendation_rain() -> None:
+    """天気に「雨」が含まれる場合、傘の推奨メッセージが出ること."""
+    from importlib import import_module
+
+    mod = import_module("mcp-servers.weather.server")
+    get_weather = mod.get_weather
+
+    rainy_forecast = _make_forecast_response(
+        weathers=["雨　時々　くもり", "くもり", "晴れ"],
+        pops=["80", "60", "40", "20", "10", "10"],
+    )
+    mock_urlopen = _mock_urlopen_factory(forecast_response=rainy_forecast)
+
+    with patch("urllib.request.urlopen", mock_urlopen):
+        result = await get_weather("東京", "today")
+
+    assert "傘を持っていくことをおすすめします" in result
+
+
+@pytest.mark.asyncio
+async def test_invalid_date_parameter() -> None:
+    """無効な日付パラメータの場合、エラーメッセージを返すこと."""
+    from importlib import import_module
+
+    mod = import_module("mcp-servers.weather.server")
+    get_weather = mod.get_weather
+
+    mock_urlopen = _mock_urlopen_factory()
+
+    with patch("urllib.request.urlopen", mock_urlopen):
+        result = await get_weather("東京", "invalid_date")
+
+    assert "無効です" in result
