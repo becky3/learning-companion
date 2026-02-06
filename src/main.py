@@ -1,5 +1,5 @@
 """Learning Companion エントリーポイント
-仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md
+仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md, docs/specs/f8-thread-support.md
 """
 
 from __future__ import annotations
