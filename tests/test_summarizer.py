@@ -1,4 +1,4 @@
-"""Summarizer要約プロンプトのテスト."""
+"""Summarizer要約プロンプトのテスト (Issue #102)."""
 
 from __future__ import annotations
 
