@@ -43,9 +43,9 @@ GitHub PRやIssueで `@claude` メンションすることでClaude Codeを呼�
 - [x] AC1: `@claude` メンションでClaude Codeが起動する
 - [x] AC2: becky3ユーザーのみ実行可能（セキュリティガード）
 - [x] AC3: OAuth認証でAPIアクセスする
-- [x] AC4: `--max-turns 30` でターン数を制限する
-- [x] AC6: `--dangerously-skip-permissions` でツール実行確認をスキップする
+- [x] AC4: `--max-turns 100` でターン数を制限する
 - [x] AC5: ワークフローファイルが `.github/workflows/claude.yml` に配置される
+- [x] AC6: `--dangerously-skip-permissions` でツール実行確認をスキップする
 
 ## 認証方式
 
@@ -58,6 +58,12 @@ GitHub PRやIssueで `@claude` メンションすることでClaude Codeを呼�
    - Settings → Secrets and variables → Actions → **Repository secrets**
    - ⚠️ Environment secrets ではなく Repository secrets に設定すること
 
+## 使用モデル
+
+**Claude Opus 4.6**（`--model claude-opus-4-6`）
+
+`claude_args` パラメータで指定。
+
 ## セキュリティガード
 
 | ガード | 説明 |
@@ -65,7 +71,7 @@ GitHub PRやIssueで `@claude` メンションすることでClaude Codeを呼�
 | ユーザー制限 | `github.actor == 'becky3'` で許可ユーザーを限定 |
 | イベントフィルタリング | `@claude` メンションがある場合のみ実行 |
 | トークン保護 | シークレット経由で参照（ハードコードしない） |
-| ターン制限 | `--max-turns 30` で無限ループ防止 |
+| ターン制限 | `--max-turns 100` で無限ループ防止 |
 | フル権限 | `--dangerously-skip-permissions` で確認スキップ（ユーザー制限があるため許容） |
 
 ## 関連ファイル
