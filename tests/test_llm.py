@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from src.config.settings import Settings
-from src.llm.base import LLMProvider, LLMResponse
+from src.llm.base import LLMProvider
 from src.llm.factory import create_local_provider, create_online_provider, get_provider_for_service
 from src.llm.lmstudio_provider import LMStudioProvider
 
@@ -231,18 +231,75 @@ def test_ac10_anthropic_tool_use() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac11_lmstudio_fallback_to_complete() -> None:
-    """AC11: ツール非対応のプロバイダー（LMStudio等）は complete_with_tools() が従来の complete() にフォールバックすること."""
-    from unittest.mock import AsyncMock
+async def test_ac11_lmstudio_complete_with_tools() -> None:
+    """AC11: LMStudioProvider が Function Calling でツール呼び出しに対応すること."""
+    import json
+    from unittest.mock import AsyncMock, MagicMock
 
     from src.llm.base import Message, ToolDefinition
     from src.llm.lmstudio_provider import LMStudioProvider
 
     provider = LMStudioProvider(base_url="http://localhost:1234/v1")
 
-    # complete() をモック化
-    mock_response = LLMResponse(content="フォールバック応答", model="local-model")
-    provider.complete = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+    # OpenAI互換APIのモックレスポンス（ツール呼び出しあり）
+    mock_tool_call = MagicMock()
+    mock_tool_call.id = "call_1"
+    mock_tool_call.function = MagicMock()
+    mock_tool_call.function.name = "get_weather"
+    mock_tool_call.function.arguments = json.dumps({"location": "東京"})
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = ""
+    mock_choice.message.tool_calls = [mock_tool_call]
+
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.model = "qwen3-30b"
+    mock_response.usage = MagicMock()
+    mock_response.usage.prompt_tokens = 100
+    mock_response.usage.completion_tokens = 20
+
+    provider._client.chat.completions.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    tools = [
+        ToolDefinition(
+            name="get_weather",
+            description="天気予報",
+            input_schema={"type": "object", "properties": {"location": {"type": "string"}}},
+        ),
+    ]
+    messages = [Message(role="user", content="東京の天気は？")]
+
+    result = await provider.complete_with_tools(messages, tools)
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == "get_weather"
+    assert result.tool_calls[0].arguments == {"location": "東京"}
+    assert result.stop_reason == "tool_use"
+
+
+@pytest.mark.asyncio
+async def test_ac11_lmstudio_complete_with_tools_no_tool_call() -> None:
+    """AC11: LMStudioProvider でツール呼び出しなしの場合、通常のテキスト応答を返すこと."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.llm.base import Message, ToolDefinition
+    from src.llm.lmstudio_provider import LMStudioProvider
+
+    provider = LMStudioProvider(base_url="http://localhost:1234/v1")
+
+    # ツール呼び出しなしのモックレスポンス
+    mock_choice = MagicMock()
+    mock_choice.message.content = "東京は今日晴れです。"
+    mock_choice.message.tool_calls = None
+
+    mock_response = MagicMock()
+    mock_response.choices = [mock_choice]
+    mock_response.model = "qwen3-30b"
+    mock_response.usage = MagicMock()
+    mock_response.usage.prompt_tokens = 50
+    mock_response.usage.completion_tokens = 10
+
+    provider._client.chat.completions.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
 
     tools = [
         ToolDefinition(
@@ -251,10 +308,9 @@ async def test_ac11_lmstudio_fallback_to_complete() -> None:
             input_schema={"type": "object", "properties": {}},
         ),
     ]
-    messages = [Message(role="user", content="東京の天気は？")]
+    messages = [Message(role="user", content="こんにちは")]
 
-    # complete_with_tools() は complete() にフォールバック
     result = await provider.complete_with_tools(messages, tools)
-    assert result.content == "フォールバック応答"
+    assert result.content == "東京は今日晴れです。"
     assert result.tool_calls == []
-    provider.complete.assert_called_once_with(messages)  # type: ignore[union-attr]
+    assert result.stop_reason == "end_turn"
