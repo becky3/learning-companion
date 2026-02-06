@@ -338,13 +338,34 @@ class WebCrawler:
     仕様: docs/specs/f9-rag-knowledge.md
     """
 
-    def __init__(self, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        timeout: float = 30.0,
+        allowed_domains: list[str] | None = None,
+        max_pages: int = 50,
+        crawl_delay: float = 1.0,
+    ) -> None:
         self._timeout = aiohttp.ClientTimeout(total=timeout)
+        self._allowed_domains = set(allowed_domains or [])
+        self._max_pages = max_pages
+        self._crawl_delay = crawl_delay
+
+    def _validate_url(self, url: str) -> str:
+        """SSRF対策のURL検証. 問題なければ正規化済みURLを返す.
+
+        検証内容:
+        - スキームが http または https であること
+        - ホスト名が allowed_domains に含まれること
+        - 検証失敗時は ValueError を送出
+        """
 
     async def crawl_index_page(
         self, index_url: str, url_pattern: str = "",
     ) -> list[str]:
         """リンク集ページ内の <a> タグからURLリストを抽出する（深度1のみ、再帰クロールは行わない）.
+
+        - index_url および抽出したリンクURLを _validate_url() で検証
+        - 抽出URL数が max_pages を超える場合は先頭 max_pages 件に制限
 
         Args:
             index_url: リンク集ページのURL
@@ -352,11 +373,37 @@ class WebCrawler:
         """
 
     async def crawl_page(self, url: str) -> CrawledPage | None:
-        """単一ページの本文テキストを取得する. 失敗時は None."""
+        """単一ページの本文テキストを取得する. 失敗時は None.
+
+        - _validate_url() でURL検証後にHTTPアクセスを行う
+        """
 
     async def crawl_pages(self, urls: list[str]) -> list[CrawledPage]:
-        """複数ページを並行クロールする."""
+        """複数ページを並行クロールする.
+
+        - 各リクエスト間に crawl_delay 秒の待機を挿入（同一ドメインへの負荷軽減）
+        """
 ```
+
+**セキュリティ要件（SSRF対策）**:
+
+Slackコマンド経由でユーザーが任意のURLを指定できるため、サーバーサイドからのリクエストを安全に制限する。
+
+- **ドメインホワイトリスト（必須）**: `RAG_ALLOWED_DOMAINS` に設定されたドメインのみクロールを許可する。未設定の場合は `rag crawl` / `rag add` コマンドを拒否する
+- **スキーム制限**: `http://` と `https://` のみ許可。`file:`, `ftp:` 等は拒否する
+- **リンク先の検証**: `crawl_index_page()` で抽出したリンクURLについても同じドメインホワイトリストで検証する
+- **URL安全性チェック（オプション）**: `RAG_URL_SAFETY_CHECK` が有効な場合、初回投入URLに対して [Google Safe Browsing API](https://developers.google.com/safe-browsing/v4) でマルウェア・フィッシング判定を行う。判定NGの場合はクロールを拒否する
+
+**クロール制御**:
+
+- **ページ数上限**: 1回の `rag crawl` で取得するページ数を `RAG_MAX_CRAWL_PAGES`（デフォルト: 50）で制限する
+- **リクエスト間隔**: 同一ドメインへの連続リクエスト間に `RAG_CRAWL_DELAY_SEC`（デフォルト: 1.0秒）の待機を挿入し、対象サーバーへの負荷を軽減する
+
+**robots.txt対応方針**:
+
+- 初期実装では `robots.txt` の解析・遵守は行わない
+- User-Agentヘッダーに識別可能なボット名を設定する（例: `AI-Assistant-Crawler/1.0`）
+- 将来的に `robots.txt` の解析・遵守機能を追加予定
 
 **HTML本文抽出ロジック（BeautifulSoup4使用）**:
 1. `<script>`, `<style>`, `<nav>`, `<header>`, `<footer>` タグを除去
@@ -519,7 +566,11 @@ rag_service: RAGKnowledgeService | None = None
 if settings.rag_enabled:
     embedding = get_embedding_provider(settings, settings.embedding_provider)
     vector_store = VectorStore(embedding, settings.chromadb_persist_dir)
-    web_crawler = WebCrawler()
+    web_crawler = WebCrawler(
+        allowed_domains=settings.rag_allowed_domains,
+        max_pages=settings.rag_max_crawl_pages,
+        crawl_delay=settings.rag_crawl_delay_sec,
+    )
     rag_service = RAGKnowledgeService(
         vector_store, web_crawler,
         chunk_size=settings.rag_chunk_size,
@@ -548,6 +599,10 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
     rag_retrieval_count: int = 5
+    rag_allowed_domains: list[str] = []
+    rag_max_crawl_pages: int = 50
+    rag_crawl_delay_sec: float = 1.0
+    rag_url_safety_check: bool = False
 ```
 
 ### 環境変数 (`.env`)
@@ -562,6 +617,10 @@ CHROMADB_PERSIST_DIR=./chroma_db
 RAG_CHUNK_SIZE=500
 RAG_CHUNK_OVERLAP=50
 RAG_RETRIEVAL_COUNT=5
+RAG_ALLOWED_DOMAINS=example.com,docs.python.org
+RAG_MAX_CRAWL_PAGES=50
+RAG_CRAWL_DELAY_SEC=1.0
+RAG_URL_SAFETY_CHECK=false
 ```
 
 ## 受け入れ条件
@@ -592,6 +651,15 @@ RAG_RETRIEVAL_COUNT=5
 - [ ] **AC13**: URLパターン（正規表現）によるフィルタリングが機能すること
 - [ ] **AC14**: `WebCrawler.crawl_page()` が単一ページの本文テキストを取得できること
 - [ ] **AC15**: `WebCrawler.crawl_pages()` が複数ページを並行クロールし、ページ単位のエラーを隔離すること
+
+### セキュリティ・クロール制御
+
+- [ ] **AC30**: `RAG_ALLOWED_DOMAINS` に含まれないドメインのURLがクロール拒否されること
+- [ ] **AC31**: `http` / `https` 以外のスキーム（`file:`, `ftp:` 等）が拒否されること
+- [ ] **AC32**: `crawl_index_page()` で抽出したリンクURLもドメインホワイトリストで検証されること
+- [ ] **AC33**: `RAG_ALLOWED_DOMAINS` が未設定の場合、`rag crawl` / `rag add` コマンドが拒否されること
+- [ ] **AC34**: 1回のクロールで取得するページ数が `RAG_MAX_CRAWL_PAGES` で制限されること
+- [ ] **AC35**: 同一ドメインへの連続リクエスト間に `RAG_CRAWL_DELAY_SEC` の待機が挿入されること
 
 ### RAGナレッジサービス（オーケストレーション）
 
@@ -680,6 +748,12 @@ RAG_RETRIEVAL_COUNT=5
 | `tests/test_web_crawler.py` | `test_ac13_url_pattern_filtering` | AC13 |
 | `tests/test_web_crawler.py` | `test_ac14_crawl_page_extracts_text` | AC14 |
 | `tests/test_web_crawler.py` | `test_ac15_crawl_pages_isolates_errors` | AC15 |
+| `tests/test_web_crawler.py` | `test_ac30_disallowed_domain_rejected` | AC30 |
+| `tests/test_web_crawler.py` | `test_ac31_non_http_scheme_rejected` | AC31 |
+| `tests/test_web_crawler.py` | `test_ac32_extracted_links_validated` | AC32 |
+| `tests/test_web_crawler.py` | `test_ac33_empty_allowlist_rejects_all` | AC33 |
+| `tests/test_web_crawler.py` | `test_ac34_max_crawl_pages_limit` | AC34 |
+| `tests/test_web_crawler.py` | `test_ac35_crawl_delay_between_requests` | AC35 |
 
 ### 統合テスト
 
@@ -745,4 +819,6 @@ RAG_RETRIEVAL_COUNT=5
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限し、対象サーバーへの過負荷を防ぐ
 5. **LLMコンテキストウィンドウ**: 多数のチャンクが注入されるとトークン上限に近づく可能性がある。`RAG_RETRIEVAL_COUNT` で検索件数を制限し、対応する
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
-7. **robots.txt**: 初期実装では `robots.txt` のチェックは行わない。将来的に対応を検討する
+7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない。User-Agentにボット名を設定し、将来的に対応を検討する
+8. **SSRF対策**: `RAG_ALLOWED_DOMAINS` によるドメインホワイトリストが主防御。未設定時はクロールコマンドを拒否する
+9. **URL安全性チェック**: `RAG_URL_SAFETY_CHECK=true` で Google Safe Browsing API による判定を有効化できる（オプション、APIキー別途必要）
