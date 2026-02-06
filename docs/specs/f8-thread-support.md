@@ -129,12 +129,14 @@ class ThreadHistoryService:
         self,
         channel: str,
         thread_ts: str,
+        current_ts: str,
     ) -> list[Message] | None:
         """スレッドのメッセージ履歴を取得し、LLM用のMessageリストに変換する.
 
         Args:
             channel: チャンネルID
             thread_ts: スレッドの親メッセージのタイムスタンプ
+            current_ts: 今回のトリガーメッセージのタイムスタンプ（除外用）
 
         Returns:
             Message のリスト。取得失敗時は None（呼び出し元でフォールバック判定）。
@@ -143,7 +145,7 @@ class ThreadHistoryService:
             result = await self._client.conversations_replies(
                 channel=channel,
                 ts=thread_ts,
-                limit=self._limit + 1,  # 最新メッセージ（今回の発言）を除外するため +1
+                limit=self._limit,
             )
             raw_messages: list[dict[str, Any]] = result.get("messages", [])
         except Exception:
@@ -157,8 +159,8 @@ class ThreadHistoryService:
         if not raw_messages:
             return []
 
-        # 最新メッセージ（= 今回の発言）は ChatService 側で追加されるため除外
-        history_messages = raw_messages[:-1]
+        # 今回のトリガーメッセージを除外（ChatService 側で追加されるため）
+        history_messages = [m for m in raw_messages if m.get("ts") != current_ts]
 
         # limit 件に絞る（古い方から切り捨て）
         if len(history_messages) > self._limit:
@@ -174,10 +176,13 @@ class ThreadHistoryService:
             user_id = msg.get("user", "")
             if user_id == self._bot_user_id:
                 role = "assistant"
+                content = text
             else:
                 role = "user"
+                # 複数ユーザーの発言を区別するためユーザーIDを付与
+                content = f"<@{user_id}>: {text}" if user_id else text
 
-            messages.append(Message(role=role, content=text))
+            messages.append(Message(role=role, content=content))
 
         return messages
 ```
@@ -205,8 +210,9 @@ class ChatService:
         user_id: str,
         text: str,
         thread_ts: str,
-        channel: str = "",         # 追加
-        is_in_thread: bool = False, # 追加
+        channel: str = "",          # 追加
+        is_in_thread: bool = False,  # 追加
+        current_ts: str = "",        # 追加: トリガーメッセージの ts
     ) -> str:
         """ユーザーメッセージに対する応答を生成し、履歴を保存する."""
         async with self._session_factory() as session:
@@ -216,6 +222,7 @@ class ChatService:
                 history = await self._thread_history.fetch_thread_messages(
                     channel=channel,
                     thread_ts=thread_ts,
+                    current_ts=current_ts,
                 )
 
             # Slack API から取得できなかった場合は DB フォールバック
@@ -267,8 +274,9 @@ async def _process_message(
     thread_ts: str,
     say: object,
     files: list[dict[str, object]] | None = None,
-    channel: str = "",          # 追加
-    is_in_thread: bool = False, # 追加
+    channel: str = "",           # 追加
+    is_in_thread: bool = False,  # 追加
+    current_ts: str = "",        # 追加: トリガーメッセージの ts
 ) -> None:
     # ... 既存のコマンド処理 ...
 
@@ -278,8 +286,9 @@ async def _process_message(
             user_id=user_id,
             text=cleaned_text,
             thread_ts=thread_ts,
-            channel=channel,          # 追加
-            is_in_thread=is_in_thread, # 追加
+            channel=channel,           # 追加
+            is_in_thread=is_in_thread,  # 追加
+            current_ts=current_ts,      # 追加
         )
         # ...
 ```
@@ -290,7 +299,8 @@ async def handle_mention(event: dict, say: object) -> None:
     user_id: str = event.get("user", "")
     text: str = event.get("text", "")
     raw_thread_ts: str | None = event.get("thread_ts")
-    thread_ts: str = raw_thread_ts or event.get("ts", "")
+    event_ts: str = event.get("ts", "")      # 追加
+    thread_ts: str = raw_thread_ts or event_ts
     files: list[dict[str, object]] | None = event.get("files")
     channel: str = event.get("channel", "")  # 追加
 
@@ -300,8 +310,9 @@ async def handle_mention(event: dict, say: object) -> None:
 
     await _process_message(
         user_id, cleaned_text, thread_ts, say, files,
-        channel=channel,                     # 追加
-        is_in_thread=raw_thread_ts is not None,  # 追加
+        channel=channel,                          # 追加
+        is_in_thread=raw_thread_ts is not None,   # 追加
+        current_ts=event_ts,                      # 追加
     )
 ```
 
@@ -311,13 +322,15 @@ async def handle_message(event: dict, say: object) -> None:
     # ... 既存のフィルタリング処理 ...
 
     raw_thread_ts: str | None = event.get("thread_ts")
-    thread_ts: str = raw_thread_ts or event.get("ts", "")
+    event_ts: str = event.get("ts", "")      # 追加
+    thread_ts: str = raw_thread_ts or event_ts
     channel: str = event.get("channel", "")
 
     await _process_message(
         user_id, cleaned_text, thread_ts, say, files,
-        channel=channel,                     # 追加
-        is_in_thread=raw_thread_ts is not None,  # 追加
+        channel=channel,                          # 追加
+        is_in_thread=raw_thread_ts is not None,   # 追加
+        current_ts=event_ts,                      # 追加
     )
 ```
 
@@ -333,9 +346,15 @@ async def main() -> None:
     app = create_app(settings)
     slack_client = app.client
 
-    # Bot User ID を取得
-    auth_result = await slack_client.auth_test()
-    bot_user_id = auth_result["user_id"]
+    # Bot User ID を取得（エラーハンドリング付き）
+    try:
+        auth_result = await slack_client.auth_test()
+    except Exception as e:
+        raise RuntimeError(f"Failed to call Slack auth_test: {e}") from e
+
+    bot_user_id: str | None = auth_result.get("user_id") if isinstance(auth_result, dict) else None
+    if not bot_user_id:
+        raise RuntimeError("Slack auth_test response does not contain 'user_id'.")
 
     # スレッド履歴サービス
     thread_history_service = ThreadHistoryService(
@@ -376,7 +395,7 @@ async def main() -> None:
 | `.env.example` | `THREAD_HISTORY_LIMIT` 追加 |
 | `tests/test_thread_history.py` | **新規** ThreadHistoryService のテスト |
 | `tests/test_chat_service.py` | スレッド履歴関連テスト追加 |
-| `docs/specs/f1-chat.md` | スレッド履歴関連の AC 追加・更新 |
+| `docs/specs/f1-chat.md` | スレッド履歴関連の AC 追加・更新（実装PRで更新予定） |
 
 ## テスト方針
 
@@ -407,6 +426,9 @@ def test_ac4_non_thread_uses_db_history():
 
 # AC5: Slack API 失敗時に DB フォールバック
 def test_ac5_fallback_to_db_on_api_failure():
+
+# AC6: 自動返信チャンネルのスレッド内でもスレッド履歴が使用される
+def test_ac6_auto_reply_channel_thread_uses_slack_api_history():
 
 # スレッド内で Slack API 履歴が使用される
 def test_thread_uses_slack_api_history():
