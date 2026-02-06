@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     feed_card_layout: Literal["vertical", "horizontal"] = "horizontal"
 
     # Database
-    database_url: str = "sqlite+aiosqlite:///./learning_companion.db"
+    database_url: str = "sqlite+aiosqlite:///./ai_assistant.db"
 
     # Environment
     env_name: str = ""

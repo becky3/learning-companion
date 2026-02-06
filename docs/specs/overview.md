@@ -1,8 +1,8 @@
-# Learning Companion — 全体仕様概要
+# AI Assistant — 全体仕様概要
 
 ## 1. プロダクト概要
 
-Learning Companionは、Slack上で動作するAI学習支援アシスタントである。
+AI Assistantは、Slack上で動作するAIアシスタントである。
 ユーザーとの会話、情報の自動収集・要約配信、ユーザープロファイリング、学習トピック提案を通じて、継続的な学習をサポートする。
 
 ## 2. 機能一覧

@@ -1,4 +1,4 @@
-# Learning Companion — 開発ガイドライン
+# AI Assistant — 開発ガイドライン
 
 > プロジェクトの概要・技術スタック・セットアップ手順・プロジェクト構造は [README.md](README.md) を参照してください。
 
