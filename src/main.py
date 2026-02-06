@@ -148,7 +148,7 @@ async def main() -> None:
         session_factory=session_factory,
         slack_client=slack_client,
         channel_id=settings.slack_news_channel_id,
-        max_articles_per_category=settings.feed_articles_per_category,
+        max_articles_per_feed=settings.feed_articles_per_feed,
         feed_card_layout=settings.feed_card_layout,
         auto_reply_channels=settings.get_auto_reply_channels(),
         bot_token=settings.slack_bot_token,
