@@ -90,13 +90,12 @@ def test_ac5_format_empty_summary_shows_fallback() -> None:
     assert any("要約なし" in t for t in section_texts)
 
 
-def test_ac14_1_build_parent_message_shows_feed_name_and_count() -> None:
-    """AC14.1: 親メッセージにフィード名と記事件数が表示される."""
-    blocks = _build_parent_message("Python公式ブログ", 3)
+def test_ac14_1_build_parent_message_shows_feed_name() -> None:
+    """AC14.1: 親メッセージにフィード名が表示される."""
+    blocks = _build_parent_message("Python公式ブログ")
     assert len(blocks) == 1
     text = blocks[0]["text"]["text"]
     assert "Python公式ブログ" in text
-    assert "3件" in text
 
 
 def test_ac14_2_format_digest_returns_per_article_blocks() -> None:
@@ -115,15 +114,15 @@ def test_ac14_2_format_digest_returns_per_article_blocks() -> None:
 
 
 def test_ac14_3_article_blocks_show_datetime() -> None:
-    """AC14.3: 更新日時が記事の先頭に区切り線付きで表示される."""
+    """AC14.3: 更新日時がタイトル下に表示される."""
     dt = datetime(2026, 2, 5, 14, 30, 0, tzinfo=timezone.utc)
     article = _make_article(1, "Title", "https://a.com/1", "summary", published_at=dt)
     blocks = _build_article_blocks(article)
 
-    # 最初のブロックに日時が含まれる
+    # 記事ブロックのテキストに日時が含まれる
     first_text = blocks[0]["text"]["text"]
-    assert "───" in first_text
-    assert ":clock1:" in first_text
+    assert "02-05" in first_text
+    assert "02-05 23:30" in first_text
 
 
 def test_ac14_4_datetime_fallback_to_collected_at() -> None:
@@ -135,7 +134,7 @@ def test_ac14_4_datetime_fallback_to_collected_at() -> None:
     )
     dt_str = _format_article_datetime(article)
     # collected_at (UTC 9:00 → JST 18:00) の文字列が返る
-    assert "2026-02-06 18:00" in dt_str
+    assert "02-06 18:00" in dt_str
 
 
 def test_ac14_format_digest_limits_articles_per_feed() -> None:
@@ -199,11 +198,32 @@ async def db_factory():  # type: ignore[no-untyped-def]
 
 
 async def test_ac4_daily_collect_and_deliver_posts_to_slack(db_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC4/AC14: daily_collect_and_deliver がフィード別にSlack投稿する."""
+    """AC4/AC14: daily_collect_and_deliver がフィード別にSlack投稿する（逐次型）."""
     collector = AsyncMock()
-    collector.collect_all.return_value = []
+
+    # get_enabled_feeds が DB 内のフィードを返すようモック
+    async with db_factory() as session:
+        feed_result = await session.execute(select(Feed))
+        feeds = list(feed_result.scalars().all())
+    collector.get_enabled_feeds.return_value = feeds
+
+    # collect_feed: on_article_ready コールバックを呼び出して逐次投稿をシミュレート
+    async with db_factory() as session:
+        article_result = await session.execute(
+            select(Article).where(Article.delivered == False)  # noqa: E712
+        )
+        undelivered = list(article_result.scalars().all())
+
+    async def mock_collect_feed(feed, on_article_ready=None):  # type: ignore[no-untyped-def]
+        feed_articles = [a for a in undelivered if a.feed_id == feed.id]
+        for article in feed_articles:
+            if on_article_ready:
+                await on_article_ready(article)
+        return feed_articles
+
+    collector.collect_feed = AsyncMock(side_effect=mock_collect_feed)
+
     slack_client = AsyncMock()
-    # 親メッセージ投稿時に ts を返す
     slack_client.chat_postMessage.return_value = {"ts": "parent.123"}
 
     await daily_collect_and_deliver(
@@ -213,13 +233,14 @@ async def test_ac4_daily_collect_and_deliver_posts_to_slack(db_factory) -> None:
         channel_id="C123",
     )
 
-    collector.collect_all.assert_called_once()
+    collector.get_enabled_feeds.assert_called_once()
+    collector.collect_feed.assert_called_once()
     # ヘッダー(1) + 親メッセージ(1) + スレッド記事(1) + フッター(1) = 4回
     assert slack_client.chat_postMessage.call_count == 4
 
     calls = slack_client.chat_postMessage.call_args_list
     # ヘッダー
-    assert "今日の学習ニュース" in calls[0].kwargs["text"]
+    assert "今日のニュース" in calls[0].kwargs["text"]
     assert "blocks" in calls[0].kwargs
     # 親メッセージ
     assert "blocks" in calls[1].kwargs
@@ -233,7 +254,7 @@ async def test_ac4_daily_collect_and_deliver_posts_to_slack(db_factory) -> None:
 async def test_ac4_daily_collect_and_deliver_handles_error(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC4: ジョブ内でエラーが発生してもクラッシュしない."""
     collector = AsyncMock()
-    collector.collect_all.side_effect = RuntimeError("DB error")
+    collector.get_enabled_feeds.side_effect = RuntimeError("DB error")
     slack_client = AsyncMock()
 
     await daily_collect_and_deliver(
@@ -313,10 +334,34 @@ async def test_ac11_2_query_retrieves_only_undelivered_articles(db_factory) -> N
         assert "Delivered" not in titles
 
 
+def _make_sequential_collector(db_factory, undelivered: list[Article]) -> AsyncMock:  # type: ignore[no-untyped-def]
+    """逐次型 daily_collect_and_deliver 用のコレクターモックを作成する."""
+    collector = AsyncMock()
+
+    async def mock_collect_feed(feed, on_article_ready=None):  # type: ignore[no-untyped-def]
+        feed_articles = [a for a in undelivered if a.feed_id == feed.id]
+        for article in feed_articles:
+            if on_article_ready:
+                await on_article_ready(article)
+        return feed_articles
+
+    collector.collect_feed = AsyncMock(side_effect=mock_collect_feed)
+    return collector
+
+
 async def test_ac11_3_delivered_flag_updated_after_posting(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.3: Slack配信完了後、配信された記事の delivered が True に更新される."""
-    collector = AsyncMock()
-    collector.collect_all.return_value = []
+    async with db_factory() as session:
+        feeds = list((await session.execute(select(Feed))).scalars().all())
+        undelivered = list(
+            (await session.execute(
+                select(Article).where(Article.delivered == False)  # noqa: E712
+            )).scalars().all()
+        )
+
+    collector = _make_sequential_collector(db_factory, undelivered)
+    collector.get_enabled_feeds.return_value = feeds
+
     slack_client = AsyncMock()
     slack_client.chat_postMessage.return_value = {"ts": "parent.123"}
 
@@ -336,8 +381,17 @@ async def test_ac11_3_delivered_flag_updated_after_posting(db_factory) -> None: 
 
 async def test_ac11_4_no_redelivery_on_multiple_executions(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.4: deliver を複数回実行しても、既に配信済みの記事は再配信されない."""
-    collector = AsyncMock()
-    collector.collect_all.return_value = []
+    async with db_factory() as session:
+        feeds = list((await session.execute(select(Feed))).scalars().all())
+        undelivered = list(
+            (await session.execute(
+                select(Article).where(Article.delivered == False)  # noqa: E712
+            )).scalars().all()
+        )
+
+    collector = _make_sequential_collector(db_factory, undelivered)
+    collector.get_enabled_feeds.return_value = feeds
+
     slack_client = AsyncMock()
     slack_client.chat_postMessage.return_value = {"ts": "parent.123"}
 
@@ -350,9 +404,11 @@ async def test_ac11_4_no_redelivery_on_multiple_executions(db_factory) -> None: 
     )
     first_call_count = slack_client.chat_postMessage.call_count
 
-    # 2回目の配信（新規記事がない場合）
+    # 2回目の配信（collect_feed が新記事を返さない）
+    collector2 = _make_sequential_collector(db_factory, [])
+    collector2.get_enabled_feeds.return_value = feeds
     await daily_collect_and_deliver(
-        collector=collector,
+        collector=collector2,
         session_factory=db_factory,
         slack_client=slack_client,
         channel_id="C123",
@@ -366,8 +422,17 @@ async def test_ac11_4_no_redelivery_on_multiple_executions(db_factory) -> None: 
 
 async def test_ac11_5_new_articles_are_delivered(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.5: 新規収集された記事（delivered == False）は次回配信対象になる."""
-    collector = AsyncMock()
-    collector.collect_all.return_value = []
+    async with db_factory() as session:
+        feeds = list((await session.execute(select(Feed))).scalars().all())
+        undelivered = list(
+            (await session.execute(
+                select(Article).where(Article.delivered == False)  # noqa: E712
+            )).scalars().all()
+        )
+
+    collector = _make_sequential_collector(db_factory, undelivered)
+    collector.get_enabled_feeds.return_value = feeds
+
     slack_client = AsyncMock()
     slack_client.chat_postMessage.return_value = {"ts": "parent.123"}
 
@@ -393,10 +458,20 @@ async def test_ac11_5_new_articles_are_delivered(db_factory) -> None:  # type: i
         )
         session.add(new_article)
         await session.commit()
+        new_id = new_article.id
 
     # 2回目の配信（新規記事あり）
+    async with db_factory() as session:
+        new_articles = list(
+            (await session.execute(
+                select(Article).where(Article.id == new_id)
+            )).scalars().all()
+        )
+    collector2 = _make_sequential_collector(db_factory, new_articles)
+    collector2.get_enabled_feeds.return_value = feeds
+
     await daily_collect_and_deliver(
-        collector=collector,
+        collector=collector2,
         session_factory=db_factory,
         slack_client=slack_client,
         channel_id="C123",
@@ -434,9 +509,9 @@ def test_ac12_2_vertical_layout_has_independent_image_block() -> None:
     assert len(image_blocks) == 1
     assert image_blocks[0]["image_url"] == "https://a.com/img.png"
 
-    # 日時section + タイトルsection + 要約section = 3 sections
+    # タイトル+日時section + 要約section = 2 sections
     sections = [b for b in blocks if b["type"] == "section"]
-    assert len(sections) == 3  # 日時 + タイトル + 要約
+    assert len(sections) == 2  # タイトル+日時 + 要約
 
 
 def test_ac12_3_horizontal_layout_has_accessory_image() -> None:
@@ -451,11 +526,11 @@ def test_ac12_3_horizontal_layout_has_accessory_image() -> None:
     image_blocks = [b for b in blocks if b["type"] == "image"]
     assert len(image_blocks) == 0
 
-    # 日時section(1) + 記事section(1) = 2 sections
+    # 記事section = 1 section（タイトル+日時+要約が統合）
     sections = [b for b in blocks if b["type"] == "section"]
-    assert len(sections) == 2
+    assert len(sections) == 1
     # 記事sectionにaccessoryあり
-    content_section = sections[1]
+    content_section = sections[0]
     assert content_section["accessory"]["type"] == "image"
     assert content_section["accessory"]["image_url"] == "https://a.com/img.png"
 
@@ -485,7 +560,7 @@ def test_ac12_5_vertical_layout_no_image() -> None:
     assert len(image_blocks) == 0
 
     sections = [b for b in blocks if b["type"] == "section"]
-    assert len(sections) == 3  # 日時 + タイトル + 要約
+    assert len(sections) == 2  # タイトル+日時 + 要約
 
 
 def test_ac12_6_format_daily_digest_passes_layout() -> None:
@@ -643,8 +718,8 @@ async def test_ac15_2_feed_test_includes_delivered_articles(db_factory_with_deli
         channel_id="C123",
     )
 
-    # ヘッダー(1) + 親メッセージ(2) + スレッド記事(3: feed1に2件 + feed2に1件) = 6
-    assert slack_client.chat_postMessage.call_count == 6
+    # ヘッダー(1) + 親メッセージ(2) + スレッド記事(3: feed1に2件 + feed2に1件) + フッター(1) = 7
+    assert slack_client.chat_postMessage.call_count == 7
 
 
 async def test_ac15_3_feed_test_limits_to_max_feeds() -> None:
@@ -684,8 +759,8 @@ async def test_ac15_3_feed_test_limits_to_max_feeds() -> None:
         max_feeds=3,
     )
 
-    # ヘッダー(1) + 親メッセージ(3) + スレッド記事(3) = 7
-    assert slack_client.chat_postMessage.call_count == 7
+    # ヘッダー(1) + 親メッセージ(3) + スレッド記事(3) + フッター(1) = 8
+    assert slack_client.chat_postMessage.call_count == 8
 
     await engine.dispose()
 
@@ -727,7 +802,8 @@ async def test_ac15_5_feed_test_uses_thread_format(db_factory_with_delivered) ->
 
     calls = slack_client.chat_postMessage.call_args_list
     # ヘッダー
-    assert "フィードテスト配信" in calls[0].kwargs["text"]
+    assert "今日のニュース" in calls[0].kwargs["text"]
+    assert "テスト" in calls[0].kwargs["text"]
     # スレッド記事には thread_ts がある
     thread_calls = [c for c in calls if "thread_ts" in c.kwargs]
     assert len(thread_calls) > 0

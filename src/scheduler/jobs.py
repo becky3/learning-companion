@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any, Literal
@@ -30,7 +31,7 @@ def _format_article_datetime(article: Article, tz: ZoneInfo = DEFAULT_TZ) -> str
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=ZoneInfo("UTC"))
     local_dt = dt.astimezone(tz)
-    return local_dt.strftime("%Y-%m-%d %H:%M")
+    return local_dt.strftime("%m-%d %H:%M")
 
 
 def _build_article_blocks(
@@ -45,22 +46,14 @@ def _build_article_blocks(
 
     blocks: list[dict[str, Any]] = []
 
-    # 更新日時の表示
     dt_str = _format_article_datetime(article, tz)
-    blocks.append({
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": f"───────────────────\n:clock1: {dt_str}\n───────────────────",
-        },
-    })
 
     summary = (article.summary or "").strip()
     if not summary:
         summary = "要約なし"
 
     if layout == "horizontal":
-        title_part = f":newspaper: *<{article.url}|{article.title}>*\n\n"
+        title_part = f":newspaper: *<{article.url}|{article.title}>*\n{dt_str}\n\n"
         max_summary = 3000 - len(title_part) - 10
         if len(summary) > max_summary:
             summary = summary[:max_summary] + "..."
@@ -86,7 +79,7 @@ def _build_article_blocks(
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f":newspaper: *<{article.url}|{article.title}>*",
+                "text": f":newspaper: *<{article.url}|{article.title}>*\n{dt_str}",
             },
         })
         if article.image_url:
@@ -106,14 +99,14 @@ def _build_article_blocks(
     return blocks
 
 
-def _build_parent_message(feed_name: str, article_count: int) -> list[dict[str, Any]]:
+def _build_parent_message(feed_name: str) -> list[dict[str, Any]]:
     """フィードの親メッセージBlock Kitブロックを構築する."""
     return [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f":mega: *{feed_name}* — {article_count}件の新着記事",
+                "text": f":file_folder: *{feed_name}*",
             },
         },
     ]
@@ -148,8 +141,13 @@ def format_daily_digest(
         feed = feeds.get(feed_id)
         feed_name = feed.name if feed else "不明なフィード"
 
-        display_articles = by_feed[feed_id][:max_articles_per_feed]
-        parent_blocks = _build_parent_message(feed_name, len(display_articles))
+        # 投稿日時昇順（published_at 優先、なければ collected_at）
+        sorted_articles = sorted(
+            by_feed[feed_id],
+            key=lambda a: (a.published_at or a.collected_at),
+        )
+        display_articles = sorted_articles[:max_articles_per_feed]
+        parent_blocks = _build_parent_message(feed_name)
 
         article_blocks_list: list[list[dict[str, Any]]] = []
         for article in display_articles:
@@ -202,174 +200,25 @@ async def _post_article_to_thread(
             raise
 
 
-async def daily_collect_and_deliver(
-    collector: FeedCollector,
-    session_factory: async_sessionmaker[AsyncSession],
+async def _deliver_feed_to_slack(
+    articles: list[Article],
+    feed: Feed,
     slack_client: object,
     channel_id: str,
-    max_articles_per_feed: int = 10,
-    layout: Literal["vertical", "horizontal"] = "horizontal",
+    max_articles_per_feed: int,
+    layout: Literal["vertical", "horizontal"],
 ) -> None:
-    """毎朝の収集・配信ジョブ."""
-    logger.info("Starting daily feed collection and delivery")
-
-    try:
-        await collector.collect_all()
-
-        async with session_factory() as session:
-            result = await session.execute(
-                select(Article).where(Article.delivered == False)  # noqa: E712
-            )
-            undelivered_articles = list(result.scalars().all())
-
-            feed_result = await session.execute(select(Feed))
-            feeds = {f.id: f for f in feed_result.scalars().all()}
-
-        if not undelivered_articles:
-            logger.info("No new articles to deliver")
-            return
-
-        today = datetime.now(tz=DEFAULT_TZ).strftime("%Y-%m-%d")
-        digest = format_daily_digest(
-            undelivered_articles, feeds,
-            max_articles_per_feed=max_articles_per_feed,
-            layout=layout,
-        )
-        if not digest:
-            return
-
-        # ヘッダーメッセージ
-        await slack_client.chat_postMessage(  # type: ignore[attr-defined]
-            channel=channel_id,
-            text=f":newspaper: 今日の学習ニュース ({today})",
-            blocks=[
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f":newspaper: 今日の学習ニュース ({today})",
-                    },
-                },
-            ],
-        )
-
-        # フィードごとに親メッセージ + スレッド内に1記事1投稿（逐次型）
-        for feed_id, (parent_blocks, article_blocks_list) in digest.items():
-            feed = feeds.get(feed_id)
-            feed_name = feed.name if feed else "不明なフィード"
-            parent_result = await slack_client.chat_postMessage(  # type: ignore[attr-defined]
-                channel=channel_id,
-                text=f"📰 {feed_name}",
-                blocks=parent_blocks,
-                unfurl_links=False,
-                unfurl_media=False,
-            )
-            parent_ts = parent_result["ts"]
-
-            # 1記事ずつスレッドに投稿（逐次型）
-            for article_blocks in article_blocks_list:
-                await _post_article_to_thread(
-                    slack_client, channel_id, parent_ts, article_blocks,
-                )
-
-        # フッターメッセージ
-        await slack_client.chat_postMessage(  # type: ignore[attr-defined]
-            channel=channel_id,
-            text=":bulb: 気になる記事があれば、スレッドで聞いてね！",
-            blocks=[
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": ":bulb: 気になる記事があれば、スレッドで聞いてね！",
-                    },
-                },
-            ],
-        )
-
-        # 配信完了後、配信済みフラグを更新
-        async with session_factory() as session:
-            await session.execute(
-                update(Article)
-                .where(Article.id.in_([a.id for a in undelivered_articles]))
-                .values(delivered=True)
-            )
-            await session.commit()
-
-        logger.info("Delivered %d articles to %s", len(undelivered_articles), channel_id)
-    except Exception:
-        logger.exception("Error in daily_collect_and_deliver job")
-
-
-async def feed_test_deliver(
-    session_factory: async_sessionmaker[AsyncSession],
-    slack_client: object,
-    channel_id: str,
-    layout: Literal["vertical", "horizontal"] = "horizontal",
-    max_feeds: int = 5,
-    max_articles_per_feed: int = 10,
-) -> None:
-    """feed test 用配信（要約スキップ・配信済み含む・上限5フィード）.
-
-    仕様: docs/specs/f2-feed-collection.md (AC15)
-    """
-    async with session_factory() as session:
-        # 有効フィードをID昇順で最大 max_feeds 件取得
-        feed_result = await session.execute(
-            select(Feed)
-            .where(Feed.enabled == True)  # noqa: E712
-            .order_by(Feed.id.asc())
-            .limit(max_feeds)
-        )
-        test_feeds = list(feed_result.scalars().all())
-
-        if not test_feeds:
-            logger.info("No enabled feeds for test delivery")
-            return
-
-        feeds = {f.id: f for f in test_feeds}
-        feed_ids = [f.id for f in test_feeds]
-
-        # 各フィードの全記事を取得（delivered 問わず）
-        article_result = await session.execute(
-            select(Article).where(Article.feed_id.in_(feed_ids))
-        )
-        all_articles = list(article_result.scalars().all())
-
-    if not all_articles:
-        logger.info("No articles found for test delivery")
-        return
-
+    """1フィード分の記事をSlackに配信する共通処理."""
+    feeds_dict = {feed.id: feed}
     digest = format_daily_digest(
-        all_articles, feeds,
+        articles, feeds_dict,
         max_articles_per_feed=max_articles_per_feed,
         layout=layout,
     )
-    if not digest:
-        return
-
-    # テストヘッダー
-    await slack_client.chat_postMessage(  # type: ignore[attr-defined]
-        channel=channel_id,
-        text=":test_tube: フィードテスト配信",
-        blocks=[
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": ":test_tube: フィードテスト配信",
-                },
-            },
-        ],
-    )
-
-    # フィードごとに親メッセージ + スレッド内に1記事1投稿（逐次型）
     for feed_id, (parent_blocks, article_blocks_list) in digest.items():
-        feed = feeds.get(feed_id)
-        feed_name = feed.name if feed else "不明なフィード"
         parent_result = await slack_client.chat_postMessage(  # type: ignore[attr-defined]
             channel=channel_id,
-            text=f"📰 {feed_name}",
+            text=f"📰 {feed.name}",
             blocks=parent_blocks,
             unfurl_links=False,
             unfurl_media=False,
@@ -380,9 +229,192 @@ async def feed_test_deliver(
             await _post_article_to_thread(
                 slack_client, channel_id, parent_ts, article_blocks,
             )
+            await asyncio.sleep(1)
+
+
+async def _post_header(
+    slack_client: object,
+    channel_id: str,
+    header_text: str,
+) -> None:
+    """ヘッダーメッセージを投稿する."""
+    await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+        channel=channel_id,
+        text=header_text,
+        blocks=[
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": header_text,
+                },
+            },
+        ],
+    )
+
+
+async def _post_footer(slack_client: object, channel_id: str) -> None:
+    """フッターメッセージを投稿する."""
+    await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+        channel=channel_id,
+        text=":bulb: 気になる記事があれば、スレッドで聞いてね！",
+        blocks=[
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": ":bulb: 気になる記事があれば、スレッドで聞いてね！",
+                },
+            },
+        ],
+    )
+
+
+async def daily_collect_and_deliver(
+    collector: FeedCollector,
+    session_factory: async_sessionmaker[AsyncSession],
+    slack_client: object,
+    channel_id: str,
+    max_articles_per_feed: int = 10,
+    layout: Literal["vertical", "horizontal"] = "horizontal",
+) -> None:
+    """毎朝の収集・配信ジョブ（フィードごとに収集→即投稿の逐次型）."""
+    logger.info("Starting daily feed collection and delivery")
+
+    try:
+        feeds_list = await collector.get_enabled_feeds()
+        if not feeds_list:
+            logger.info("No enabled feeds")
+            return
+
+        today = datetime.now(tz=DEFAULT_TZ).strftime("%Y-%m-%d")
+        header_posted = False
+        total_delivered: list[int] = []
+
+        for feed in feeds_list:
+            # 親メッセージ投稿用の状態
+            parent_ts: str | None = None
+            posted_count = 0
+            posted_article_ids: list[int] = []
+
+            # 1記事要約完了時に即投稿するコールバック
+            async def on_article_ready(article: Article) -> None:
+                nonlocal header_posted, parent_ts, posted_count
+                if posted_count >= max_articles_per_feed:
+                    return
+
+                # ヘッダーメッセージ（初回のみ）
+                if not header_posted:
+                    await _post_header(
+                        slack_client, channel_id,
+                        f":newspaper: 今日のニュース ({today})",
+                    )
+                    header_posted = True
+
+                # 親メッセージ（フィード初回のみ）
+                if parent_ts is None:
+                    parent_blocks = _build_parent_message(feed.name)
+                    parent_result = await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+                        channel=channel_id,
+                        text=f"📰 {feed.name}",
+                        blocks=parent_blocks,
+                        unfurl_links=False,
+                        unfurl_media=False,
+                    )
+                    parent_ts = parent_result["ts"]
+
+                # スレッドに記事を投稿
+                article_blocks = _build_article_blocks(article, layout=layout)
+                await _post_article_to_thread(
+                    slack_client, channel_id, parent_ts, article_blocks,
+                )
+                posted_count += 1
+                posted_article_ids.append(article.id)
+                await asyncio.sleep(1)
+
+            # フィード単位で収集（1記事ごとにコールバックで即投稿）
+            try:
+                await collector.collect_feed(feed, on_article_ready=on_article_ready)
+            except Exception:
+                logger.exception("Failed to collect feed: %s (%s)", feed.name, feed.url)
+                continue
+
+            # 配信済みフラグを即更新
+            if posted_article_ids:
+                async with session_factory() as session:
+                    await session.execute(
+                        update(Article)
+                        .where(Article.id.in_(posted_article_ids))
+                        .values(delivered=True)
+                    )
+                    await session.commit()
+                total_delivered.extend(posted_article_ids)
+
+        # フッターメッセージ（1件でも配信した場合のみ）
+        if header_posted:
+            await _post_footer(slack_client, channel_id)
+
+        logger.info("Delivered %d articles to %s", len(total_delivered), channel_id)
+    except Exception:
+        logger.exception("Error in daily_collect_and_deliver job")
+
+
+async def feed_test_deliver(
+    session_factory: async_sessionmaker[AsyncSession],
+    slack_client: object,
+    channel_id: str,
+    layout: Literal["vertical", "horizontal"] = "horizontal",
+    max_feeds: int = 3,
+    max_articles_per_feed: int = 5,
+) -> None:
+    """feed test 用配信（要約スキップ・配信済み含む・上限3フィード・各5記事）.
+
+    本番と同じ _deliver_feed_to_slack を使用し、収集ステップのみスキップする。
+    仕様: docs/specs/f2-feed-collection.md (AC15)
+    """
+    async with session_factory() as session:
+        feed_result = await session.execute(
+            select(Feed)
+            .where(Feed.enabled == True)  # noqa: E712
+            .order_by(Feed.id.asc())
+            .limit(max_feeds)
+        )
+        test_feeds = list(feed_result.scalars().all())
+
+    if not test_feeds:
+        logger.info("No enabled feeds for test delivery")
+        return
+
+    # テストヘッダー（本番同等 +（テスト））
+    today = datetime.now(tz=DEFAULT_TZ).strftime("%Y-%m-%d")
+    await _post_header(
+        slack_client, channel_id,
+        f":newspaper: 今日のニュース ({today})（テスト）",
+    )
+
+    feeds_delivered = 0
+    for feed in test_feeds:
+        # 既存記事を取得（delivered 問わず）— 収集はスキップ
+        async with session_factory() as session:
+            article_result = await session.execute(
+                select(Article).where(Article.feed_id == feed.id)
+            )
+            articles = list(article_result.scalars().all())
+
+        if not articles:
+            continue
+
+        # 本番と同じ共通配信処理
+        await _deliver_feed_to_slack(
+            articles, feed, slack_client, channel_id,
+            max_articles_per_feed, layout,
+        )
+        feeds_delivered += 1
+
+    await _post_footer(slack_client, channel_id)
 
     # delivered フラグは更新しない（テストなので副作用なし）
-    logger.info("Test delivery completed for %d feeds", len(test_feeds))
+    logger.info("Test delivery completed for %d feeds", feeds_delivered)
 
 
 def setup_scheduler(

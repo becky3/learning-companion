@@ -424,7 +424,6 @@ def register_handlers(
                             slack_client=slack_client,
                             channel_id=channel_id,
                             layout=feed_card_layout,
-                            max_articles_per_feed=max_articles_per_feed,
                         )
                         await say(text="テスト配信が完了しました", thread_ts=thread_ts)  # type: ignore[operator]
                     except Exception:
@@ -446,7 +445,7 @@ def register_handlers(
                     "• `@bot feed enable <URL>` — フィード有効化\n"
                     "• `@bot feed disable <URL>` — フィード無効化\n"
                     "• `@bot feed import` + CSV添付 — フィード一括インポート\n"
-                    "• `@bot feed test` — テスト配信（上位5フィード）\n"
+                    "• `@bot feed test` — テスト配信（上位3フィード・各5件）\n"
                     "※ URL・カテゴリは複数指定可能（スペース区切り）"
                 )
 

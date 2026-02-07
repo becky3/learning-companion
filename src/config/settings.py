@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     # Feed delivery
     feed_articles_per_feed: int = Field(default=10, ge=1)
     feed_card_layout: Literal["vertical", "horizontal"] = "horizontal"
+    feed_summarize_timeout: int = Field(default=180, ge=0)  # 要約タイムアウト（秒、0=無制限）
 
     # Database
     database_url: str = "sqlite+aiosqlite:///./ai_assistant.db"

@@ -139,6 +139,7 @@ async def main() -> None:
         session_factory=session_factory,
         summarizer=summarizer,
         ogp_extractor=ogp_extractor,
+        summarize_timeout=settings.feed_summarize_timeout,
     )
     handlers_module.register_handlers(
         app, chat_service,
