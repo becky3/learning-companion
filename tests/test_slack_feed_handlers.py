@@ -702,3 +702,33 @@ async def test_ac17_6_handle_feed_export_permission_error() -> None:
 
     assert "エラー" in result
     assert "files:write" in result
+
+
+# --- feed collect --skip-summary テスト (AC18) ---
+
+
+def test_parse_feed_command_collect() -> None:
+    """feedコマンド解析: collect."""
+    subcommand, urls, category = _parse_feed_command("feed collect --skip-summary")
+    assert subcommand == "collect"
+    assert urls == []
+    # カテゴリ省略時はデフォルト「一般」となり、--skip-summary はカテゴリとして扱われない
+    assert category == "一般"
+
+
+def test_ac18_1_parse_collect_skip_summary_flag() -> None:
+    """feedコマンド解析: --skip-summary がカテゴリに含まれない (AC18.1)."""
+    subcommand, urls, category = _parse_feed_command("feed collect --skip-summary")
+    assert subcommand == "collect"
+    assert "--skip-summary" not in category
+    assert category == "一般"
+
+
+def test_ac18_parse_collect_without_skip_summary() -> None:
+    """feedコマンド解析: collect without --skip-summary."""
+    subcommand, urls, category = _parse_feed_command("feed collect")
+    assert subcommand == "collect"
+    assert urls == []
+    assert category == "一般"
+
+

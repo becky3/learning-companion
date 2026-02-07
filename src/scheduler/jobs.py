@@ -277,19 +277,28 @@ async def daily_collect_and_deliver(
     channel_id: str,
     max_articles_per_feed: int = 10,
     layout: Literal["vertical", "horizontal"] = "horizontal",
-) -> None:
-    """毎朝の収集・配信ジョブ（フィードごとに収集→即投稿の逐次型）."""
+    skip_summary: bool = False,
+) -> tuple[int, int]:
+    """毎朝の収集・配信ジョブ（フィードごとに収集→即投稿の逐次型）.
+
+    Returns:
+        (配信フィード数, 配信記事数) のタプル。
+    """
     logger.info("Starting daily feed collection and delivery")
 
     try:
         feeds_list = await collector.get_enabled_feeds()
         if not feeds_list:
             logger.info("No enabled feeds")
-            return
+            return (0, 0)
+
+        # skip-summary時はmax_articles_per_feedを無制限にする（全件収集・配信）
+        effective_max = max_articles_per_feed if not skip_summary else float("inf")
 
         today = datetime.now(tz=DEFAULT_TZ).strftime("%Y-%m-%d")
         header_posted = False
         total_delivered: list[int] = []
+        delivered_feed_count = 0
 
         for feed in feeds_list:
             # 親メッセージ投稿用の状態
@@ -333,22 +342,22 @@ async def daily_collect_and_deliver(
             # 1記事要約完了時に即投稿するコールバック
             # False を返すと収集を中止する
             async def on_article_ready(article: Article) -> bool:
-                if posted_count >= max_articles_per_feed:
+                if posted_count >= effective_max:
                     return False
                 await _post_single_article(article)
-                return posted_count < max_articles_per_feed
+                return posted_count < effective_max
 
             # フィード単位で収集（1記事ごとにコールバックで即投稿）
             try:
-                await collector.collect_feed(feed, on_article_ready=on_article_ready)
+                await collector.collect_feed(feed, on_article_ready=on_article_ready, skip_summary=skip_summary)
             except Exception:
                 logger.exception("Failed to collect feed: %s (%s)", feed.name, feed.url)
                 continue
 
             # 収集後、DB上の過去の未配信記事も投稿対象にする
-            if posted_count < max_articles_per_feed:
+            if posted_count < effective_max:
                 async with session_factory() as session:
-                    remaining = max_articles_per_feed - posted_count
+                    remaining = int(effective_max - posted_count) if effective_max != float("inf") else None
                     result = await session.execute(
                         select(Article)
                         .where(
@@ -374,14 +383,17 @@ async def daily_collect_and_deliver(
                     )
                     await session.commit()
                 total_delivered.extend(posted_article_ids)
+                delivered_feed_count += 1
 
         # フッターメッセージ（1件でも配信した場合のみ）
         if header_posted:
             await _post_footer(slack_client, channel_id)
 
         logger.info("Delivered %d articles to %s", len(total_delivered), channel_id)
+        return (delivered_feed_count, len(total_delivered))
     except Exception:
         logger.exception("Error in daily_collect_and_deliver job")
+        return (0, 0)
 
 
 async def feed_test_deliver(

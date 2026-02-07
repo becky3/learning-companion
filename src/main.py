@@ -17,7 +17,7 @@ from src.config.settings import get_settings, load_assistant_config
 from src.process_guard import cleanup_children, kill_existing_process, remove_pid_file, write_pid_file
 from src.db.session import init_db, get_session_factory
 from src.llm.factory import get_provider_for_service
-from src.mcp.client_manager import MCPClientManager, MCPServerConfig
+from src.mcp_bridge.client_manager import MCPClientManager, MCPServerConfig
 from src.services.chat import ChatService
 from src.services.thread_history import ThreadHistoryService
 from src.services.feed_collector import FeedCollector
@@ -146,6 +146,7 @@ async def main() -> None:
         summarizer=summarizer,
         ogp_extractor=ogp_extractor,
         summarize_timeout=settings.feed_summarize_timeout,
+        collect_days=settings.feed_collect_days,
     )
     handlers_module.register_handlers(
         app, chat_service,
