@@ -66,7 +66,7 @@ src/
   llm/anthropic_provider.py
   llm/lmstudio_provider.py  # OpenAI SDK で base_url を localhost:1234 に向ける
   llm/factory.py     # プロバイダー生成ファクトリ
-  mcp/
+  mcp_bridge/
     __init__.py
     client_manager.py  # MCPサーバー接続管理
   services/chat.py           # チャット応答 (オンラインLLM)
