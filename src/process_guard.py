@@ -84,12 +84,32 @@ def _kill_process_tree(pid: int) -> None:
 
 
 def _kill_process_tree_unix(pid: int) -> None:
-    """Unix系OSでプロセスを停止する.
+    """Unix系OSでプロセスツリーを停止する.
 
-    対象PIDに SIGTERM → SIGKILL を送信して停止を試みる。
-    子プロセスのクリーンアップは cleanup_children() が担当する。
+    子プロセスを列挙して停止した後、親プロセスに SIGTERM → SIGKILL を送信する。
     """
-    # まず SIGTERM で graceful に停止を試みる
+    import subprocess
+
+    # まず子プロセスを停止
+    try:
+        result = subprocess.run(  # noqa: S603
+            ["pgrep", "-P", str(pid)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        for line in result.stdout.strip().split("\n"):
+            if line.strip().isdigit():
+                child_pid = int(line.strip())
+                try:
+                    os.kill(child_pid, signal.SIGTERM)
+                    logger.info("子プロセス PID=%d に SIGTERM を送信しました", child_pid)
+                except (ProcessLookupError, PermissionError):
+                    pass
+    except FileNotFoundError:
+        logger.debug("pgrep コマンドが見つかりません。子プロセスの停止をスキップします。")
+
+    # 親プロセスに SIGTERM で graceful に停止を試みる
     try:
         os.kill(pid, signal.SIGTERM)
         logger.info("プロセス PID=%d に SIGTERM を送信しました", pid)

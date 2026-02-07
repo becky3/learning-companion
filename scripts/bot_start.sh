@@ -50,11 +50,14 @@ kill_process_tree() {
     if [ "$os_type" = "windows" ]; then
         taskkill //F //T //PID "$pid" > /dev/null 2>&1 || true
     else
-        # まず SIGTERM で graceful に停止
+        # まず子プロセスを停止
+        pkill -P "$pid" 2>/dev/null || true
+        # 親プロセスに SIGTERM で graceful に停止
         kill "$pid" 2>/dev/null || true
         sleep 1
         # まだ生きていれば SIGKILL
         if is_process_alive "$pid"; then
+            pkill -9 -P "$pid" 2>/dev/null || true
             kill -9 "$pid" 2>/dev/null || true
         fi
     fi

@@ -104,8 +104,9 @@ class TestIsProcessAlive:
         assert is_process_alive(os.getpid()) is True
 
     def test_nonexistent_process(self) -> None:
-        # PID 99999999 は通常存在しない
-        assert is_process_alive(99999999) is False
+        """存在しないプロセスの場合に False を返すこと."""
+        with patch("src.process_guard.os.kill", side_effect=ProcessLookupError):
+            assert is_process_alive(99999999) is False
 
 
 class TestKillExistingProcess:

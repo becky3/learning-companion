@@ -169,9 +169,15 @@ async def main() -> None:
         await start_socket_mode(app, settings)
     finally:
         if mcp_manager:
-            await mcp_manager.cleanup()
-            logger.info("MCP接続をクリーンアップしました")
-        cleanup_children()
+            try:
+                await mcp_manager.cleanup()
+                logger.info("MCP接続をクリーンアップしました")
+            except Exception:
+                logger.warning("MCP接続のクリーンアップに失敗しました", exc_info=True)
+        try:
+            cleanup_children()
+        except Exception:
+            logger.warning("子プロセスのクリーンアップに失敗しました", exc_info=True)
         remove_pid_file()
 
 
