@@ -8,7 +8,7 @@ import asyncio
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import unescape
 from time import mktime
 
@@ -43,11 +43,13 @@ class FeedCollector:
         summarizer: Summarizer,
         ogp_extractor: OgpExtractor | None = None,
         summarize_timeout: int = 180,
+        collect_days: int = 7,
     ) -> None:
         self._session_factory = session_factory
         self._summarizer = summarizer
         self._ogp_extractor = ogp_extractor
         self._summarize_timeout = summarize_timeout
+        self._collect_days = collect_days
 
     async def collect_all(
         self,
@@ -112,7 +114,7 @@ class FeedCollector:
         Args:
             on_article_ready: 記事1件の処理完了時に呼ばれるコールバック。
                 True を返すと収集続行、False を返すと収集を中止する。
-            skip_summary: Trueの場合、LLM要約をスキップし delivered=True で保存する。
+            skip_summary: Trueの場合、LLM要約をスキップしdescriptionを要約として保存する。
         """
         parsed = await asyncio.to_thread(feedparser.parse, feed.url)
         articles: list[Article] = []
@@ -142,10 +144,17 @@ class FeedCollector:
                     entry.get("summary", "") or entry.get("description", "")
                 )
                 published_at = None
-                if hasattr(entry, "published_parsed") and entry.published_parsed:
+                parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
+                if parsed_time:
                     published_at = datetime.fromtimestamp(
-                        mktime(entry.published_parsed), tz=timezone.utc
+                        mktime(parsed_time), tz=timezone.utc
                     )
+
+                # 日付カット: published_atがあり、collect_days以前の記事はスキップ
+                if published_at is not None:
+                    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=self._collect_days)
+                    if published_at < cutoff:
+                        continue
 
                 if skip_summary:
                     summary = description if description else "（要約なし）"

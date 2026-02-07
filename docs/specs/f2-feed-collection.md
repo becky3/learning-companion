@@ -90,6 +90,7 @@ asyncioにTaskGroupが正式導入され...（要約全文）
 - `FEED_ARTICLES_PER_FEED`: フィードあたりの最大表示件数（デフォルト10）
 - `FEED_CARD_LAYOUT`: 配信カードの表示形式（`"horizontal"` or `"vertical"`, デフォルト `"horizontal"`）
 - `FEED_SUMMARIZE_TIMEOUT`: 1記事あたりの要約タイムアウト秒数（デフォルト180、0=無制限）。タイムアウト時はそのフィードの収集を中止する
+- `FEED_COLLECT_DAYS`: 収集対象の日数（デフォルト7）。`published_at` がこの日数より古い記事は収集をスキップする。`published_at` がNULLの記事はスキップしない
 
 ### 手動配信テスト
 
@@ -160,7 +161,7 @@ uv run python scripts/test_delivery.py vertical     # 縦長形式を指定
 - 操作結果をスレッド内で応答（成功: ✓ / 失敗: ✗）
 - `feed list` は各フィードを `URL — フィード名` 形式で表示（有効/無効で分類）
 - フィード一覧はURL昇順でソートする（`feed list` / `feed export` / 配信処理で共通）
-- `feed collect --skip-summary` は `FeedCollector.collect_all_skip_summary()` を呼び出す
+- `feed collect --skip-summary` は `daily_collect_and_deliver(skip_summary=True)` で通常配信フローに要約スキップを適用する
 - 不明なサブコマンドの場合はヘルプメッセージを表示
 
 ### フィード一括インポート（CSV）

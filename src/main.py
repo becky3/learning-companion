@@ -140,6 +140,7 @@ async def main() -> None:
         summarizer=summarizer,
         ogp_extractor=ogp_extractor,
         summarize_timeout=settings.feed_summarize_timeout,
+        collect_days=settings.feed_collect_days,
     )
     handlers_module.register_handlers(
         app, chat_service,
