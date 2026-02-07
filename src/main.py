@@ -1,5 +1,6 @@
 """AI Assistant エントリーポイント
-仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md, docs/specs/f8-thread-support.md
+仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md, docs/specs/f8-thread-support.md,
+      docs/specs/bot-process-guard.md
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 import src.slack.handlers as handlers_module
 from src.config.settings import get_settings, load_assistant_config
+from src.process_guard import cleanup_children, kill_existing_process, remove_pid_file, write_pid_file
 from src.db.session import init_db, get_session_factory
 from src.llm.factory import get_provider_for_service
 from src.mcp.client_manager import MCPClientManager, MCPServerConfig
@@ -57,6 +59,10 @@ def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
 
 
 async def main() -> None:
+    # プロセスガード: 既存プロセスの停止 → PIDファイル書き込み
+    kill_existing_process()
+    write_pid_file()
+
     settings = get_settings()
 
     # 起動時刻を記録 (F7)
@@ -164,6 +170,8 @@ async def main() -> None:
         if mcp_manager:
             await mcp_manager.cleanup()
             logger.info("MCP接続をクリーンアップしました")
+        cleanup_children()
+        remove_pid_file()
 
 
 if __name__ == "__main__":
