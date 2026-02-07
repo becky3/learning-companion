@@ -292,5 +292,5 @@ class FeedCollector:
             全Feedオブジェクトのリスト
         """
         async with self._session_factory() as session:
-            result = await session.execute(select(Feed))
+            result = await session.execute(select(Feed).order_by(Feed.id.asc()))
             return list(result.scalars().all())

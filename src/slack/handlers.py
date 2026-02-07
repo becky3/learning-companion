@@ -223,7 +223,7 @@ async def _download_and_parse_csv(
     if not files:
         return ([], (
             "エラー: CSVファイルを添付してください。\n"
-            "使用方法: `@bot feed import` にCSVファイルを添付\n"
+            "使用方法: `@bot feed import` または `@bot feed replace` にCSVファイルを添付\n"
             "CSV形式: `url,name,category`"
         ))
 
@@ -310,9 +310,9 @@ async def _import_feeds_from_rows(
     errors: list[str] = []
 
     for line_number, row in enumerate(rows, start=2):  # ヘッダー行が1行目なので2から開始
-        url = row.get("url", "").strip()
-        name = row.get("name", "").strip()
-        category = row.get("category", "").strip() or "一般"
+        url = (row.get("url") or "").strip()
+        name = (row.get("name") or "").strip()
+        category = (row.get("category") or "").strip() or "一般"
 
         if not url or not name:
             errors.append(f"行{line_number}: url または name が空です")
@@ -385,7 +385,15 @@ async def _handle_feed_replace(
     deleted_count = await collector.delete_all_feeds()
 
     # CSVからフィードを登録
-    success_count, errors = await _import_feeds_from_rows(collector, rows)
+    try:
+        success_count, errors = await _import_feeds_from_rows(collector, rows)
+    except Exception:
+        logger.exception("Failed to import feeds after delete_all in replace")
+        return (
+            "*フィード置換エラー*\n"
+            f"🗑️ 削除: {deleted_count}件（既存フィード）\n"
+            "❌ インポート中に予期せぬエラーが発生しました。"
+        )
 
     # 結果サマリーを作成
     result_lines = [
@@ -523,11 +531,17 @@ def register_handlers(
                         collector, files, bot_token
                     )
             elif subcommand == "export":
-                response_text = await _handle_feed_export(
-                    collector, slack_client, channel, thread_ts
-                )
-                if response_text:
-                    await say(text=response_text, thread_ts=thread_ts)  # type: ignore[operator]
+                if slack_client is not None and channel:
+                    response_text = await _handle_feed_export(
+                        collector, slack_client, channel, thread_ts
+                    )
+                    if response_text:
+                        await say(text=response_text, thread_ts=thread_ts)  # type: ignore[operator]
+                else:
+                    await say(  # type: ignore[operator]
+                        text="エラー: Slack連携の設定が不足しています。",
+                        thread_ts=thread_ts,
+                    )
                 return
             elif subcommand == "test":
                 if (
