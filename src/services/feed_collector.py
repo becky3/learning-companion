@@ -269,3 +269,28 @@ class FeedCollector:
         enabled = [f for f in all_feeds if f.enabled]
         disabled = [f for f in all_feeds if not f.enabled]
         return (enabled, disabled)
+
+    async def delete_all_feeds(self) -> int:
+        """全フィードを削除する（関連記事もCASCADE削除される）.
+
+        Returns:
+            削除されたフィード数
+        """
+        async with self._session_factory() as session:
+            result = await session.execute(select(Feed))
+            feeds = list(result.scalars().all())
+            count = len(feeds)
+            for feed in feeds:
+                await session.delete(feed)
+            await session.commit()
+            return count
+
+    async def get_all_feeds(self) -> list[Feed]:
+        """全フィード（有効・無効問わず）を取得する.
+
+        Returns:
+            全Feedオブジェクトのリスト
+        """
+        async with self._session_factory() as session:
+            result = await session.execute(select(Feed))
+            return list(result.scalars().all())
