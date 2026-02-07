@@ -73,6 +73,9 @@ def _parse_feed_command(text: str) -> tuple[str, list[str], str]:
             if parsed_url.netloc:
                 urls.append(cleaned)
             # ドメインなしの不正URLは無視（カテゴリにも追加しない）
+        elif cleaned.startswith("--"):
+            # フラグ引数（--skip-summary など）はカテゴリに含めない
+            pass
         else:
             category_tokens.append(token)
 
@@ -561,6 +564,46 @@ def register_handlers(
                         thread_ts=thread_ts,
                     )
                 return
+            elif subcommand == "collect":
+                # feed collect --skip-summary
+                if "--skip-summary" in cleaned_text.lower():
+                    if (
+                        session_factory is not None
+                        and slack_client is not None
+                        and channel_id is not None
+                    ):
+                        from src.scheduler.jobs import daily_collect_and_deliver
+
+                        try:
+                            await say(text="要約スキップ収集を開始します...", thread_ts=thread_ts)  # type: ignore[operator]
+                            feed_count, article_count = await daily_collect_and_deliver(
+                                collector, session_factory, slack_client, channel_id,
+                                max_articles_per_feed=max_articles_per_feed,
+                                layout=feed_card_layout,
+                                skip_summary=True,
+                            )
+                            await say(  # type: ignore[operator]
+                                text=f"要約スキップ収集が完了しました\n収集フィード数: {feed_count}\n収集記事数: {article_count}",
+                                thread_ts=thread_ts,
+                            )
+                        except Exception:
+                            logger.exception("Failed to collect feeds with skip-summary")
+                            await say(  # type: ignore[operator]
+                                text="要約スキップ収集中にエラーが発生しました。",
+                                thread_ts=thread_ts,
+                            )
+                    else:
+                        await say(  # type: ignore[operator]
+                            text="エラー: 配信設定が不足しています。",
+                            thread_ts=thread_ts,
+                        )
+                else:
+                    response_text = (
+                        "使用方法:\n"
+                        "• `@bot feed collect --skip-summary` — 要約なし一括収集"
+                    )
+                    await say(text=response_text, thread_ts=thread_ts)  # type: ignore[operator]
+                return
             elif subcommand == "test":
                 if (
                     session_factory is not None
@@ -599,6 +642,7 @@ def register_handlers(
                     "• `@bot feed import` + CSV添付 — フィード一括インポート\n"
                     "• `@bot feed replace` + CSV添付 — フィード一括置換\n"
                     "• `@bot feed export` — フィード一覧をCSVエクスポート\n"
+                    "• `@bot feed collect --skip-summary` — 要約なし一括収集\n"
                     "• `@bot feed test` — テスト配信（上位3フィード・各5件）\n"
                     "※ URL・カテゴリは複数指定可能（スペース区切り）"
                 )

@@ -8,7 +8,7 @@ import asyncio
 import logging
 import re
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import unescape
 from time import mktime
 
@@ -43,26 +43,38 @@ class FeedCollector:
         summarizer: Summarizer,
         ogp_extractor: OgpExtractor | None = None,
         summarize_timeout: int = 180,
+        collect_days: int = 7,
     ) -> None:
         self._session_factory = session_factory
         self._summarizer = summarizer
         self._ogp_extractor = ogp_extractor
         self._summarize_timeout = summarize_timeout
+        self._collect_days = collect_days
 
-    async def collect_all(self) -> list[Article]:
-        """有効な全フィードから記事を収集する."""
+    async def collect_all(
+        self,
+        skip_summary: bool = False,
+    ) -> list[Article]:
+        """有効な全フィードから記事を収集する.
+
+        Args:
+            skip_summary: Trueの場合、LLM要約をスキップしdescriptionを要約として保存する。
+        """
         collected: list[Article] = []
         async with self._session_factory() as session:
             feeds = await self._get_enabled_feeds(session)
 
-        for feed in feeds:
+        logger.info("collect_all: %d feeds to process (skip_summary=%s)", len(feeds), skip_summary)
+        for i, feed in enumerate(feeds, 1):
             try:
-                articles = await self._collect_feed(feed)
+                logger.info("collect_all: [%d/%d] %s", i, len(feeds), feed.name)
+                articles = await self._collect_feed(feed, skip_summary=skip_summary)
                 collected.extend(articles)
             except Exception:
                 logger.exception("Failed to collect feed: %s (%s)", feed.name, feed.url)
                 continue
 
+        logger.info("collect_all: done — %d articles collected", len(collected))
         return collected
 
     async def get_enabled_feeds(self) -> list[Feed]:
@@ -74,13 +86,15 @@ class FeedCollector:
         self,
         feed: Feed,
         on_article_ready: Callable[[Article], Awaitable[bool]] | None = None,
+        skip_summary: bool = False,
     ) -> list[Article]:
         """単一フィードから記事を収集する（公開API）.
 
         on_article_ready: 記事1件の処理完了時に呼ばれるコールバック。
             True を返すと収集続行、False を返すと収集を中止する。
+        skip_summary: Trueの場合、LLM要約をスキップしdescriptionまたはプレースホルダを使用する。
         """
-        return await self._collect_feed(feed, on_article_ready=on_article_ready)
+        return await self._collect_feed(feed, on_article_ready=on_article_ready, skip_summary=skip_summary)
 
     async def _get_enabled_feeds(self, session: AsyncSession) -> list[Feed]:
         """有効なフィード一覧を取得する."""
@@ -93,10 +107,18 @@ class FeedCollector:
         self,
         feed: Feed,
         on_article_ready: Callable[[Article], Awaitable[bool]] | None = None,
+        skip_summary: bool = False,
     ) -> list[Article]:
-        """単一フィードから記事を収集する."""
+        """単一フィードから記事を収集する.
+
+        Args:
+            on_article_ready: 記事1件の処理完了時に呼ばれるコールバック。
+                True を返すと収集続行、False を返すと収集を中止する。
+            skip_summary: Trueの場合、LLM要約をスキップしdescriptionを要約として保存する。
+        """
         parsed = await asyncio.to_thread(feedparser.parse, feed.url)
         articles: list[Article] = []
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=self._collect_days)
 
         async with self._session_factory() as session:
             # エントリ内の全URLを収集し、一括で既存記事を取得する
@@ -123,23 +145,31 @@ class FeedCollector:
                     entry.get("summary", "") or entry.get("description", "")
                 )
                 published_at = None
-                if hasattr(entry, "published_parsed") and entry.published_parsed:
+                parsed_time = entry.get("published_parsed") or entry.get("updated_parsed")
+                if parsed_time:
                     published_at = datetime.fromtimestamp(
-                        mktime(entry.published_parsed), tz=timezone.utc
+                        mktime(parsed_time), tz=timezone.utc
                     )
 
-                try:
-                    timeout = self._summarize_timeout if self._summarize_timeout > 0 else None
-                    summary = await asyncio.wait_for(
-                        self._summarizer.summarize(title, url, description),
-                        timeout=timeout,
-                    )
-                except TimeoutError:
-                    logger.warning(
-                        "Summarization timed out after %ds, aborting feed: %s",
-                        self._summarize_timeout, feed.name,
-                    )
-                    break
+                # 日付カット: published_atがあり、collect_days以前の記事はスキップ
+                if published_at is not None and published_at < cutoff:
+                    continue
+
+                if skip_summary:
+                    summary = description if description else "（要約なし）"
+                else:
+                    try:
+                        timeout = self._summarize_timeout if self._summarize_timeout > 0 else None
+                        summary = await asyncio.wait_for(
+                            self._summarizer.summarize(title, url, description),
+                            timeout=timeout,
+                        )
+                    except TimeoutError:
+                        logger.warning(
+                            "Summarization timed out after %ds, aborting feed: %s",
+                            self._summarize_timeout, feed.name,
+                        )
+                        break
 
                 image_url = None
                 if self._ogp_extractor:
@@ -160,6 +190,7 @@ class FeedCollector:
                     published_at=published_at,
                 )
                 session.add(article)
+                existing_urls.add(url)
                 new_articles.append(article)
 
                 # 1記事処理完了のコールバック（投稿など）
