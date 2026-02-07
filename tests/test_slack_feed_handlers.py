@@ -716,3 +716,19 @@ def test_parse_feed_command_collect() -> None:
     assert category == "一般"
 
 
+def test_ac18_1_parse_collect_skip_summary_flag() -> None:
+    """feedコマンド解析: --skip-summary がカテゴリに含まれない (AC18.1)."""
+    subcommand, urls, category = _parse_feed_command("feed collect --skip-summary")
+    assert subcommand == "collect"
+    assert "--skip-summary" not in category
+    assert category == "一般"
+
+
+def test_ac18_parse_collect_without_skip_summary() -> None:
+    """feedコマンド解析: collect without --skip-summary."""
+    subcommand, urls, category = _parse_feed_command("feed collect")
+    assert subcommand == "collect"
+    assert urls == []
+    assert category == "一般"
+
+

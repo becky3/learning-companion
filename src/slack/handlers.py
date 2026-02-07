@@ -576,13 +576,16 @@ def register_handlers(
 
                         try:
                             await say(text="要約スキップ収集を開始します...", thread_ts=thread_ts)  # type: ignore[operator]
-                            await daily_collect_and_deliver(
+                            feed_count, article_count = await daily_collect_and_deliver(
                                 collector, session_factory, slack_client, channel_id,
                                 max_articles_per_feed=max_articles_per_feed,
                                 layout=feed_card_layout,
                                 skip_summary=True,
                             )
-                            await say(text="要約スキップ収集が完了しました", thread_ts=thread_ts)  # type: ignore[operator]
+                            await say(  # type: ignore[operator]
+                                text=f"要約スキップ収集が完了しました\n収集フィード数: {feed_count}\n収集記事数: {article_count}",
+                                thread_ts=thread_ts,
+                            )
                         except Exception:
                             logger.exception("Failed to collect feeds with skip-summary")
                             await say(  # type: ignore[operator]

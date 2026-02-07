@@ -58,7 +58,7 @@ class FeedCollector:
         """有効な全フィードから記事を収集する.
 
         Args:
-            skip_summary: Trueの場合、LLM要約をスキップし delivered=True で保存する（初回インポート用）
+            skip_summary: Trueの場合、LLM要約をスキップしdescriptionを要約として保存する。
         """
         collected: list[Article] = []
         async with self._session_factory() as session:
@@ -118,6 +118,7 @@ class FeedCollector:
         """
         parsed = await asyncio.to_thread(feedparser.parse, feed.url)
         articles: list[Article] = []
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=self._collect_days)
 
         async with self._session_factory() as session:
             # エントリ内の全URLを収集し、一括で既存記事を取得する
@@ -151,10 +152,8 @@ class FeedCollector:
                     )
 
                 # 日付カット: published_atがあり、collect_days以前の記事はスキップ
-                if published_at is not None:
-                    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=self._collect_days)
-                    if published_at < cutoff:
-                        continue
+                if published_at is not None and published_at < cutoff:
+                    continue
 
                 if skip_summary:
                     summary = description if description else "（要約なし）"
