@@ -218,7 +218,9 @@ async def test_ac4_daily_collect_and_deliver_posts_to_slack(db_factory) -> None:
         feed_articles = [a for a in undelivered if a.feed_id == feed.id]
         for article in feed_articles:
             if on_article_ready:
-                await on_article_ready(article)
+                should_continue = await on_article_ready(article)
+                if not should_continue:
+                    break
         return feed_articles
 
     collector.collect_feed = AsyncMock(side_effect=mock_collect_feed)
@@ -342,7 +344,9 @@ def _make_sequential_collector(db_factory, undelivered: list[Article]) -> AsyncM
         feed_articles = [a for a in undelivered if a.feed_id == feed.id]
         for article in feed_articles:
             if on_article_ready:
-                await on_article_ready(article)
+                should_continue = await on_article_ready(article)
+                if not should_continue:
+                    break
         return feed_articles
 
     collector.collect_feed = AsyncMock(side_effect=mock_collect_feed)

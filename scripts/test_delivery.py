@@ -22,7 +22,7 @@ from slack_sdk.web.async_client import AsyncWebClient
 from src.config.settings import get_settings
 from src.db.models import Article, Feed
 from src.db.session import get_session_factory, init_db
-from src.scheduler.jobs import format_daily_digest, _post_article_to_thread
+from src.scheduler.jobs import format_daily_digest, post_article_to_thread
 
 # --- テスト用ダミー記事データ ---
 DUMMY_ARTICLES = [
@@ -200,7 +200,7 @@ async def main() -> None:
             print(f"  親メッセージ投稿完了: {feed_name}")
 
             for article_blocks in article_blocks_list:
-                await _post_article_to_thread(
+                await post_article_to_thread(
                     client, channel, parent_ts, article_blocks,
                 )
             print(f"  スレッド記事投稿完了: {feed_name} ({len(article_blocks_list)}件)")

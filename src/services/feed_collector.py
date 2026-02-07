@@ -73,25 +73,26 @@ class FeedCollector:
     async def collect_feed(
         self,
         feed: Feed,
-        on_article_ready: Callable[[Article], Awaitable[None]] | None = None,
+        on_article_ready: Callable[[Article], Awaitable[bool]] | None = None,
     ) -> list[Article]:
         """単一フィードから記事を収集する（公開API）.
 
         on_article_ready: 記事1件の処理完了時に呼ばれるコールバック。
+            True を返すと収集続行、False を返すと収集を中止する。
         """
         return await self._collect_feed(feed, on_article_ready=on_article_ready)
 
     async def _get_enabled_feeds(self, session: AsyncSession) -> list[Feed]:
         """有効なフィード一覧を取得する."""
         result = await session.execute(
-            select(Feed).where(Feed.enabled.is_(True))
+            select(Feed).where(Feed.enabled.is_(True)).order_by(Feed.id.asc())
         )
         return list(result.scalars().all())
 
     async def _collect_feed(
         self,
         feed: Feed,
-        on_article_ready: Callable[[Article], Awaitable[None]] | None = None,
+        on_article_ready: Callable[[Article], Awaitable[bool]] | None = None,
     ) -> list[Article]:
         """単一フィードから記事を収集する."""
         parsed = await asyncio.to_thread(feedparser.parse, feed.url)
@@ -108,7 +109,11 @@ class FeedCollector:
                 existing_urls = set(result.scalars().all())
 
             new_articles: list[Article] = []
+            stopped = False
             for entry in parsed.entries:
+                if stopped:
+                    break
+
                 url = entry.get("link", "")
                 if not url or url in existing_urls:
                     continue
@@ -158,9 +163,12 @@ class FeedCollector:
                 new_articles.append(article)
 
                 # 1記事処理完了のコールバック（投稿など）
+                # False を返すと収集を中止する
                 if on_article_ready:
                     await session.flush()
-                    await on_article_ready(article)
+                    should_continue = await on_article_ready(article)
+                    if not should_continue:
+                        stopped = True
 
             await session.commit()
             articles.extend(new_articles)

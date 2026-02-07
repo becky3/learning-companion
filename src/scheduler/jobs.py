@@ -54,7 +54,7 @@ def _build_article_blocks(
 
     if layout == "horizontal":
         title_part = f":newspaper: *<{article.url}|{article.title}>*\n{dt_str}\n\n"
-        max_summary = 3000 - len(title_part) - 10
+        max_summary = max(0, 3000 - len(title_part) - 10)
         if len(summary) > max_summary:
             summary = summary[:max_summary] + "..."
         section: dict[str, Any] = {
@@ -158,7 +158,7 @@ def format_daily_digest(
     return result
 
 
-async def _post_article_to_thread(
+async def post_article_to_thread(
     slack_client: object,
     channel_id: str,
     thread_ts: str,
@@ -226,7 +226,7 @@ async def _deliver_feed_to_slack(
         parent_ts = parent_result["ts"]
 
         for article_blocks in article_blocks_list:
-            await _post_article_to_thread(
+            await post_article_to_thread(
                 slack_client, channel_id, parent_ts, article_blocks,
             )
             await asyncio.sleep(1)
@@ -297,11 +297,9 @@ async def daily_collect_and_deliver(
             posted_count = 0
             posted_article_ids: list[int] = []
 
-            # 1記事要約完了時に即投稿するコールバック
-            async def on_article_ready(article: Article) -> None:
+            # 投稿共通処理
+            async def _post_single_article(article: Article) -> None:
                 nonlocal header_posted, parent_ts, posted_count
-                if posted_count >= max_articles_per_feed:
-                    return
 
                 # ヘッダーメッセージ（初回のみ）
                 if not header_posted:
@@ -325,12 +323,20 @@ async def daily_collect_and_deliver(
 
                 # スレッドに記事を投稿
                 article_blocks = _build_article_blocks(article, layout=layout)
-                await _post_article_to_thread(
+                await post_article_to_thread(
                     slack_client, channel_id, parent_ts, article_blocks,
                 )
                 posted_count += 1
                 posted_article_ids.append(article.id)
                 await asyncio.sleep(1)
+
+            # 1記事要約完了時に即投稿するコールバック
+            # False を返すと収集を中止する
+            async def on_article_ready(article: Article) -> bool:
+                if posted_count >= max_articles_per_feed:
+                    return False
+                await _post_single_article(article)
+                return posted_count < max_articles_per_feed
 
             # フィード単位で収集（1記事ごとにコールバックで即投稿）
             try:
@@ -338,6 +344,25 @@ async def daily_collect_and_deliver(
             except Exception:
                 logger.exception("Failed to collect feed: %s (%s)", feed.name, feed.url)
                 continue
+
+            # 収集後、DB上の過去の未配信記事も投稿対象にする
+            if posted_count < max_articles_per_feed:
+                async with session_factory() as session:
+                    remaining = max_articles_per_feed - posted_count
+                    result = await session.execute(
+                        select(Article)
+                        .where(
+                            Article.feed_id == feed.id,
+                            Article.delivered == False,  # noqa: E712
+                            Article.id.notin_(posted_article_ids) if posted_article_ids else True,  # type: ignore[arg-type]
+                        )
+                        .order_by(Article.published_at.asc().nullslast(), Article.collected_at.asc())
+                        .limit(remaining)
+                    )
+                    old_articles = list(result.scalars().all())
+
+                for article in old_articles:
+                    await _post_single_article(article)
 
             # 配信済みフラグを即更新
             if posted_article_ids:
