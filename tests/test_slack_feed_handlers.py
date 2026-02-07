@@ -713,6 +713,8 @@ def test_parse_feed_command_collect() -> None:
     subcommand, urls, category = _parse_feed_command("feed collect --skip-summary")
     assert subcommand == "collect"
     assert urls == []
+    # カテゴリ省略時はデフォルト「一般」となり、--skip-summary はカテゴリとして扱われない
+    assert category == "一般"
 
 
 @pytest.mark.asyncio

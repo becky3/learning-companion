@@ -260,7 +260,7 @@ https://another.com/rss,Another Feed,News
 2. 各フィードのRSSエントリを取得し、既存記事（URL重複）をスキップ
 3. 新規記事を要約なしでDBに保存
    - LLM呼び出しなし
-   - `summary` にはフィードの description（HTMLタグ除去済み）を保存。description が空の場合はプレースホルダ「（要約なし）」を保存
+   - `summary` には記事エントリの description（= RSS entry の summary/description, HTMLタグ除去済み）を保存。description が空の場合はプレースホルダ「（要約なし）」を保存
    - `delivered=True` で保存（配信キューに入らないようにする）
    - OGP画像の取得も行う（通常収集と同様）
 4. フィード単位でエラーが発生した場合はログに記録し、他のフィードの処理を継続する
@@ -361,7 +361,7 @@ https://another.com/rss,Another Feed,News
   - [ ] AC18.1: `@bot feed collect --skip-summary` コマンドで要約なし収集が実行できる
   - [ ] AC18.2: 要約なし収集時は LLM を呼び出さない
   - [ ] AC18.3: 収集された記事は `delivered=True` で保存され、配信キューに入らない
-  - [ ] AC18.4: summary にはフィードの description またはプレースホルダ「（要約なし）」が保存される
+  - [ ] AC18.4: summary には記事エントリの description またはプレースホルダ「（要約なし）」が保存される
   - [ ] AC18.5: 要約なし収集後の通常収集で、新着記事のみが要約・配信対象になる
   - [ ] AC18.6: 処理結果のサマリー（収集フィード数・記事数）をSlackに返答する
   - [ ] AC18.7: フィード処理中にエラーが発生した場合、該当フィードをスキップして他のフィードの処理を継続する

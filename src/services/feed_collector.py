@@ -69,7 +69,7 @@ class FeedCollector:
         """要約をスキップして全フィードから記事を一括収集する（初回インポート用）.
 
         LLM呼び出しなしで記事をDBに登録する。
-        - summary にはフィードの description（HTMLタグ除去済み）またはプレースホルダを保存
+        - summary には各エントリの summary / description（HTMLタグ除去済み）またはプレースホルダを保存
         - delivered=True で保存（配信キューに入らないようにする）
 
         Returns:
@@ -149,6 +149,7 @@ class FeedCollector:
                     delivered=True,
                 )
                 session.add(article)
+                existing_urls.add(url)
                 new_count += 1
 
             await session.commit()

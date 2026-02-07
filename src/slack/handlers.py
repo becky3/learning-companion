@@ -73,6 +73,9 @@ def _parse_feed_command(text: str) -> tuple[str, list[str], str]:
             if parsed_url.netloc:
                 urls.append(cleaned)
             # ドメインなしの不正URLは無視（カテゴリにも追加しない）
+        elif cleaned.startswith("--"):
+            # フラグ引数（--skip-summary など）はカテゴリに含めない
+            pass
         else:
             category_tokens.append(token)
 
