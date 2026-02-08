@@ -55,7 +55,7 @@ class WebCrawler:
             max_concurrent: 同時接続数の上限
         """
         self._timeout = aiohttp.ClientTimeout(total=timeout)
-        self._allowed_domains = set(allowed_domains or [])
+        self._allowed_domains = {d.strip().lower() for d in (allowed_domains or [])}
         self._max_pages = max_pages
         self._crawl_delay = crawl_delay
         self._semaphore = asyncio.Semaphore(max_concurrent)
@@ -183,12 +183,20 @@ class WebCrawler:
         # パターンのコンパイル
         pattern = re.compile(url_pattern) if url_pattern else None
 
-        # ページ取得
+        # ページ取得（SSRF対策: リダイレクト追従を無効化）
         async with aiohttp.ClientSession(
             timeout=self._timeout,
             headers={"User-Agent": USER_AGENT},
         ) as session:
-            async with session.get(validated_url) as resp:
+            async with session.get(validated_url, allow_redirects=False) as resp:
+                # リダイレクト応答の場合はログを出して空リストを返す
+                if resp.status in (301, 302, 303, 307, 308):
+                    logger.warning(
+                        "Redirect detected (SSRF protection): %s -> %s",
+                        index_url,
+                        resp.headers.get("Location", "unknown"),
+                    )
+                    return []
                 if resp.status != 200:
                     logger.warning("Failed to fetch index page: %s (status=%d)", index_url, resp.status)
                     return []
@@ -252,7 +260,16 @@ class WebCrawler:
                     timeout=self._timeout,
                     headers={"User-Agent": USER_AGENT},
                 ) as session:
-                    async with session.get(validated_url) as resp:
+                    # SSRF対策: リダイレクト追従を無効化
+                    async with session.get(validated_url, allow_redirects=False) as resp:
+                        # リダイレクト応答の場合はログを出して None を返す
+                        if resp.status in (301, 302, 303, 307, 308):
+                            logger.warning(
+                                "Redirect detected (SSRF protection): %s -> %s",
+                                url,
+                                resp.headers.get("Location", "unknown"),
+                            )
+                            return None
                         if resp.status != 200:
                             logger.warning("Failed to fetch page: %s (status=%d)", url, resp.status)
                             return None
@@ -280,7 +297,8 @@ class WebCrawler:
     async def crawl_pages(self, urls: list[str]) -> list[CrawledPage]:
         """複数ページを並行クロールする.
 
-        - 各リクエスト間に crawl_delay 秒の待機を挿入（同一ドメインへの負荷軽減）
+        - Semaphore により同時接続数を max_concurrent に制限
+        - 同一ドメインへの連続リクエスト間に crawl_delay 秒の待機を挿入（負荷軽減）
         - ページ単位でエラーを隔離し、他のページの処理は継続
 
         Args:
@@ -289,15 +307,45 @@ class WebCrawler:
         Returns:
             クロールに成功したページのリスト
         """
-        results: list[CrawledPage] = []
+        if not urls:
+            return []
 
-        for i, url in enumerate(urls):
-            # 最初のリクエスト以外は遅延を挿入
-            if i > 0 and self._crawl_delay > 0:
-                await asyncio.sleep(self._crawl_delay)
+        # ホストごとの最終リクエスト時刻を管理するロック付き辞書
+        last_request_time: dict[str, float] = {}
+        time_lock = asyncio.Lock()
+
+        async def crawl_with_delay(url: str) -> CrawledPage | None:
+            """同一ドメインへの遅延を挿入してクロールする."""
+            hostname = urlparse(url).hostname
+
+            if hostname and self._crawl_delay > 0:
+                async with time_lock:
+                    previous = last_request_time.get(hostname)
+                    if previous is not None:
+                        now = asyncio.get_event_loop().time()
+                        elapsed = now - previous
+                        if elapsed < self._crawl_delay:
+                            await asyncio.sleep(self._crawl_delay - elapsed)
+                    # リクエスト前に時刻を更新（他のタスクが同じホストに同時アクセスしないようにする）
+                    last_request_time[hostname] = asyncio.get_event_loop().time()
 
             page = await self.crawl_page(url)
-            if page is not None:
-                results.append(page)
 
-        return results
+            # リクエスト後に実際の完了時刻を更新
+            if hostname:
+                async with time_lock:
+                    last_request_time[hostname] = asyncio.get_event_loop().time()
+
+            return page
+
+        # 並行実行（Semaphore は crawl_page 内で適用される）
+        tasks = [crawl_with_delay(url) for url in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 成功したページのみを収集（例外はログ済みなのでスキップ）
+        pages: list[CrawledPage] = []
+        for result in results:
+            if isinstance(result, CrawledPage):
+                pages.append(result)
+
+        return pages
