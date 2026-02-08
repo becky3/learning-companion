@@ -94,6 +94,7 @@ docs/
 **開発を始める前に必ず [CLAUDE.md](CLAUDE.md) を読んでください。**
 
 CLAUDE.mdには以下の重要な情報が含まれています：
+
 - 仕様駆動開発のルール
 - コーディング規約
 - Git運用フロー
@@ -125,6 +126,7 @@ uv run mypy src
 ## ドキュメント
 
 ### 機能仕様
+
 - [全体仕様概要](docs/specs/overview.md)
 - [F1: チャット応答](docs/specs/f1-chat.md)
 - [F2: 情報収集・配信](docs/specs/f2-feed-collection.md)
@@ -135,6 +137,7 @@ uv run mypy src
 - [F7: ボットステータス](docs/specs/f7-bot-status.md)
 
 ### Claude Code 関連
+
 - [Claude Code Hooks](docs/specs/claude-code-hooks.md)
 - [Claude Code Actions](docs/specs/claude-code-actions.md)
 - [Planner サブエージェント](docs/specs/planner-agent.md)

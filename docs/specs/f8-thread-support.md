@@ -258,6 +258,7 @@ class ChatService:
 ```
 
 **変更ポイント**:
+
 - `thread_history_service` をオプショナル引数として追加（後方互換性を維持）
 - `channel` と `is_in_thread` を `respond()` に追加
 - Slack API 取得 → 失敗時は DB フォールバックの 2段構え

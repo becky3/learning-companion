@@ -13,12 +13,14 @@
 - 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
 
 ### MCP設定
+
 - `MCP_ENABLED` — MCP機能の有効/無効（`true` / `false`、デフォルト: `false`）
 - `MCP_SERVERS_CONFIG` — MCPサーバー設定ファイルのパス（デフォルト: `config/mcp_servers.json`）
 - MCPサーバーの追加・変更は `config/mcp_servers.json` で行う
 - MCPサーバー（`mcp-servers/` 配下）は `src/` のモジュールを import しないこと（将来のリポジトリ分離制約）
 
 ### RAG設定
+
 - `RAG_ENABLED` — RAG機能の有効/無効（`true` / `false`、デフォルト: `false`）
 - `EMBEDDING_PROVIDER` — Embeddingプロバイダー（`"local"` / `"online"`、デフォルト: `"local"`）
 - `RAG_ALLOWED_DOMAINS` — クロール許可ドメインのカンマ区切りリスト（SSRF対策、未設定時はクロール拒否）
@@ -27,6 +29,7 @@
 ## 開発ルール
 
 ### 仕様駆動開発
+
 - **実装前に必ず `docs/specs/` の仕様書を読むこと**。仕様書が実装の根拠。
 - **実装前に既存コードを必ず読むこと**。仕様書の「関連ファイル」に記載された実装ファイルを確認し、既存の構造・パターン・抽象化を把握してから設計する。
 - **既存コードの拡張を優先する**。新しいメソッドやクラスを作る前に、既存のメソッドにパラメータ（フラグ）を追加して対応できないか検討する。やむを得ず類似ロジックが重複する場合は、その理由と設計判断を仕様書に記載する。
@@ -34,33 +37,42 @@
 - 仕様変更が必要な場合は、先に仕様書を更新してから実装する。
 
 ### コーディング規約
+
 - 各サービスクラスのdocstringに対応する仕様書パスを記載する:
+
   ```python
   class FeedCollector:
       """RSS/Webからの情報収集サービス
       仕様: docs/specs/f2-feed-collection.md
       """
   ```
+
 - テスト名は仕様書の受け入れ条件(AC)番号と対応させる:
+
   ```python
   def test_ac1_rss_feed_is_fetched_and_parsed():
   def test_ac2_articles_are_summarized_by_local_llm():
   ```
-- ruff でリント、mypy (strict) で型チェック
+
+- ruff でリント、mypy (strict) で型チェック、markdownlint でMarkdownチェック
 
 ### 作業開始時の手順
+
 1. **Issue・Milestoneの確認**: 作業前に必ず現状を把握する
+
    ```bash
    gh milestone list                  # Milestone一覧と進捗確認
    gh issue list --milestone "Step N: ..."  # 該当Stepのissue一覧
    gh issue list --state open         # 未着手Issue一覧
    gh issue view <番号>               # Issue詳細の確認
    ```
+
 2. **対象Issueの仕様書を読む**: Issueに記載された仕様書パスを確認し、`docs/specs/` の該当ファイルを読む
 3. **既存実装コードの確認**: 仕様書の「関連ファイル」セクションに記載されたソースファイルを読み、既存の処理フロー・メソッド構成・抽象化パターンを把握する。**新規メソッド作成前に、既存メソッドのパラメータ追加で対応できないか必ず検討する**
 4. **ブランチ作成→実装→PR** の流れで進める
 
 ### Git運用
+
 - ブランチ: `feature/f{N}-{機能名}-#{Issue番号}`
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
 - PR作成時に `Closes #{Issue番号}` で紐付け
@@ -68,8 +80,9 @@
 - `gh` コマンドで Issue/PR を操作
 
 **Claudeによる実装完了時の必須手順**:
+
 1. **ファイル作成の確認**: 作成したと報告したファイルが実際に存在するか `ls -la` で確認
-2. **テスト実行**: **test-runner サブエージェント** で全テスト（pytest / mypy / ruff）が通過することを確認
+2. **テスト実行**: **test-runner サブエージェント** で全テスト（pytest / mypy / ruff / markdownlint）が通過することを確認
 3. **コードレビュー**: **code-reviewer サブエージェント** で変更コードのセルフレビューを実施し、Critical/Warning の指摘があれば修正する
 4. **ドキュメントレビュー**: `docs/specs/` に変更・新規追加がある場合、**doc-reviewer サブエージェント** で品質レビューを実施し、指摘があれば修正する。実装のみのPRでも、対応する仕様書との整合性チェックのため実施すること。
    - **スキップ基準**: 誤字脱字のみの修正はスキップ可
@@ -79,20 +92,25 @@
 6. **コミット**: 変更内容を明確に記述したコミットメッセージでコミット
 7. **プッシュ**: `git push origin <ブランチ名>` でリモートにプッシュ
 8. **PR作成**: `gh pr create` コマンドで実際にPRを作成（手動リンクではなく実際に作成）
+
    ```bash
    gh pr create --title "タイトル" --body "説明\n\nCloses #Issue番号" --base main
    ```
+
 9. **作成確認**: `gh pr view` でPRが正しく作成されたことを確認し、URLをユーザーに提示
 10. **レトロスペクティブ**: 機能実装のPRの場合、`/doc-gen retro <feature-name>` でレトロを生成・更新する
 
 ### レビュー指摘対応
+
 PRに対するレビュー指摘（Copilot、人間問わず）への対応は `/fix-reviews` スキルを使用する。
 ユーザーが以下のような表現でレビュー対応を依頼した場合、自律的に `/fix-reviews` スキルを呼び出すこと:
+
 - 「指摘をチェックして」「レビューを確認して」「レビュー指摘に対応して」
 - 「コメントを修正して」「レビューコメントを直して」
 - 「Copilotの指摘を見て」「PRのフィードバックに対応して」
 
 手動対応する場合は以下を確認すること:
+
 1. **コード修正**: 指摘に対する修正を実施
 2. **テスト実行**: **test-runner サブエージェント** で全テストが通過することを確認
 3. **ドキュメント整合性チェック**: 修正内容が以下のドキュメントに影響しないか確認し、必要なら更新する
@@ -102,6 +120,7 @@ PRに対するレビュー指摘（Copilot、人間問わず）への対応は `
 5. **コミット**: `fix: レビュー指摘対応 (PR #番号)` の形式でコミット
 
 ### レトロスペクティブ
+
 - **機能の実装完了時（PRマージ後）に必ず** `/doc-gen retro <feature-name>` でレトロを生成する
 - 運用テストで問題が見つかった場合も、修正完了後にレトロを更新する
 - **ファイル命名**: `docs/retro/f{N}-{機能名}.md`
@@ -128,6 +147,7 @@ PRに対するレビュー指摘（Copilot、人間問わず）への対応は `
 - **通知スクリプト**: `.claude/scripts/notify.sh`
 
 **Windows環境での注意点**:
+
 - シェルスクリプト（`.sh`）は **LF 改行コード** で保存すること（CRLF だとエラー）
 - 改行コード変換: `cat file.sh | tr -d '\r' > file_tmp.sh && mv file_tmp.sh file.sh`
 - **出力の破棄には必ず `/dev/null` を使うこと。`> nul` は禁止。**

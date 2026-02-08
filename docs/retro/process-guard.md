@@ -5,6 +5,7 @@
 PIDファイル（`bot.pid`）による重複起動検知と、シャットダウン時の子プロセスクリーンアップを実装した。
 
 主な機能:
+
 - PIDファイルの排他作成（`O_EXCL`）による重複起動検知
 - プラットフォーム分岐によるプロセス生存確認（Windows: `tasklist` / Unix: `os.kill`）
 - シャットダウン時の子プロセスクリーンアップ（Windows: `wmic`+`taskkill` / Unix: `pgrep`+`SIGTERM`）
@@ -32,6 +33,7 @@ PIDファイル（`bot.pid`）による重複起動検知と、シャットダ�
 ### 2. Copilotレビューで6件の指摘（PR #140）
 
 **問題**: PR作成後のCopilotレビューで以下の問題が指摘された:
+
 - テスト名とテスト内容の不一致（`pgrep` vs `wmic`）
 - docstring の typo（`taslist`）
 - `except ... pass` のサイレントエラー
@@ -44,6 +46,7 @@ PIDファイル（`bot.pid`）による重複起動検知と、シャットダ�
 **対応**: 全6件を修正。特に TOCTOU 対策として `O_CREAT | O_EXCL` による排他作成に変更。`try/finally` スコープを `write_pid_file()` 直後から全体を包む構造に変更。
 
 **教訓**:
+
 - コミット前にdiffを読み直すセルフレビュー工程が必要
 - プロセス管理コードでは競合状態（TOCTOU）を常に意識する
 - `except ... pass` は原則禁止。最低でも `logger.debug()` を入れる

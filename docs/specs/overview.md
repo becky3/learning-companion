@@ -89,6 +89,7 @@ ONLINE_LLM_PROVIDER=openai
 ## 6. アシスタント設定
 
 `config/assistant.yaml` で以下を定義:
+
 - 名前・表示名
 - 性格・口調（システムプロンプトに反映）
 - アイコンURL
@@ -97,12 +98,14 @@ ONLINE_LLM_PROVIDER=openai
 ## 7. 開発方針
 
 ### 仕様駆動開発
+
 1. GitHub Issueで機能・タスクを管理
 2. 各機能の仕様書を先に作成・承認
 3. 仕様書に基づいて実装・テスト
 4. 機能完了時にレトロスペクティブを実施し、運用ルールを改善
 
 ### 仕様書テンプレート
+
 ```
 # F{N}: 機能名
 ## 概要
@@ -116,6 +119,7 @@ ONLINE_LLM_PROVIDER=openai
 ```
 
 ### Git運用
+
 - ブランチ: `feature/f{N}-{機能名}-#{Issue番号}`
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
 - PR作成時に `Closes #{Issue番号}` で紐付け

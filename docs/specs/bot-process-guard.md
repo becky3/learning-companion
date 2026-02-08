@@ -38,16 +38,19 @@ PID_FILE = Path("bot.pid")
 ```
 
 #### `write_pid_file() -> None`
+
 - `O_CREAT | O_EXCL` フラグによる排他作成でPIDファイルを確保する（TOCTOU対策）
 - PIDファイルが既に存在する場合:
   - 既存PIDのプロセスが生存していれば `sys.exit(1)`
   - stale PIDならファイルを削除して再試行（1回のみ）
 
 #### `read_pid_file() -> int | None`
+
 - PIDファイルを読み取り、整数値として返す
 - ファイルが存在しない、内容が不正、または PID <= 0 の場合は `None` を返す
 
 #### `remove_pid_file() -> None`
+
 - PIDファイルを削除する
 - ファイルが存在しない場合は何もしない
 - 削除に失敗した場合はログ警告を出力して続行する
@@ -55,14 +58,17 @@ PID_FILE = Path("bot.pid")
 ### プロセス生存確認
 
 #### `is_process_alive(pid: int) -> bool`
+
 - `sys.platform == "win32"` で判定し、Windows用 / Unix用の内部関数にディスパッチする
 
 #### `_is_process_alive_unix(pid: int) -> bool`
+
 - `os.kill(pid, 0)` でプロセスの存在を確認
 - `ProcessLookupError` → `False`（プロセスなし）
 - `PermissionError` → `True`（プロセスあり、権限なし）
 
 #### `_is_process_alive_windows(pid: int) -> bool`
+
 - `subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], ...)` を実行
 - 標準出力にPID文字列が含まれていれば `True`
 - `"INFO:"` で始まるか、PID文字列が見つからなければ `False`
@@ -72,6 +78,7 @@ PID_FILE = Path("bot.pid")
 ### 重複起動チェック
 
 #### `check_already_running() -> None`
+
 1. `read_pid_file()` でPIDを取得
 2. PIDが取得できなければ正常通過
 3. `is_process_alive(pid)` でプロセス生存確認
@@ -81,6 +88,7 @@ PID_FILE = Path("bot.pid")
 ### 子プロセスクリーンアップ
 
 #### `cleanup_children() -> None`
+
 - 現在のプロセスの子プロセスを停止する
 - **Unix**: `pgrep -P {pid}` で子プロセスを取得し `os.kill(child_pid, signal.SIGTERM)` で停止
 - **Windows**: `wmic process where (ParentProcessId={pid}) get ProcessId` で子プロセスを取得し `taskkill /PID {child_pid} /F` で停止

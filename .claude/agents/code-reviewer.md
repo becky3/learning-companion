@@ -10,6 +10,7 @@ permissionMode: default
 ## 仕様書の参照
 
 レビューを開始する前に、必ず自身の仕様書 `docs/specs/code-review-agent.md` を読み、以下の情報を確認すること:
+
 - レビュー観点（8カテゴリ）の詳細
 - 優先度の判定基準（Critical / Warning / Suggestion）
 - 処理フローの詳細
@@ -40,14 +41,17 @@ permissionMode: default
 #### ファイル: {file-path}
 
 **Critical（修正必須）:**
+
 - [{行番号}] 問題の説明
   - 改善案: 具体的な修正提案
 
 **Warning（修正推奨）:**
+
 - [{行番号}] 問題の説明
   - 改善案: 具体的な修正提案
 
 **Suggestion（改善検討）:**
+
 - [{行番号}] 問題の説明
   - 改善案: 具体的な修正提案
 
