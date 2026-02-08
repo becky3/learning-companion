@@ -479,9 +479,10 @@ class RAGKnowledgeService:
     async def ingest_page(self, url: str) -> int:
         """単一ページ取り込み.
 
-        同一URLの再取り込み時は、既存チャンクを delete_by_source() で
-        削除してから新規追加する（upsert動作）。
+        同一URLの再取り込み時は、新規チャンクをupsert後に古いチャンクを削除する
+        （データロス防止のため、先に追加してから不要なチャンクを削除）。
         Returns: チャンク数.
+        Raises: ValueError（URL検証失敗時）
         """
 
     async def retrieve(self, query: str, n_results: int = 5) -> str:
@@ -515,7 +516,7 @@ class RAGKnowledgeService:
 
 **同一URLの再取り込み**:
 
-`ingest_page()` および `ingest_from_index()` で同一URLを再取り込みする場合、既存チャンクを `VectorStore.delete_by_source()` で削除してから新規チャンクを追加する（upsert動作）。これにより、ページ内容の更新に追従できる。
+`ingest_page()` および `ingest_from_index()` で同一URLを再取り込みする場合、新規チャンクをupsert（`VectorStore.add_documents()` で同一ID上書き）してから古いチャンクを `VectorStore.delete_stale_chunks()` で削除する。データロス防止のため、先に追加してから不要なチャンクを削除する順序にしている。
 
 ### ChatServiceへの自動統合 (`src/services/chat.py`)
 

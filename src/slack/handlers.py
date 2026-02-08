@@ -420,28 +420,31 @@ async def _handle_feed_replace(
     return "\n".join(result_lines)
 
 
-def _parse_rag_command(text: str) -> tuple[str, str, str]:
+def _parse_rag_command(text: str) -> tuple[str, str, str, str]:
     """ragコマンドを解析する.
 
     Args:
         text: "rag crawl https://example.com/docs pattern" のようなコマンド文字列
 
     Returns:
-        (サブコマンド, URL, パターン) のタプル
+        (サブコマンド, URL, パターン, 生のURLトークン) のタプル
+        URLが空でも生のURLトークンが存在する場合、スキームエラーの可能性がある
     """
     tokens = text.split()
     if len(tokens) < 2:
-        return ("", "", "")
+        return ("", "", "", "")
 
     subcommand = tokens[1].lower()
     url = ""
     pattern = ""
+    raw_url_token = ""
 
     if len(tokens) >= 3:
         # URLを取得（Slackは URL を <https://...|label> 形式に変換するため除去）
         url_token = tokens[2].strip("<>")
         if "|" in url_token:
             url_token = url_token.split("|")[0]
+        raw_url_token = url_token
         if url_token.startswith("http://") or url_token.startswith("https://"):
             url = url_token
 
@@ -449,16 +452,19 @@ def _parse_rag_command(text: str) -> tuple[str, str, str]:
         # パターンは残りのトークンを結合
         pattern = " ".join(tokens[3:])
 
-    return (subcommand, url, pattern)
+    return (subcommand, url, pattern, raw_url_token)
 
 
 async def _handle_rag_crawl(
     rag_service: RAGKnowledgeService,
     url: str,
     pattern: str,
+    raw_url_token: str = "",
 ) -> str:
     """RAGクロール処理."""
     if not url:
+        if raw_url_token:
+            return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
         return "エラー: URLを指定してください。\n例: `@bot rag crawl https://example.com/docs [パターン]`"
 
     try:
@@ -481,9 +487,12 @@ async def _handle_rag_crawl(
 async def _handle_rag_add(
     rag_service: RAGKnowledgeService,
     url: str,
+    raw_url_token: str = "",
 ) -> str:
     """RAG単一ページ追加処理."""
     if not url:
+        if raw_url_token:
+            return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
         return "エラー: URLを指定してください。\n例: `@bot rag add https://example.com/page`"
 
     try:
@@ -518,9 +527,12 @@ async def _handle_rag_status(
 async def _handle_rag_delete(
     rag_service: RAGKnowledgeService,
     url: str,
+    raw_url_token: str = "",
 ) -> str:
     """RAGソース削除処理."""
     if not url:
+        if raw_url_token:
+            return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
         return "エラー: URLを指定してください。\n例: `@bot rag delete https://example.com/page`"
 
     try:
@@ -771,16 +783,18 @@ def register_handlers(
         if rag_service is not None and any(
             re.match(rf"^{re.escape(kw)}\b", lower_text) for kw in _RAG_KEYWORDS
         ):
-            subcommand, url, pattern = _parse_rag_command(cleaned_text)
+            subcommand, url, pattern, raw_url_token = _parse_rag_command(cleaned_text)
 
             if subcommand == "crawl":
-                response_text = await _handle_rag_crawl(rag_service, url, pattern)
+                response_text = await _handle_rag_crawl(
+                    rag_service, url, pattern, raw_url_token
+                )
             elif subcommand == "add":
-                response_text = await _handle_rag_add(rag_service, url)
+                response_text = await _handle_rag_add(rag_service, url, raw_url_token)
             elif subcommand == "status":
                 response_text = await _handle_rag_status(rag_service)
             elif subcommand == "delete":
-                response_text = await _handle_rag_delete(rag_service, url)
+                response_text = await _handle_rag_delete(rag_service, url, raw_url_token)
             else:
                 response_text = (
                     "使用方法:\n"

@@ -60,6 +60,19 @@ class ChatService:
         current_ts: str = "",
     ) -> str:
         """ユーザーメッセージに対する応答を生成し、履歴を保存する."""
+        # RAGコンテキスト取得（DBセッション外で実行してDB接続保持時間を最小化）
+        rag_context = ""
+        if self._rag_service:
+            try:
+                from src.config.settings import get_settings
+
+                settings = get_settings()  # キャッシュ済みインスタンスを使用
+                rag_context = await self._rag_service.retrieve(
+                    text, n_results=settings.rag_retrieval_count
+                )
+            except Exception:
+                logger.exception("Failed to retrieve RAG context")
+
         async with self._session_factory() as session:
             # スレッド内かつ ThreadHistoryService が利用可能な場合は Slack API から取得
             history: list[Message] | None = None
@@ -73,19 +86,6 @@ class ChatService:
             # Slack API から取得できなかった場合は DB フォールバック
             if history is None:
                 history = await self._load_history(session, thread_ts)
-
-            # RAGコンテキスト取得（オプショナル）
-            rag_context = ""
-            if self._rag_service:
-                try:
-                    from src.config.settings import get_settings
-
-                    settings = get_settings()  # キャッシュ済みインスタンスを使用
-                    rag_context = await self._rag_service.retrieve(
-                        text, n_results=settings.rag_retrieval_count
-                    )
-                except Exception:
-                    logger.exception("Failed to retrieve RAG context")
 
             # メッセージリストを構築
             messages: list[Message] = []

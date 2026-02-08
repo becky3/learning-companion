@@ -57,7 +57,7 @@ class WebCrawler:
         self._crawl_delay = crawl_delay
         self._semaphore = asyncio.Semaphore(max_concurrent)
 
-    def _validate_url(self, url: str) -> str:
+    def validate_url(self, url: str) -> str:
         """SSRF対策のURL検証. 問題なければ正規化済みURLを返す.
 
         検証内容:
@@ -175,7 +175,7 @@ class WebCrawler:
             ValueError: URL検証に失敗した場合
         """
         # インデックスページのURL検証
-        validated_url = self._validate_url(index_url)
+        validated_url = self.validate_url(index_url)
 
         # パターンのコンパイル
         pattern = re.compile(url_pattern) if url_pattern else None
@@ -220,7 +220,7 @@ class WebCrawler:
 
             # URL検証（許可されていないドメインはスキップ）
             try:
-                self._validate_url(absolute_url)
+                self.validate_url(absolute_url)
             except ValueError:
                 continue
 
@@ -245,7 +245,7 @@ class WebCrawler:
             CrawledPage オブジェクト、または失敗時は None
         """
         try:
-            validated_url = self._validate_url(url)
+            validated_url = self.validate_url(url)
         except ValueError as e:
             logger.warning("URL validation failed: %s - %s", url, e)
             return None

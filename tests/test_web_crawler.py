@@ -149,56 +149,56 @@ class TestWebCrawlerValidation:
         """AC30: allowed_domains に含まれないドメインのURLがクロール拒否されること."""
         crawler = WebCrawler(allowed_domains=["example.com"])
         with pytest.raises(ValueError, match="クロールが許可されていません"):
-            crawler._validate_url("https://other-domain.com/page")
+            crawler.validate_url("https://other-domain.com/page")
 
     def test_ac31_non_http_scheme_rejected(self) -> None:
         """AC31: http/https 以外のスキームが拒否されること."""
         crawler = WebCrawler(allowed_domains=["example.com"])
 
         with pytest.raises(ValueError, match="許可されていないスキーム"):
-            crawler._validate_url("file:///etc/passwd")
+            crawler.validate_url("file:///etc/passwd")
 
         with pytest.raises(ValueError, match="許可されていないスキーム"):
-            crawler._validate_url("ftp://example.com/file")
+            crawler.validate_url("ftp://example.com/file")
 
     def test_ac33_empty_allowlist_rejects_all(self) -> None:
         """AC33: allowed_domains が未設定の場合、全てのURLが拒否されること."""
         crawler = WebCrawler(allowed_domains=[])
         with pytest.raises(ValueError, match="クロールが許可されたドメインが設定されていません"):
-            crawler._validate_url("https://example.com/page")
+            crawler.validate_url("https://example.com/page")
 
     def test_ac33_none_allowlist_rejects_all(self) -> None:
         """AC33: allowed_domains が None の場合、全てのURLが拒否されること."""
         crawler = WebCrawler(allowed_domains=None)
         with pytest.raises(ValueError, match="クロールが許可されたドメインが設定されていません"):
-            crawler._validate_url("https://example.com/page")
+            crawler.validate_url("https://example.com/page")
 
     def test_valid_url_passes(self) -> None:
         """許可されたドメインのURLが検証を通過すること."""
         crawler = WebCrawler(allowed_domains=["example.com"])
-        result = crawler._validate_url("https://example.com/page")
+        result = crawler.validate_url("https://example.com/page")
         assert result == "https://example.com/page"
 
     def test_subdomain_allowed(self) -> None:
         """サブドメインも許可されること."""
         crawler = WebCrawler(allowed_domains=["example.com"])
-        result = crawler._validate_url("https://sub.example.com/page")
+        result = crawler.validate_url("https://sub.example.com/page")
         assert result == "https://sub.example.com/page"
 
     def test_http_scheme_allowed(self) -> None:
         """http スキームも許可されること."""
         crawler = WebCrawler(allowed_domains=["example.com"])
-        result = crawler._validate_url("http://example.com/page")
+        result = crawler.validate_url("http://example.com/page")
         assert result == "http://example.com/page"
 
     def test_allowed_domains_case_insensitive(self) -> None:
         """allowed_domains は大文字小文字を区別しないこと."""
         # 設定値が大文字混在でも、小文字のホスト名と一致する
         crawler = WebCrawler(allowed_domains=["Example.COM", " OTHER.org "])
-        result = crawler._validate_url("https://example.com/page")
+        result = crawler.validate_url("https://example.com/page")
         assert result == "https://example.com/page"
 
-        result2 = crawler._validate_url("https://other.org/page")
+        result2 = crawler.validate_url("https://other.org/page")
         assert result2 == "https://other.org/page"
 
 

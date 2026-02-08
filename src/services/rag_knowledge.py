@@ -104,7 +104,13 @@ class RAGKnowledgeService:
 
         Returns:
             チャンク数
+
+        Raises:
+            ValueError: URL検証に失敗した場合
         """
+        # URL検証を先に行い、失敗時は例外を投げる（ユーザーにエラー理由を伝えるため）
+        self._web_crawler.validate_url(url)
+
         page = await self._web_crawler.crawl_page(url)
         if page is None:
             logger.warning("Failed to crawl page: %s", url)
@@ -121,7 +127,7 @@ class RAGKnowledgeService:
         Returns:
             保存されたチャンク数
         """
-        # テキストをチャンキング（先にチャンク生成を試み、成功した場合のみ削除→追加）
+        # テキストをチャンキング
         chunks = chunk_text(
             page.text,
             chunk_size=self._chunk_size,
@@ -132,9 +138,6 @@ class RAGKnowledgeService:
             # チャンク生成失敗時は既存ナレッジを削除しない（データ喪失防止）
             logger.info("No chunks generated for page: %s", page.url)
             return 0
-
-        # チャンク生成成功後に既存チャンクを削除（upsert動作）
-        await self._vector_store.delete_by_source(page.url)
 
         # DocumentChunkに変換
         # SHA256の先頭16文字を使用（衝突確率が十分に低い）
@@ -152,9 +155,14 @@ class RAGKnowledgeService:
             )
             for i, chunk in enumerate(chunks)
         ]
+        new_ids = {chunk.id for chunk in document_chunks}
 
-        # ベクトルストアに保存
+        # ベクトルストアにupsert（失敗時もデータロスを防ぐため、先に追加）
         count = await self._vector_store.add_documents(document_chunks)
+
+        # upsert成功後、古いチャンクを削除（チャンク数が減った場合）
+        await self._vector_store.delete_stale_chunks(page.url, new_ids)
+
         logger.info("Ingested page %s: %d chunks", page.url, count)
         return count
 

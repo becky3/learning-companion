@@ -98,7 +98,9 @@ class VectorStore:
         return instance
 
     async def add_documents(self, chunks: list[DocumentChunk]) -> int:
-        """チャンクをEmbedding→ベクトルストアに追加.
+        """チャンクをEmbedding→ベクトルストアに追加（upsert動作）.
+
+        同じIDのドキュメントが既に存在する場合は上書きする。
 
         Args:
             chunks: 追加するチャンクのリスト
@@ -114,19 +116,19 @@ class VectorStore:
         raw_embeddings = await self._embedding.embed(texts)
         embeddings: Embeddings = cast(Embeddings, raw_embeddings)
 
-        # ChromaDBに追加（同期APIなのでto_threadでラップ）
+        # ChromaDBにupsert（同期APIなのでto_threadでラップ）
         ids = [chunk.id for chunk in chunks]
         metadatas = [chunk.metadata for chunk in chunks]
 
         await asyncio.to_thread(
-            self._collection.add,
+            self._collection.upsert,
             ids=ids,
             embeddings=embeddings,
             documents=texts,
             metadatas=metadatas,  # type: ignore[arg-type]
         )
 
-        logger.info("Added %d documents to vector store", len(chunks))
+        logger.info("Upserted %d documents to vector store", len(chunks))
         return len(chunks)
 
     async def search(
@@ -203,6 +205,45 @@ class VectorStore:
 
         logger.info("Deleted %d documents from vector store (source: %s)", count, source_url)
         return count
+
+    async def delete_stale_chunks(self, source_url: str, valid_ids: set[str]) -> int:
+        """ソースURLのチャンクのうち、valid_idsに含まれないものを削除.
+
+        upsert後に古いチャンクを削除するために使用。
+
+        Args:
+            source_url: 対象ソースURL
+            valid_ids: 保持するID（これ以外のIDを削除）
+
+        Returns:
+            削除件数
+        """
+        # ソースURLの全チャンクを取得
+        results = await asyncio.to_thread(
+            self._collection.get,
+            where={"source_url": source_url},
+            include=[IncludeEnum.metadatas],
+        )
+
+        if not results["ids"]:
+            return 0
+
+        # valid_idsに含まれないIDを特定
+        stale_ids = [id_ for id_ in results["ids"] if id_ not in valid_ids]
+
+        if not stale_ids:
+            return 0
+
+        # 削除実行
+        await asyncio.to_thread(
+            self._collection.delete,
+            ids=stale_ids,
+        )
+
+        logger.info(
+            "Deleted %d stale chunks from vector store (source: %s)", len(stale_ids), source_url
+        )
+        return len(stale_ids)
 
     def get_stats(self) -> dict[str, int]:
         """ナレッジベース統計（総チャンク数等）を返す.

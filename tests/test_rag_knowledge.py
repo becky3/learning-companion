@@ -29,6 +29,7 @@ def mock_vector_store(mock_embedding_provider: MagicMock) -> MagicMock:
     mock.add_documents = AsyncMock(return_value=3)
     mock.search = AsyncMock(return_value=[])
     mock.delete_by_source = AsyncMock(return_value=0)
+    mock.delete_stale_chunks = AsyncMock(return_value=0)
     mock.get_stats = MagicMock(return_value={"total_chunks": 10, "source_count": 2})
     return mock
 
@@ -40,6 +41,7 @@ def mock_web_crawler() -> MagicMock:
     mock.crawl_index_page = AsyncMock(return_value=[])
     mock.crawl_page = AsyncMock(return_value=None)
     mock.crawl_pages = AsyncMock(return_value=[])
+    mock.validate_url = MagicMock(return_value="https://example.com")  # 検証OK
     return mock
 
 
@@ -173,11 +175,11 @@ class TestIngestPage:
 
         # Assert
         assert result == 1
+        mock_web_crawler.validate_url.assert_called_once_with("https://example.com/page1")
         mock_web_crawler.crawl_page.assert_called_once_with("https://example.com/page1")
-        mock_vector_store.delete_by_source.assert_called_once_with(
-            "https://example.com/page1"
-        )
         mock_vector_store.add_documents.assert_called_once()
+        # upsert後に古いチャンクを削除
+        mock_vector_store.delete_stale_chunks.assert_called_once()
 
     async def test_ingest_page_crawl_failed(
         self,
@@ -200,7 +202,7 @@ class TestIngestPage:
         mock_vector_store: MagicMock,
         mock_web_crawler: MagicMock,
     ) -> None:
-        """同一URLの再取り込み時は既存チャンクを削除してから追加すること."""
+        """同一URLの再取り込み時はupsert後に古いチャンクを削除すること."""
         # Arrange
         mock_web_crawler.crawl_page.return_value = CrawledPage(
             url="https://example.com/page1",
@@ -208,15 +210,14 @@ class TestIngestPage:
             text="Updated content.",
             crawled_at="2024-01-02T00:00:00+00:00",
         )
-        mock_vector_store.delete_by_source.return_value = 5  # 既存5件削除
+        mock_vector_store.delete_stale_chunks.return_value = 2  # 古い2件削除
 
         # Act
         await rag_service.ingest_page("https://example.com/page1")
 
-        # Assert
-        mock_vector_store.delete_by_source.assert_called_once_with(
-            "https://example.com/page1"
-        )
+        # Assert: upsert後に古いチャンクを削除
+        mock_vector_store.add_documents.assert_called_once()
+        mock_vector_store.delete_stale_chunks.assert_called_once()
 
 
 class TestRetrieve:
