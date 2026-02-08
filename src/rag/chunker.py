@@ -27,7 +27,19 @@ def chunk_text(
 
     Returns:
         分割されたチャンクのリスト
+
+    Raises:
+        ValueError: chunk_size <= 0 または chunk_overlap >= chunk_size の場合
     """
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size must be positive, got {chunk_size}")
+    if chunk_overlap < 0:
+        raise ValueError(f"chunk_overlap must be non-negative, got {chunk_overlap}")
+    if chunk_overlap >= chunk_size:
+        raise ValueError(
+            f"chunk_overlap ({chunk_overlap}) must be less than chunk_size ({chunk_size})"
+        )
+
     if not text or not text.strip():
         return []
 
@@ -52,8 +64,8 @@ def _split_by_paragraphs(text: str) -> list[str]:
 
 def _split_by_sentences(text: str) -> list[str]:
     """テキストを文（句点区切り）で分割する."""
-    # 日本語の句点（。）と英語のピリオド（.）で分割
-    # ただし、ピリオド後にスペースまたは改行がある場合のみ
+    # 日本語の句点（。）と英語の終端記号（. / ! / ?）で分割
+    # 句点後の空白があれば含めて分割、なくても分割する
     sentences = re.split(r"(?<=[。.!?])\s*", text)
     return [s.strip() for s in sentences if s.strip()]
 
