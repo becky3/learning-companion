@@ -411,7 +411,7 @@ Slackコマンド経由でユーザーが任意のURLを指定できるため、
 - **ドメインホワイトリスト（必須）**: `RAG_ALLOWED_DOMAINS` に設定されたドメインのみクロールを許可する。未設定の場合は `rag crawl` / `rag add` コマンドを拒否する
 - **スキーム制限**: `http://` と `https://` のみ許可。`file:`, `ftp:` 等は拒否する
 - **リンク先の検証**: `crawl_index_page()` で抽出したリンクURLについても同じドメインホワイトリストで検証する
-- **URL安全性チェック（オプション）**: `RAG_URL_SAFETY_CHECK` が有効な場合、初回投入URLに対して [Google Safe Browsing API](https://developers.google.com/safe-browsing/v4) でマルウェア・フィッシング判定を行う。判定NGの場合はクロールを拒否する
+- **URL安全性チェック（将来実装予定）**: Google Safe Browsing API によるマルウェア・フィッシング判定機能を検討中
 
 **クロール制御**:
 
@@ -622,10 +622,9 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
     rag_retrieval_count: int = 5
-    rag_allowed_domains: list[str] = []
+    rag_allowed_domains: str = ""  # カンマ区切り、get_rag_allowed_domains()でlist変換
     rag_max_crawl_pages: int = 50
     rag_crawl_delay_sec: float = 1.0
-    rag_url_safety_check: bool = False
 ```
 
 ### 環境変数 (`.env`)
@@ -643,7 +642,6 @@ RAG_RETRIEVAL_COUNT=5
 RAG_ALLOWED_DOMAINS=example.com,docs.python.org
 RAG_MAX_CRAWL_PAGES=50
 RAG_CRAWL_DELAY_SEC=1.0
-RAG_URL_SAFETY_CHECK=false
 ```
 
 ## 受け入れ条件
@@ -850,4 +848,4 @@ RAG_URL_SAFETY_CHECK=false
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
 7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない。User-Agentにボット名を設定し、将来的に対応を検討する
 8. **SSRF対策**: `RAG_ALLOWED_DOMAINS` によるドメインホワイトリストが主防御。未設定時はクロールコマンドを拒否する
-9. **URL安全性チェック**: `RAG_URL_SAFETY_CHECK=true` で Google Safe Browsing API による判定を有効化できる（オプション、APIキー別途必要）
+9. **URL安全性チェック**: 将来実装予定。Google Safe Browsing API による判定機能を検討中

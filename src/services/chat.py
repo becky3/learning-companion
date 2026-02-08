@@ -78,9 +78,9 @@ class ChatService:
             rag_context = ""
             if self._rag_service:
                 try:
-                    from src.config.settings import Settings
+                    from src.config.settings import get_settings
 
-                    settings = Settings()
+                    settings = get_settings()  # キャッシュ済みインスタンスを使用
                     rag_context = await self._rag_service.retrieve(
                         text, n_results=settings.rag_retrieval_count
                     )
