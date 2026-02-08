@@ -54,7 +54,8 @@
   def test_ac2_articles_are_summarized_by_local_llm():
   ```
 
-- ruff でリント、mypy (strict) で型チェック、markdownlint でMarkdownチェック
+- ruff でリント、mypy (strict) で型チェック
+- markdownlint でMarkdownチェック（`npx markdownlint-cli2` を使用、Node.js環境が必要）
 
 ### 作業開始時の手順
 
