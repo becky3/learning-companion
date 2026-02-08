@@ -17,9 +17,6 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# User-Agent for crawler identification
-USER_AGENT = "AI-Assistant-Crawler/1.0"
-
 
 @dataclass
 class CrawledPage:
@@ -186,7 +183,6 @@ class WebCrawler:
         # ページ取得（SSRF対策: リダイレクト追従を無効化）
         async with aiohttp.ClientSession(
             timeout=self._timeout,
-            headers={"User-Agent": USER_AGENT},
         ) as session:
             async with session.get(validated_url, allow_redirects=False) as resp:
                 # リダイレクト応答の場合はログを出して空リストを返す
@@ -258,7 +254,6 @@ class WebCrawler:
             async with self._semaphore:
                 async with aiohttp.ClientSession(
                     timeout=self._timeout,
-                    headers={"User-Agent": USER_AGENT},
                 ) as session:
                     # SSRF対策: リダイレクト追従を無効化
                     async with session.get(validated_url, allow_redirects=False) as resp:
