@@ -109,11 +109,12 @@ class RAGKnowledgeService:
             ValueError: URL検証に失敗した場合
         """
         # URL検証を先に行い、失敗時は例外を投げる（ユーザーにエラー理由を伝えるため）
-        self._web_crawler.validate_url(url)
+        # 戻り値を以降の処理で使用（将来の正規化対応に備える）
+        validated_url = self._web_crawler.validate_url(url)
 
-        page = await self._web_crawler.crawl_page(url)
+        page = await self._web_crawler.crawl_page(validated_url)
         if page is None:
-            logger.warning("Failed to crawl page: %s", url)
+            logger.warning("Failed to crawl page: %s", validated_url)
             return 0
 
         return await self._ingest_crawled_page(page)

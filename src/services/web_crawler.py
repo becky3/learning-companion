@@ -58,7 +58,7 @@ class WebCrawler:
         self._semaphore = asyncio.Semaphore(max_concurrent)
 
     def validate_url(self, url: str) -> str:
-        """SSRF対策のURL検証. 問題なければ正規化済みURLを返す.
+        """SSRF対策のURL検証. 問題なければ検証済みURLを返す.
 
         検証内容:
         - スキームが http または https であること
@@ -69,7 +69,7 @@ class WebCrawler:
             url: 検証するURL
 
         Returns:
-            正規化済みURL
+            検証済みURL（現時点では入力URLをそのまま返す）
 
         Raises:
             ValueError: URL検証に失敗した場合

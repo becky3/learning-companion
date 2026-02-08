@@ -41,7 +41,8 @@ def mock_web_crawler() -> MagicMock:
     mock.crawl_index_page = AsyncMock(return_value=[])
     mock.crawl_page = AsyncMock(return_value=None)
     mock.crawl_pages = AsyncMock(return_value=[])
-    mock.validate_url = MagicMock(return_value="https://example.com")  # 検証OK
+    # validate_url は入力URLをそのまま返す（検証OK）
+    mock.validate_url = MagicMock(side_effect=lambda url: url)
     return mock
 
 
