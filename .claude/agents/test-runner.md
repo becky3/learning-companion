@@ -82,15 +82,21 @@ uv run mypy src/
 
 変更ファイルに関連するテストのみを実行:
 ```bash
-# 変更ファイルの取得
+# 変更ファイルの取得（以下の優先順位で試行）
+# 1. ベースブランチとの比較
 git diff --name-only $(git merge-base HEAD origin/main) HEAD
+# 2. ステージング済みの変更（1が失敗した場合）
+git diff --cached --name-only
+# 3. 直近コミットの差分（フォールバック）
+git show --name-only --format="" HEAD
+# 4. すべて失敗した場合 → fullモードにフォールバック
 
 # 推定されたテストファイルのみ実行
 uv run pytest {推定されたテストファイル}
 
-# lint・型チェックも変更ファイルのみ
-uv run ruff check {変更されたファイル}
-uv run mypy {変更されたsrc/ファイル}
+# lint・型チェックも変更ファイルのみ（Pythonファイルに限定）
+uv run ruff check {変更された *.py ファイル}
+uv run mypy {変更された src/**/*.py ファイル}
 ```
 
 ## 実行プロセス
@@ -103,9 +109,14 @@ uv run mypy {変更されたsrc/ファイル}
 
 1. **テスト対象の特定**
    - **diff モード**:
-     - `git diff --name-only $(git merge-base HEAD origin/main) HEAD` で変更ファイルを取得
+     - 変更ファイルの取得（以下の優先順位で試行）:
+       1. ベースブランチ（`origin/main`）との比較: `git diff --name-only $(git merge-base HEAD origin/main) HEAD`
+       2. ステージング済みの変更: `git diff --cached --name-only`
+       3. 直近コミットの差分（フォールバック）: `git show --name-only --format="" HEAD`
+       4. すべて失敗した場合は `full` モードにフォールバック
      - 変更ファイルから対応テストを推定（下記マッピングルール参照）
-     - 対応テストが見つからない場合、フォールバックで全テスト実行
+     - Pythonファイル以外（docs/, CLAUDE.md等）のみの変更 → テスト0件で正常終了（lint・型チェックもスキップ）
+     - `pyproject.toml`, `conftest.py` の変更 → `full` モードにフォールバック
    - **full モード**:
      - 引数でファイルパスやテスト名が指定されていればそれを実行
      - `-k` オプションによるパターンマッチも対応

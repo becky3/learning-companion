@@ -40,7 +40,7 @@ tools: Bash, Read, Grep, Glob, Edit
 permissionMode: default
 ```
 
-※ `model` フィールドは省略（デフォルトモデルを使用）。これはプロジェクト全体で統一された方針。
+※ `model` フィールドは（doc-reviewer 等と同様に）本サブエージェント定義では省略し、デフォルトモデルを使用する。
 
 ### テスト実行パターン
 
@@ -76,14 +76,17 @@ permissionMode: default
 
 ### 差分テスト処理フロー
 
-1. **変更ファイルの取得**
-   - `git diff --name-only $(git merge-base HEAD origin/main) HEAD` で変更ファイルを取得
+1. **変更ファイルの取得**（以下の優先順位で試行）
+   - ベースブランチ（`origin/main`）との比較: `git diff --name-only $(git merge-base HEAD origin/main) HEAD`
+   - ステージング済みの変更: `git diff --cached --name-only`
+   - 直近コミットの差分（フォールバック）: `git show --name-only --format="" HEAD`
+   - すべて失敗した場合は `full` モードにフォールバック
 
 2. **変更ファイルの分類**
-   - `src/*.py` → 対応テストを推定
+   - `src/**/*.py` → 対応テストを推定
    - `tests/*.py` → そのまま実行対象に追加
-   - `pyproject.toml` → 全テスト実行にフォールバック
-   - その他 → 影響なしと判定
+   - `pyproject.toml`, `conftest.py` → 全テスト実行にフォールバック（設定変更とみなし安全側に倒す）
+   - その他（`docs/**`, `CLAUDE.md`, `*.md` 等） → テスト対象外（diffモードではテスト0件で正常終了、fullへのフォールバックは行わない）
 
 3. **テストファイルの推定（マッピングルール）**
 
@@ -101,9 +104,9 @@ permissionMode: default
 4. **推定テストの実行**
    - `uv run pytest {推定されたテストファイル}`
 
-5. **lint・型チェック（変更ファイルのみ）**
-   - `uv run ruff check {変更されたファイル}`
-   - `uv run mypy {変更されたsrc/ファイル}`
+5. **lint・型チェック（変更されたPythonファイルのみ）**
+   - `uv run ruff check {変更された *.py ファイル}`（非Pythonファイルは除外）
+   - `uv run mypy {変更された src/**/*.py ファイル}`
 
 6. **結果レポート生成**
 
@@ -308,11 +311,11 @@ test-runnerサブエージェントでカバレッジを測定してください
 
 ## 使用LLMプロバイダー
 
-**Claude Code (Sonnet モデル)** — サブエージェントとして使用
+**Claude Code** — サブエージェントとして使用
 
 **選定理由:**
 - テスト実行、エラー分析、修正提案は、コードの文脈理解と論理的推論が必要
-- サブエージェント定義では `model` フィールドを省略し、デフォルトモデルを使用（プロジェクト統一方針）
+- サブエージェント定義では `model` フィールドを省略し、デフォルトモデルを使用
 - pytestの出力解析、スタックトレースの読解、コード修正案の生成には高度な推論力が重要
 
 ## 受け入れ条件
