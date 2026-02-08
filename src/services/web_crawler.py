@@ -17,9 +17,6 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# User-Agent for crawler identification
-USER_AGENT = "AI-Assistant-Crawler/1.0"
-
 
 @dataclass
 class CrawledPage:
@@ -60,8 +57,8 @@ class WebCrawler:
         self._crawl_delay = crawl_delay
         self._semaphore = asyncio.Semaphore(max_concurrent)
 
-    def _validate_url(self, url: str) -> str:
-        """SSRF対策のURL検証. 問題なければ正規化済みURLを返す.
+    def validate_url(self, url: str) -> str:
+        """SSRF対策のURL検証. 問題なければ検証済みURLを返す.
 
         検証内容:
         - スキームが http または https であること
@@ -72,7 +69,7 @@ class WebCrawler:
             url: 検証するURL
 
         Returns:
-            正規化済みURL
+            検証済みURL（現時点では入力URLをそのまま返す）
 
         Raises:
             ValueError: URL検証に失敗した場合
@@ -164,7 +161,7 @@ class WebCrawler:
     ) -> list[str]:
         """リンク集ページ内の <a> タグからURLリストを抽出する（深度1のみ、再帰クロールは行わない）.
 
-        - index_url および抽出したリンクURLを _validate_url() で検証
+        - index_url および抽出したリンクURLを validate_url() で検証
         - 抽出URL数が max_pages を超える場合は先頭 max_pages 件に制限
 
         Args:
@@ -178,7 +175,7 @@ class WebCrawler:
             ValueError: URL検証に失敗した場合
         """
         # インデックスページのURL検証
-        validated_url = self._validate_url(index_url)
+        validated_url = self.validate_url(index_url)
 
         # パターンのコンパイル
         pattern = re.compile(url_pattern) if url_pattern else None
@@ -186,7 +183,6 @@ class WebCrawler:
         # ページ取得（SSRF対策: リダイレクト追従を無効化）
         async with aiohttp.ClientSession(
             timeout=self._timeout,
-            headers={"User-Agent": USER_AGENT},
         ) as session:
             async with session.get(validated_url, allow_redirects=False) as resp:
                 # リダイレクト応答の場合はログを出して空リストを返す
@@ -224,7 +220,7 @@ class WebCrawler:
 
             # URL検証（許可されていないドメインはスキップ）
             try:
-                self._validate_url(absolute_url)
+                self.validate_url(absolute_url)
             except ValueError:
                 continue
 
@@ -240,7 +236,7 @@ class WebCrawler:
     async def crawl_page(self, url: str) -> CrawledPage | None:
         """単一ページの本文テキストを取得する. 失敗時は None.
 
-        - _validate_url() でURL検証後にHTTPアクセスを行う
+        - validate_url() でURL検証後にHTTPアクセスを行う
 
         Args:
             url: クロールするURL
@@ -249,7 +245,7 @@ class WebCrawler:
             CrawledPage オブジェクト、または失敗時は None
         """
         try:
-            validated_url = self._validate_url(url)
+            validated_url = self.validate_url(url)
         except ValueError as e:
             logger.warning("URL validation failed: %s - %s", url, e)
             return None
@@ -258,7 +254,6 @@ class WebCrawler:
             async with self._semaphore:
                 async with aiohttp.ClientSession(
                     timeout=self._timeout,
-                    headers={"User-Agent": USER_AGENT},
                 ) as session:
                     # SSRF対策: リダイレクト追従を無効化
                     async with session.get(validated_url, allow_redirects=False) as resp:

@@ -411,7 +411,7 @@ Slackコマンド経由でユーザーが任意のURLを指定できるため、
 - **ドメインホワイトリスト（必須）**: `RAG_ALLOWED_DOMAINS` に設定されたドメインのみクロールを許可する。未設定の場合は `rag crawl` / `rag add` コマンドを拒否する
 - **スキーム制限**: `http://` と `https://` のみ許可。`file:`, `ftp:` 等は拒否する
 - **リンク先の検証**: `crawl_index_page()` で抽出したリンクURLについても同じドメインホワイトリストで検証する
-- **URL安全性チェック（オプション）**: `RAG_URL_SAFETY_CHECK` が有効な場合、初回投入URLに対して [Google Safe Browsing API](https://developers.google.com/safe-browsing/v4) でマルウェア・フィッシング判定を行う。判定NGの場合はクロールを拒否する
+- **URL安全性チェック（将来実装予定）**: Google Safe Browsing API によるマルウェア・フィッシング判定機能を検討中
 
 **クロール制御**:
 
@@ -421,7 +421,7 @@ Slackコマンド経由でユーザーが任意のURLを指定できるため、
 **robots.txt対応方針**:
 
 - 初期実装では `robots.txt` の解析・遵守は行わない
-- User-Agentヘッダーに識別可能なボット名を設定する（例: `AI-Assistant-Crawler/1.0`）
+- User-Agentはaiohttpのデフォルト値を使用（ボット特定を回避しつつ、プログラムからのアクセスであることは示す）
 - 将来的に `robots.txt` の解析・遵守機能を追加予定
 
 **HTML本文抽出ロジック（BeautifulSoup4使用）**:
@@ -479,9 +479,10 @@ class RAGKnowledgeService:
     async def ingest_page(self, url: str) -> int:
         """単一ページ取り込み.
 
-        同一URLの再取り込み時は、既存チャンクを delete_by_source() で
-        削除してから新規追加する（upsert動作）。
+        同一URLの再取り込み時は、新規チャンクをupsert後に古いチャンクを削除する
+        （データロス防止のため、先に追加してから不要なチャンクを削除）。
         Returns: チャンク数.
+        Raises: ValueError（URL検証失敗時）
         """
 
     async def retrieve(self, query: str, n_results: int = 5) -> str:
@@ -515,7 +516,7 @@ class RAGKnowledgeService:
 
 **同一URLの再取り込み**:
 
-`ingest_page()` および `ingest_from_index()` で同一URLを再取り込みする場合、既存チャンクを `VectorStore.delete_by_source()` で削除してから新規チャンクを追加する（upsert動作）。これにより、ページ内容の更新に追従できる。
+`ingest_page()` および `ingest_from_index()` で同一URLを再取り込みする場合、新規チャンクをupsert（`VectorStore.add_documents()` で同一ID上書き）してから古いチャンクを `VectorStore.delete_stale_chunks()` で削除する。データロス防止のため、先に追加してから不要なチャンクを削除する順序にしている。
 
 ### ChatServiceへの自動統合 (`src/services/chat.py`)
 
@@ -622,10 +623,9 @@ class Settings(BaseSettings):
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
     rag_retrieval_count: int = 5
-    rag_allowed_domains: list[str] = []
+    rag_allowed_domains: str = ""  # カンマ区切り、get_rag_allowed_domains()でlist変換
     rag_max_crawl_pages: int = 50
     rag_crawl_delay_sec: float = 1.0
-    rag_url_safety_check: bool = False
 ```
 
 ### 環境変数 (`.env`)
@@ -643,7 +643,6 @@ RAG_RETRIEVAL_COUNT=5
 RAG_ALLOWED_DOMAINS=example.com,docs.python.org
 RAG_MAX_CRAWL_PAGES=50
 RAG_CRAWL_DELAY_SEC=1.0
-RAG_URL_SAFETY_CHECK=false
 ```
 
 ## 受け入れ条件
@@ -848,6 +847,6 @@ RAG_URL_SAFETY_CHECK=false
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限し、対象サーバーへの過負荷を防ぐ
 5. **LLMコンテキストウィンドウ**: 多数のチャンクが注入されるとトークン上限に近づく可能性がある。`RAG_RETRIEVAL_COUNT` で検索件数を制限し、対応する
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
-7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない。User-Agentにボット名を設定し、将来的に対応を検討する
+7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない。User-Agentはaiohttpデフォルトを使用し、将来的に対応を検討する
 8. **SSRF対策**: `RAG_ALLOWED_DOMAINS` によるドメインホワイトリストが主防御。未設定時はクロールコマンドを拒否する
-9. **URL安全性チェック**: `RAG_URL_SAFETY_CHECK=true` で Google Safe Browsing API による判定を有効化できる（オプション、APIキー別途必要）
+9. **URL安全性チェック**: 将来実装予定。Google Safe Browsing API による判定機能を検討中

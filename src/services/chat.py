@@ -16,6 +16,7 @@ from src.llm.base import LLMProvider, LLMResponse, Message, ToolDefinition, Tool
 
 if TYPE_CHECKING:
     from src.mcp_bridge.client_manager import MCPClientManager
+    from src.services.rag_knowledge import RAGKnowledgeService
     from src.services.thread_history import ThreadHistoryService
 
 logger = logging.getLogger(__name__)
@@ -40,12 +41,14 @@ class ChatService:
         system_prompt: str = "",
         mcp_manager: MCPClientManager | None = None,
         thread_history_service: ThreadHistoryService | None = None,
+        rag_service: RAGKnowledgeService | None = None,
     ) -> None:
         self._llm = llm
         self._session_factory = session_factory
         self._system_prompt = system_prompt
         self._mcp_manager = mcp_manager
         self._thread_history = thread_history_service
+        self._rag_service = rag_service
 
     async def respond(
         self,
@@ -57,6 +60,19 @@ class ChatService:
         current_ts: str = "",
     ) -> str:
         """ユーザーメッセージに対する応答を生成し、履歴を保存する."""
+        # RAGコンテキスト取得（DBセッション外で実行してDB接続保持時間を最小化）
+        rag_context = ""
+        if self._rag_service:
+            try:
+                from src.config.settings import get_settings
+
+                settings = get_settings()  # キャッシュ済みインスタンスを使用
+                rag_context = await self._rag_service.retrieve(
+                    text, n_results=settings.rag_retrieval_count
+                )
+            except Exception:
+                logger.exception("Failed to retrieve RAG context")
+
         async with self._session_factory() as session:
             # スレッド内かつ ThreadHistoryService が利用可能な場合は Slack API から取得
             history: list[Message] | None = None
@@ -73,8 +89,18 @@ class ChatService:
 
             # メッセージリストを構築
             messages: list[Message] = []
-            if self._system_prompt:
-                messages.append(Message(role="system", content=self._system_prompt))
+            # system_promptまたはrag_contextがあればシステムメッセージを追加
+            system_content = self._system_prompt or ""
+            if rag_context:
+                rag_prefix = (
+                    "\n\n以下は質問に関連する参考情報です。"
+                    "回答に役立つ場合は活用してください:\n"
+                    if system_content
+                    else "以下は質問に関連する参考情報です。回答に役立つ場合は活用してください:\n"
+                )
+                system_content += rag_prefix + rag_context
+            if system_content:
+                messages.append(Message(role="system", content=system_content))
             messages.extend(history)
             messages.append(Message(role="user", content=text))
 
