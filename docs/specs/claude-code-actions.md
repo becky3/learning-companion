@@ -13,16 +13,19 @@ GitHub PRやIssueで `@claude` メンションすることでClaude Codeを呼�
 ## 入出力仕様
 
 ### トリガー
+
 - `issue_comment`: Issue/PRへのコメント
 - `pull_request_review_comment`: PRレビューコメント
 - `issues`: Issue作成・アサイン
 - `pull_request_review`: PRレビュー投稿
 
 ### 入力
+
 - `@claude` を含むコメント本文
 - 対象のIssue/PRのコンテキスト
 
 ### 出力
+
 - Issue/PRへのコメントとして回答
 - 必要に応じてコード変更のコミット・プッシュ
 
@@ -52,6 +55,7 @@ GitHub PRやIssueで `@claude` メンションすることでClaude Codeを呼�
 **OAuth認証**（`CLAUDE_CODE_OAUTH_TOKEN`）
 
 ### セットアップ手順
+
 1. [Claude GitHub App](https://github.com/apps/claude) をリポジトリにインストール
 2. `claude setup-token` でOAuthトークンを取得
 3. **リポジトリシークレット**に `CLAUDE_CODE_OAUTH_TOKEN` を登録

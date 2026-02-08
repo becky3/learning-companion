@@ -13,6 +13,7 @@ argument-hint: "[spec|retro] [feature-name]"
 ## 引数
 
 `$ARGUMENTS` の形式:
+
 - `spec <feature-name>`: 仕様書生成（例: `spec feed-collection`）
 - `retro <feature-name>`: レトロスペクティブ生成（例: `retro chat`）
 
@@ -21,6 +22,7 @@ argument-hint: "[spec|retro] [feature-name]"
 ### 共通フロー
 
 1. **引数解析**
+
    ```bash
    ARGS=($ARGUMENTS)
    DOC_TYPE="${ARGS[0]}"  # spec, retro
@@ -54,14 +56,17 @@ argument-hint: "[spec|retro] [feature-name]"
    - 既存機能を指定された場合はその番号を使用
 
 2. Issue情報の収集
+
    ```bash
    # 該当機能のIssueを検索
    gh issue list --search "in:title $FEATURE_NAME" --json number,title,body
    ```
+
    - Issue本文から要件を抽出
    - コメントから議論内容を収集
 
 3. 関連コードの調査
+
    ```bash
    # 機能に関連するファイルを検索
    find src/ -name "*${FEATURE_NAME}*"
@@ -89,6 +94,7 @@ argument-hint: "[spec|retro] [feature-name]"
    - 仕様書と同じ番号を使用
 
 2. 実装情報の収集
+
    ```bash
    # 該当機能のPR
    gh pr list --search "in:title $FEATURE_NAME" --state all --json number,title,body
@@ -111,6 +117,7 @@ argument-hint: "[spec|retro] [feature-name]"
 ## エラーハンドリング
 
 - 引数が不正な場合:
+
   ```
   エラー: 引数が不正です。
   使用方法:
@@ -119,12 +126,14 @@ argument-hint: "[spec|retro] [feature-name]"
   ```
 
 - 既存ファイルがある場合:
+
   ```
   警告: ファイル {path} は既に存在します。
   上書きしますか？ (y/n)
   ```
 
 - Issue/PRが見つからない場合:
+
   ```
   警告: {feature-name} に関連するIssue/PRが見つかりませんでした。
   手動で情報を入力してドキュメントを作成します。

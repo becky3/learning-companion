@@ -15,9 +15,11 @@ RSSフィードや特定サイトから学習関連の記事を自動収集し�
 ### RSS収集
 
 **入力:**
+
 - DBに登録されたRSSフィードURL一覧（feedsテーブル、enabled=true）
 
 **処理:**
+
 1. 各フィードからfeedparserで記事を取得
 2. 既にarticlesテーブルに存在するURLはスキップ（重複排除）
 3. 新規記事ごとにローカルLLMで要約を生成（`FEED_SUMMARIZE_TIMEOUT` 秒でタイムアウト、超過時はそのフィードを中止）
@@ -28,14 +30,17 @@ RSSフィードや特定サイトから学習関連の記事を自動収集し�
 5. articlesテーブルに保存
 
 **出力:**
+
 - articlesテーブルに新規記事レコード（title, url, summary, image_url, published_at, collected_at）
 
 ### 毎朝配信
 
 **入力:**
+
 - 未配信の記事（articlesテーブル、`delivered == False`）
 
 **処理:**
+
 1. 有効なフィードを順に処理（1フィードずつ逐次）
 2. 各フィードのRSSエントリを取得し、新規記事ごとに要約生成→即Slack投稿（コールバック方式）
 3. フィード配信完了後、配信済み記事の `delivered` フラグを `True` に更新
@@ -43,17 +48,21 @@ RSSフィードや特定サイトから学習関連の記事を自動収集し�
 **出力（Slackメッセージ — フィードごとに親メッセージ＋スレッド、Block Kit形式）:**
 
 1. ヘッダーメッセージ（1通）:
+
 ```
 :newspaper: 今日のニュース (2026-02-01)
 ```
 
 2. フィード別 親メッセージ（フィード数分、チャンネルに投稿）:
+
 ```
 :file_folder: *Python公式ブログ*
 ```
+
 - フィード名のみのシンプルな投稿（件数はスレッドのリプライ数で把握可能）
 
 3. スレッド内 記事投稿（親メッセージへのリプライ、**1記事1投稿**）:
+
 ```
 :newspaper: *<https://example.com/article1|asyncioの新機能がPython 3.14で追加>*
 02-05 14:30
@@ -61,6 +70,7 @@ RSSフィードや特定サイトから学習関連の記事を自動収集し�
 asyncioにTaskGroupが正式導入され...（要約全文）
 [OGP画像（取得できた場合、horizontalではaccessory配置）]
 ```
+
 - 各記事の全内容（タイトル・日時・画像・要約）をスレッド内に投稿
 - **1記事につき1つのSlackメッセージ**として投稿（一括ではない）
 - 投稿は**逐次型**（1記事の要約完了後に即投稿し、次の記事の要約に進む）
@@ -73,20 +83,24 @@ asyncioにTaskGroupが正式導入され...（要約全文）
 **カード構成（`FEED_CARD_LAYOUT` で切り替え可能）:**
 
 横長形式 (`horizontal`, デフォルト):
+
 - タイトル+要約を1つのsectionにまとめ、OGP画像がある場合のみaccessoryとして右側に配置
 - 画像がない場合はテキストのみのsectionとして表示（画像取得失敗時も同様）
 
 縦長形式 (`vertical`):
+
 - タイトルはリンク付き太字で表示（`:newspaper:` アイコン付き）
 - OGP画像がある場合は独立imageブロックとして表示（画像取得失敗時はスキップ）
 - 要約はSlackの上限に応じて切り詰め（`horizontal` と同じロジック）
 
 4. フッターメッセージ（1通）:
+
 ```
 :bulb: 気になる記事があれば、スレッドで聞いてね！
 ```
 
 **設定値:**
+
 - `FEED_ARTICLES_PER_FEED`: フィードあたりの最大表示件数（デフォルト10）
 - `FEED_CARD_LAYOUT`: 配信カードの表示形式（`"horizontal"` or `"vertical"`, デフォルト `"horizontal"`）
 - `FEED_SUMMARIZE_TIMEOUT`: 1記事あたりの要約タイムアウト秒数（デフォルト180、0=無制限）。タイムアウト時はそのフィードの収集を中止する
@@ -95,22 +109,27 @@ asyncioにTaskGroupが正式導入され...（要約全文）
 ### 手動配信テスト
 
 **入力:**
+
 - Slackでボットにメンション + キーワード（`deliver`）
 
 **処理:**
+
 1. 「配信を開始します...」と応答
 2. `daily_collect_and_deliver` を実行（毎朝配信と同一処理）
 3. 完了後「配信が完了しました」と応答 / エラー時はエラーメッセージ
 
 **出力:**
+
 - 毎朝配信と同じBlock Kitメッセージ（フィード別・親メッセージ＋スレッド形式）が `SLACK_NEWS_CHANNEL_ID` に投稿される
 
 ### フィードテスト配信
 
 **入力:**
+
 - Slackでボットにメンション + `feed test`
 
 **処理:**
+
 1. 「テスト配信を開始します...」と応答
 2. 有効フィードをID昇順で最大3件取得
 3. 各フィードの全記事を取得（`delivered` フラグに関わらず、各5件まで）
@@ -120,6 +139,7 @@ asyncioにTaskGroupが正式導入され...（要約全文）
 7. 完了後「テスト配信が完了しました」と応答 / エラー時はエラーメッセージ
 
 **出力:**
+
 - テストヘッダー + フィード別親メッセージ＋スレッド形式のメッセージが `SLACK_NEWS_CHANNEL_ID` に投稿される
 
 ### 配信カード表示テスト（スクリプト）
@@ -139,9 +159,11 @@ uv run python scripts/test_delivery.py vertical     # 縦長形式を指定
 ### フィード管理（Slackコマンド）
 
 **入力:**
+
 - Slackでボットにメンション + `feed` + サブコマンド
 
 **コマンド一覧:**
+
 - `@bot feed add <URL> [カテゴリ]` — フィード追加（カテゴリ省略時は「一般」、複数URL対応）
 - `@bot feed list` — フィード一覧表示（有効/無効で分類）
 - `@bot feed delete <URL>` — フィード削除（関連記事もCASCADE削除、複数URL対応）
@@ -153,11 +175,13 @@ uv run python scripts/test_delivery.py vertical     # 縦長形式を指定
 - `@bot feed collect --skip-summary` — 要約なし一括収集（初回インポート用）
 
 **コマンド解析ルール:**
+
 - `http://` または `https://` で始まり、ドメインを含むトークンをURLとして認識
 - URL以外のトークンをカテゴリ名として認識（`add` の場合のみ使用）
 - サブコマンドは大文字小文字不問
 
 **出力:**
+
 - 操作結果をスレッド内で応答（成功: ✓ / 失敗: ✗）
 - `feed list` は各フィードを `URL — フィード名` 形式で表示（有効/無効で分類）
 - フィード一覧はURL昇順でソートする（`feed list` / `feed export` / 配信処理で共通）
@@ -167,19 +191,23 @@ uv run python scripts/test_delivery.py vertical     # 縦長形式を指定
 ### フィード一括インポート（CSV）
 
 **入力:**
+
 - Slackでボットにメンション + `feed import` + CSVファイル添付
 
 **CSV形式:**
+
 ```csv
 url,name,category
 https://example.com/feed,Example Feed,Tech
 https://another.com/rss,Another Feed,News
 ```
+
 - `url` (必須): フィードURL
 - `name` (必須): フィード名
 - `category` (オプション): カテゴリ名（省略時は「一般」）
 
 **処理:**
+
 1. 添付ファイルの存在確認（なければエラー）
 2. CSVファイルのみ受付（MIMEタイプ or 拡張子で判定）
 3. Slack APIでファイルをダウンロード
@@ -187,6 +215,7 @@ https://another.com/rss,Another Feed,News
 5. 重複URLはスキップ（他の行は継続処理）
 
 **出力例:**
+
 ```
 フィードインポート完了
 ✅ 成功: 25件
@@ -200,18 +229,22 @@ https://another.com/rss,Another Feed,News
 ### フィード一括置換（replace）
 
 **入力:**
+
 - Slackでボットにメンション + `feed replace` + CSVファイル添付
 
 **CSV形式:**
+
 - `feed import` と同一（`url,name,category`）
 
 **処理:**
+
 1. 添付ファイルの存在確認・CSV検証（`feed import` と共通処理）
 2. 既存の全フィード（関連記事含む）を削除（CASCADE削除）
 3. CSVの各行で `FeedCollector.add_feed()` を実行
 4. 全削除後のインポートで失敗しても、削除は取り消されない（非トランザクション）
 
 **出力例:**
+
 ```
 フィード置換完了
 🗑️ 削除: 10件（既存フィード）
@@ -224,6 +257,7 @@ https://another.com/rss,Another Feed,News
 ```
 
 **異常系出力例（インポート中に予期せぬエラーが発生した場合）:**
+
 ```
 フィード置換エラー
 🗑️ 削除: 10件（既存フィード）
@@ -233,18 +267,22 @@ https://another.com/rss,Another Feed,News
 ### フィードエクスポート（export）
 
 **入力:**
+
 - Slackでボットにメンション + `feed export`
 
 **処理:**
+
 1. `FeedCollector.get_all_feeds()` で全フィード取得（有効・無効問わず）
 2. CSV文字列を生成（`url,name,category` ヘッダー付き、`feed import` / `feed replace` と同一形式）
 3. `slack_client.files_upload_v2()` でCSVファイルをスレッドに投稿
 
 **出力:**
+
 - CSVファイル（`feeds.csv`）がSlackにファイル添付として投稿される
 - フィードが0件の場合はエラーメッセージを表示
 
 **Slack API権限要件:**
+
 - `files:write` スコープが必須（`files_upload_v2()` に必要）
 - `files:read` スコープが推奨（`files_upload_v2()` の内部処理に使用）
 - 権限不足時は分かりやすいエラーメッセージを返す
@@ -254,10 +292,12 @@ https://another.com/rss,Another Feed,News
 LLM要約をスキップして記事を収集・配信するモード。通常配信と同じ逐次投稿フローを使用し、要約部分のみスキップする。
 
 **入力:**
+
 - Slackでボットにメンション + `feed collect --skip-summary`
 
 **処理:**
 通常の収集・配信フロー（`daily_collect_and_deliver`）に `skip_summary=True` を渡して実行する。
+
 1. 有効フィードを順に処理（通常配信と同じ逐次型）
 2. 各フィードのRSSエントリを取得し、既存記事（URL重複）をスキップ
 3. 新規記事を要約なしでDBに保存
@@ -271,9 +311,11 @@ LLM要約をスキップして記事を収集・配信するモード。通常�
 ### 情報源探索
 
 **入力:**
+
 - ユーザーからの「この分野の情報源を追加して」等のリクエスト
 
 **処理:**
+
 1. オンラインLLMに分野名を渡し、おすすめのRSSフィード/サイトを提案させる
 2. ユーザーに提案を提示
 3. 承認されたらfeedsテーブルに追加

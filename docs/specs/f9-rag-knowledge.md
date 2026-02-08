@@ -204,6 +204,7 @@ class EmbeddingProvider(abc.ABC):
 ```
 
 **`LLMProvider` と別階層にする理由**:
+
 - chat completionとembeddingは入出力が根本的に異なる（`Message→str` vs `str→float[]`）
 - モデルも別（chat用モデルとembedding用モデル）
 - 既存の `LLMProvider` 実装を変更不要
@@ -334,6 +335,7 @@ class VectorStore:
 ```
 
 **設計ポイント**:
+
 - ChromaDBは同期APIのため `asyncio.to_thread()` でラップ（`feed_collector.py` の `feedparser.parse` と同パターン）
 - SQLAlchemyモデルは追加しない（ChromaDB自身がSQLiteに永続化するため）
 - Embeddingは `VectorStore` 内で呼び出す（外部から渡す必要なし）
@@ -423,15 +425,18 @@ Slackコマンド経由でユーザーが任意のURLを指定できるため、
 - 将来的に `robots.txt` の解析・遵守機能を追加予定
 
 **HTML本文抽出ロジック（BeautifulSoup4使用）**:
+
 1. `<script>`, `<style>`, `<nav>`, `<header>`, `<footer>` タグを除去
 2. `<article>` → `<main>` → `<body>` の優先順で本文領域を特定
 3. テキストを抽出してクリーンアップ
 
 **並行制御**:
+
 - `asyncio.Semaphore` で同時接続数を制限（デフォルト: 5）
 - 対象サーバーへの負荷を配慮
 
 **エラー耐性**:
+
 - ページ単位で失敗を隔離し、他のページの処理は継続
 - 失敗時は `None` を返す（`OgpExtractor` と同パターン）
 
@@ -568,6 +573,7 @@ _RAG_KEYWORDS = ("rag",)
 既存の `feed` コマンドと同じルーティングパターンで `rag` コマンドを追加する。
 
 **コマンド処理**:
+
 - `rag crawl <URL> [パターン]`: `RAGKnowledgeService.ingest_from_index()` を呼び出し
 - `rag add <URL>`: `RAGKnowledgeService.ingest_page()` を呼び出し
 - `rag status`: `RAGKnowledgeService.get_stats()` を呼び出し
@@ -804,6 +810,7 @@ RAG_URL_SAFETY_CHECK=false
 ## 実装ステップ
 
 ### Step 1: Embeddingプロバイダー (#115)
+
 1. `src/embedding/base.py` に `EmbeddingProvider` 抽象基底クラスを作成
 2. `src/embedding/lmstudio_embedding.py` を実装
 3. `src/embedding/openai_embedding.py` を実装
@@ -811,17 +818,20 @@ RAG_URL_SAFETY_CHECK=false
 5. テスト作成
 
 ### Step 2: RAGインフラ (#116)
+
 1. `src/rag/chunker.py` — テキストチャンキング実装
 2. `src/rag/vector_store.py` — ChromaDBラッパー実装
 3. `pyproject.toml` に `chromadb` 追加
 4. テスト作成
 
 ### Step 3: Webクローラー (#117)
+
 1. `src/services/web_crawler.py` を作成
 2. `pyproject.toml` に `beautifulsoup4` 追加
 3. テスト作成
 
 ### Step 4: RAGナレッジサービス＆既存コード統合 (#118)
+
 1. `src/services/rag_knowledge.py` — オーケストレーションサービス実装
 2. `src/config/settings.py` — RAG設定追加
 3. `src/services/chat.py` — RAGコンテキスト注入

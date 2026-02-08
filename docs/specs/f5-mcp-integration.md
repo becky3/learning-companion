@@ -47,6 +47,7 @@ MCPは3層のクライアント・サーバーモデルで構成される：
 MCPサーバーは将来的に別リポジトリに切り出すことを前提に設計する。
 
 **設計原則**:
+
 - MCPサーバーはトップレベルの `mcp-servers/` ディレクトリに配置する（`src/` の外）
 - MCPサーバーのコードは `src/` 配下のモジュールを一切 import しないこと
 - MCPサーバーとホストアプリはMCPプロトコルのみで通信する（直接のPython import禁止）
@@ -190,11 +191,13 @@ MCPサーバー → (MCP SDK) → MCPClientManager → ToolDefinition → LLMPro
 **変換責務**: `MCPClientManager.get_available_tools()` が `ToolDefinition` のリストを返し、各プロバイダーの `complete_with_tools()` 内で API固有形式に変換する。
 
 **OpenAI Function Calling形式**:
+
 ```python
 {"type": "function", "function": {"name": td.name, "description": td.description, "parameters": td.input_schema}}
 ```
 
 **Anthropic Tool Use形式**:
+
 ```python
 {"name": td.name, "description": td.description, "input_schema": td.input_schema}
 ```
@@ -225,6 +228,7 @@ async def get_weather(location: str, date: str = "today") -> str:
 ```
 
 **天気予報API**:
+
 - [気象庁API（非公式）](https://www.jma.go.jp/bosai/forecast/) — 無料、APIキー不要、日本国内全域対応
   - `https://www.jma.go.jp/bosai/common/const/area.json`: 地域コード一覧（offices レベル）
   - `https://www.jma.go.jp/bosai/forecast/data/forecast/{code}.json`: 天気予報データ（短期3日間 + 週間7日間）
@@ -251,6 +255,7 @@ MCPサーバーの接続設定を外部ファイルで管理する。
 ```
 
 **トランスポート種別**:
+
 - `"stdio"`: ローカルプロセスとして起動（初期実装）
 - `"http"`: HTTP (Streamable HTTP) で接続（将来対応 — リポジトリ分離後のリモート接続用）
 
@@ -352,6 +357,7 @@ class LLMProvider(abc.ABC):
 **OpenAIProvider** (`src/llm/openai_provider.py`):
 
 `complete_with_tools()` をオーバーライドし、OpenAI の Function Calling API を使用する。
+
 - `ToolDefinition` → OpenAI `tools` パラメータ形式に変換
 - `Message(role="tool")` → OpenAI の `tool` ロールメッセージに変換
 - `response.choices[0].message.tool_calls` から `ToolCall` リストを構築
@@ -359,6 +365,7 @@ class LLMProvider(abc.ABC):
 **AnthropicProvider** (`src/llm/anthropic_provider.py`):
 
 `complete_with_tools()` をオーバーライドし、Anthropic の Tool Use API を使用する。
+
 - `ToolDefinition` → Anthropic `tools` パラメータ形式に変換
 - `Message(role="tool")` → `role: "user"` + `tool_result` content block に変換
 - `response.content` から `type="tool_use"` ブロックを抽出して `ToolCall` リストを構築
@@ -368,6 +375,7 @@ class LLMProvider(abc.ABC):
 既存の `ChatService.respond()` にツール呼び出しループを追加する。
 
 **変更点**:
+
 1. `MCPClientManager` を注入できるようにする（オプショナル）
 2. `respond()` メソッドでツール情報をLLMに渡す
 3. LLMが `tool_use` を返した場合、ツール実行 → 結果返送のループを実行
@@ -385,6 +393,7 @@ TOOL_CALL_TIMEOUT_SEC = 30      # 1回のツール実行タイムアウト（秒
 - 個々のツール実行が `TOOL_CALL_TIMEOUT_SEC` を超えた場合、タイムアウトエラーとして処理し、エラー内容をLLMに返す
 
 **ツール呼び出しループの擬似コード**:
+
 ```python
 async def respond(self, user_id: str, text: str, thread_ts: str) -> str:
     messages = self._build_messages(history, text)
@@ -419,6 +428,7 @@ async def respond(self, user_id: str, text: str, thread_ts: str) -> str:
 ツール呼び出しの中間ステップ（`role="assistant"` + tool_calls、`role="tool"` + 結果）は**DBに保存しない**。
 
 **理由**:
+
 - ツール呼び出しは1回の `respond()` 内で完結するため、スレッド再開時に再利用する必要がない
 - 既存の `Conversation` テーブルのスキーマ変更を最小限にする
 - LLMへの最終応答テキストのみを `role="assistant"` として保存する
@@ -542,22 +552,26 @@ class Settings(BaseSettings):
 ## 実装ステップ
 
 ### Step 1: 基盤（LLMプロバイダー拡張）
+
 1. `src/llm/base.py` に `ToolDefinition`, `ToolCall`, `ToolResult` を追加、`Message` を拡張
 2. `OpenAIProvider.complete_with_tools()` を実装（ツールスキーマ変換含む）
 3. `AnthropicProvider.complete_with_tools()` を実装（ツールスキーマ変換含む）
 4. テスト作成
 
 ### Step 2: MCPサーバー（天気予報）
+
 1. `mcp-servers/weather/server.py` を作成
 2. 天気予報API連携を実装
 3. テスト作成
 
 ### Step 3: MCPクライアント
+
 1. `src/mcp_bridge/client_manager.py` を作成（`MCPServerConfig` 含む）
 2. サーバー接続・ツール発見（`ToolDefinition` 変換）・ツール実行を実装
 3. テスト作成
 
 ### Step 4: チャット統合
+
 1. `ChatService.respond()` にツール呼び出しループを追加（安全弁含む）
 2. `src/main.py` にMCPClientManager初期化・cleanup追加
 3. 設定項目を追加

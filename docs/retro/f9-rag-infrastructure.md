@@ -5,6 +5,7 @@
 RAG（Retrieval-Augmented Generation）の基盤となるテキストチャンキングとChromaDBベクトルストアを実装した。
 
 主なコンポーネント:
+
 - **テキストチャンキング** (`src/rag/chunker.py`): 段落→文→文字数の優先順で分割、オーバーラップ付き
 - **ベクトルストア** (`src/rag/vector_store.py`): ChromaDBラッパー（add_documents, search, delete_by_source, get_stats）
 - **Embeddingプロバイダー** (`src/embedding/`): ローカル（sentence-transformers）とオンライン（OpenAI）の切り替え対応
@@ -25,12 +26,14 @@ RAG（Retrieval-Augmented Generation）の基盤となるテキストチャン�
 **問題**: `onnxruntime==1.24.1`（sentence-transformersの依存）がPython 3.11以上を要求。テスト実行時にエラーが発生。
 
 **対応**:
+
 - `.python-version`: 3.10 → 3.11
 - `pyproject.toml`: `requires-python`, ruff/mypy の `target-version` を 3.11 に更新
 - `README.md`: 動作環境・技術スタックのバージョン記載を更新
 - `uv.lock`: 依存関係の再解決
 
 **教訓**:
+
 - 新しい依存パッケージを追加する際は、Pythonバージョン要件を事前に確認する
 - バージョン変更は影響範囲が大きい（README, pyproject.toml, CI設定など複数ファイル）。ドキュメントレビューを必ず実施する
 
@@ -41,6 +44,7 @@ RAG（Retrieval-Augmented Generation）の基盤となるテキストチャン�
 **対応**: ユーザーに指摘されてから実施し、README.mdとpyproject.tomlの追加修正が必要になった。
 
 **教訓**:
+
 - CLAUDE.mdの「実装完了時の必須手順」を厳守する。特にレビュー指摘対応でも同じ手順を踏む
 - 大きな変更（Pythonバージョン、依存関係）があった場合は特にドキュメントレビューを重視する
 
@@ -51,6 +55,7 @@ RAG（Retrieval-Augmented Generation）の基盤となるテキストチャン�
 **対応**: テストで `chunk_overlap` を明示的に指定するよう修正。
 
 **教訓**:
+
 - バリデーション追加時は、既存のテストケースがそのバリデーションに抵触しないか確認する
 - 特にデフォルト値を持つパラメータは、様々な組み合わせで使われている可能性がある
 
@@ -61,6 +66,7 @@ RAG（Retrieval-Augmented Generation）の基盤となるテキストチャン�
 **対応**: コメントを実装に合わせて修正（「句点後の空白があれば含めて分割、なくても分割する」）。
 
 **教訓**:
+
 - コメントを書く際は実装と正確に一致させる。特に正規表現など複雑なロジックは要注意
 - コードレビュー時はコメントと実装の整合性も確認する
 

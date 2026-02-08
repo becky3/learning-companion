@@ -9,6 +9,7 @@ Claude Code が生成・変更したコードに対して、コミット前に�
 AI Assistantプロジェクトでは、Claude Code が生成したコードがPR作成後に Copilot レビューで初めて問題を指摘されるケースが頻発している。
 
 PR #140（Bot重複起動検知）で検出された典型的な問題:
+
 - テスト名と実際のテスト内容の不一致（`pgrep` vs `wmic`）
 - docstring の typo
 - `except ... pass` のログ欠落（silent failure）
@@ -31,6 +32,7 @@ PR #140（Bot重複起動検知）で検出された典型的な問題:
 **ファイル**: `.claude/agents/code-reviewer.md`
 
 **メタデータ:**
+
 ```yaml
 name: code-reviewer
 description: コミット前のセルフコードレビュー専門家。テスト名と実装の整合性、エラーハンドリング、バリデーション、競合状態、リソース管理などの問題を検出する。
@@ -132,16 +134,19 @@ permissionMode: default
 ユーザーが Claude Code で以下のように呼び出す:
 
 **パターン1: 特定ファイルのレビュー**
+
 ```
 code-reviewerサブエージェントで src/services/chat_service.py をレビューしてください
 ```
 
 **パターン2: 変更差分のレビュー**
+
 ```
 code-reviewerサブエージェントで変更差分をレビューしてください
 ```
 
 **パターン3: 複数ファイルのレビュー**
+
 ```
 code-reviewerサブエージェントで src/services/ と tests/ をレビューしてください
 ```
@@ -151,6 +156,7 @@ code-reviewerサブエージェントで src/services/ と tests/ をレビュ�
 以下の形式でレビュー結果を返す:
 
 **問題検出時:**
+
 ```markdown
 ### コードレビュー結果
 
@@ -177,6 +183,7 @@ code-reviewerサブエージェントで src/services/ と tests/ をレビュ�
 ```
 
 **問題なしの場合:**
+
 ```markdown
 ### コードレビュー結果 ✅
 
@@ -191,6 +198,7 @@ code-reviewerサブエージェントで src/services/ と tests/ をレビュ�
 **Claude Code** — サブエージェントとして使用
 
 **選定理由:**
+
 - コードレビューは、実装の意図理解、バグパターンの検出、セキュリティ分析など、高度な推論力が必要なタスク
 - テストと実装の整合性確認や競合状態の検出には、コードの文脈理解と論理的分析が重要
 
@@ -272,6 +280,7 @@ Claude Codeサブエージェントは実行時テストが中心となるため
 - **doc-reviewer**: doc-reviewer がドキュメントの品質を検証するのに対し、code-reviewer はコードの品質を検証する。コード内の docstring は code-reviewer、仕様書は doc-reviewer の管轄
 
 **推奨ワークフロー:**
+
 1. 実装完了
 2. `test-runner サブエージェント` でテスト実行（機能の正しさを確認）
 3. `code-reviewer サブエージェント` でコードレビュー（品質・潜在的問題を確認）

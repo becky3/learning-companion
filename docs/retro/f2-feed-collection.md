@@ -5,6 +5,7 @@
 RSSフィードからの記事自動収集・LLM要約・Slack配信の一連のパイプラインを実装した。
 
 主な機能:
+
 - RSS収集 + ローカルLLM要約 + Slack Block Kit配信（フィード別スレッド形式）
 - Slackコマンドによるフィード管理（add/delete/enable/disable/list/import/replace/export）
 - 要約スキップ収集モード（`feed collect --skip-summary`）

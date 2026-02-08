@@ -6,7 +6,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 
 ## 背景
 
-- 参考記事: https://zenn.dev/is0383kk/articles/5d66a34b0a89be
+- 参考記事: <https://zenn.dev/is0383kk/articles/5d66a34b0a89be>
 - Claude Code は hooks 機能により、特定のイベント発生時にカスタムスクリプトを実行可能
 - 長時間かかるタスクの完了通知や、重要な確認時のアラートに有用
 
@@ -63,6 +63,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 ```
 
 **対応イベント（PascalCase）:**
+
 - `Notification`: ユーザー入力待ち時（選択肢提示、許可ダイアログ、アイドル状態など）
 - `PermissionRequest`: ツール実行の許可ダイアログ表示時のみ
 - `Stop`: Claude がタスク完了時
@@ -71,12 +72,14 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 **注意**: 選択肢提示（AskUserQuestion）は `Notification` イベントで捕捉する。`PermissionRequest` はツール実行許可のみ。
 
 **設定形式のポイント:**
+
 - イベント名は PascalCase（例: `Stop`, `Notification`）
 - 各イベントは配列で、`matcher` と `hooks` を含むオブジェクトを持つ
 - `hooks` 配列内で `type: "command"` と `command` を指定
 - パスは相対パス `./.claude/scripts/...` を使用
 
 **Notification イベントの matcher 値:**
+
 - `*`: 全ての通知タイプをキャッチ
 - `permission_prompt`: ツール許可ダイアログ表示時
 - `idle_prompt`: アイドル状態で入力待機時
@@ -95,6 +98,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 - **フォールバック**: 通知コマンドがない環境では `stderr` にテキスト出力
 
 **セキュリティ対策:**
+
 - シェルインジェクション対策（変数の適切なエスケープ）
 - エラー発生時の明示的なメッセージ表示
 
@@ -145,23 +149,27 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 ## 実装の優先順位
 
 **Phase 1 (MVP)** — 完了:
+
 - macOS + Linux のデスクトップ通知
 - `PermissionRequest` イベント対応（確認・承認待ち通知）
 - 基本的な通知スクリプト
 - セキュリティ対策
 
 **Phase 2 (拡張)** — 完了:
+
 - Windows対応
 - `Stop` イベント対応
 - 音による通知追加
 
 **Phase 2.1 (Windows 高速化)** — 完了:
+
 - PowerShell 起動オプション最適化
 - `Start-Sleep` 時間短縮
 - PowerShell Core 優先利用
 - ※詳細は「技術的な注意点」のパフォーマンスセクションを参照
 
 **Phase 3 (最適化)** — 未実装:
+
 - 通知のカスタマイズ設定
 - 通知頻度制御
 - 通知音選択機能

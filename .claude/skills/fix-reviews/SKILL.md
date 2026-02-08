@@ -20,33 +20,34 @@ PRの未解決レビュー指摘を確認し、妥当な指摘に対応する。
    - owner/repo は `gh repo view --json owner,name` で取得
    - 以下の GraphQL で未解決スレッドのみ抽出:
 
-```bash
-gh api graphql -f query='
-{
-  repository(owner: "{owner}", name: "{repo}") {
-    pullRequest(number: {pr_number}) {
-      reviewThreads(first: 100) {
-        nodes {
-          isResolved
-          comments(first: 10) {
-            nodes {
-              author { login }
-              body
-              path
-              line
-            }
-          }
-        }
-      }
-    }
-  }
-}' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .comments.nodes[0] | {author: .author.login, path, line, body}'
-```
+   ```bash
+   gh api graphql -f query='
+   {
+     repository(owner: "{owner}", name: "{repo}") {
+       pullRequest(number: {pr_number}) {
+         reviewThreads(first: 100) {
+           nodes {
+             isResolved
+             comments(first: 10) {
+               nodes {
+                 author { login }
+                 body
+                 path
+                 line
+               }
+             }
+           }
+         }
+       }
+     }
+   }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .comments.nodes[0] | {author: .author.login, path, line, body}'
+   ```
 
 3. 指摘がない場合は「未解決の指摘はありません」と表示して終了
 
 4. 指摘がある場合は一覧表示:
-   ```
+
+   ```text
    ## 未解決レビューコメント (PR #番号)
 
    ### [N] ファイル:行番号 (@レビュアー)
@@ -60,8 +61,8 @@ gh api graphql -f query='
 
 6. 妥当な指摘に対して修正を実施
 
-7. 修正後に **test-runner サブエージェント** でテストを実行して全テスト通過を確認:
-   - `test-runnerサブエージェントで全テストを実行してください` と呼び出す
+7. 修正後に **test-runner サブエージェント** で差分テストを実行:
+   - `test-runnerサブエージェントで差分テストを実行してください` と呼び出す
    - 直接 `uv run pytest` を実行せず、必ずサブエージェントに委譲すること
 
 8. ドキュメント整合性チェック:
@@ -74,8 +75,8 @@ gh api graphql -f query='
    - Critical/Warning の指摘があれば修正し、再度 test-runner でテスト通過を確認
 
 10. 修正をコミット & push:
-   - コミットメッセージ: `fix: レビュー指摘対応 (PR #番号)`
-   - 変更内容を箇条書きでコミットメッセージに含める
-   - ドキュメント更新がある場合はコミットメッセージにその旨も含める
+    - コミットメッセージ: `fix: レビュー指摘対応 (PR #番号)`
+    - 変更内容を箇条書きでコミットメッセージに含める
+    - ドキュメント更新がある場合はコミットメッセージにその旨も含める
 
 11. 対応結果のサマリーを表示
