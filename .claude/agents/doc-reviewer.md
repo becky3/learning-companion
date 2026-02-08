@@ -25,7 +25,11 @@ permissionMode: default
 
 「差分レビュー」「diffレビュー」というキーワードが含まれる場合に適用。
 
-1. `git diff HEAD -- <file>` で変更差分を取得（ステージング済みの場合は `git diff --cached -- <file>` も確認）
+1. 変更差分の取得（以下の優先順位で試行）
+   - ベースブランチ（`origin/main`）との比較: `git diff "$(git merge-base HEAD origin/main)" HEAD -- <file>`
+   - ステージング済みの変更: `git diff --cached -- <file>`
+   - 直近コミットの差分（フォールバック）: `git show HEAD -- <file>`
+   - すべて空の場合のみ「変更なし」として終了
 2. 変更箇所に関連する観点のみをチェック
 3. 変更箇所に対する指摘のみを出力
 4. 既存部分への指摘は含めない

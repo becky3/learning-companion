@@ -230,9 +230,10 @@ doc-reviewerサブエージェントで docs/specs/f1-chat.md を差分レビュ
 #### 差分レビューモード
 
 1. **変更差分の取得**
-   - `git diff HEAD -- <file>` で直近の変更差分を取得
-   - ステージング済みの場合は `git diff --cached -- <file>` も確認
-   - 差分がない場合は「変更なし」として終了
+   - ベースブランチ（例: `origin/main`）との merge-base を取得し、`git diff <merge-base>...HEAD -- <file>` でPR全体の変更差分を取得
+   - ステージング済みの変更がある場合は `git diff --cached -- <file>` も確認
+   - 作業ツリーがクリーンで差分が空の場合のフォールバック: `git show HEAD -- <file>` で直近コミットの差分を取得
+   - merge-base比較およびフォールバックのいずれでも差分が空の場合のみ、「変更なし」として終了
 
 2. **変更タイプの判定**
    - 追加行のみ: 新規内容のレビュー
