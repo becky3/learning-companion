@@ -12,6 +12,7 @@ from typing import cast
 
 import chromadb
 from chromadb.api.types import Embeddings, IncludeEnum
+from chromadb.config import Settings as ChromaSettings
 
 from src.embedding.base import EmbeddingProvider
 
@@ -58,7 +59,11 @@ class VectorStore:
         self._embedding = embedding_provider
         self._persist_directory = persist_directory
         self._collection_name = collection_name
-        self._client = chromadb.PersistentClient(path=persist_directory)
+        # テレメトリを無効化
+        chroma_settings = ChromaSettings(anonymized_telemetry=False)
+        self._client = chromadb.PersistentClient(
+            path=persist_directory, settings=chroma_settings
+        )
         self._collection = self._client.get_or_create_collection(
             name=collection_name,
             metadata={"hnsw:space": "cosine"},
@@ -83,7 +88,9 @@ class VectorStore:
         instance._embedding = embedding_provider
         instance._persist_directory = ""
         instance._collection_name = collection_name
-        instance._client = chromadb.EphemeralClient()
+        # テレメトリを無効化
+        chroma_settings = ChromaSettings(anonymized_telemetry=False)
+        instance._client = chromadb.EphemeralClient(settings=chroma_settings)
         instance._collection = instance._client.get_or_create_collection(
             name=collection_name,
             metadata={"hnsw:space": "cosine"},

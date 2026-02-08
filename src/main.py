@@ -12,6 +12,9 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+# ChromaDBテレメトリのエラーログを抑制（常に無効化、ユーザーには不要）
+logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
+
 import src.slack.handlers as handlers_module
 from src.config.settings import get_settings, load_assistant_config
 from src.process_guard import (
