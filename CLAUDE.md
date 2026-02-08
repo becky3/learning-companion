@@ -101,9 +101,9 @@
 9. **作成確認**: `gh pr view` でPRが正しく作成されたことを確認し、URLをユーザーに提示
 10. **Issueへの完了コメント**: 対応したIssueに完了コメントを追加し、PRへのリンクを含める（コメント編集では通知が飛ばないため、追加コメントで通知する）
 
-    ```bash
-    gh issue comment <Issue番号> --body "対応が完了しました。PR #<PR番号> をご確認ください。"
-    ```
+   ```bash
+   gh issue comment Issue番号 --body "対応が完了しました。PR #PR番号 をご確認ください。"
+   ```
 
 11. **レトロスペクティブ**: 機能実装のPRの場合、`/doc-gen retro <feature-name>` でレトロを生成・更新する
 
