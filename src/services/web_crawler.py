@@ -161,7 +161,7 @@ class WebCrawler:
     ) -> list[str]:
         """リンク集ページ内の <a> タグからURLリストを抽出する（深度1のみ、再帰クロールは行わない）.
 
-        - index_url および抽出したリンクURLを _validate_url() で検証
+        - index_url および抽出したリンクURLを validate_url() で検証
         - 抽出URL数が max_pages を超える場合は先頭 max_pages 件に制限
 
         Args:
@@ -236,7 +236,7 @@ class WebCrawler:
     async def crawl_page(self, url: str) -> CrawledPage | None:
         """単一ページの本文テキストを取得する. 失敗時は None.
 
-        - _validate_url() でURL検証後にHTTPアクセスを行う
+        - validate_url() でURL検証後にHTTPアクセスを行う
 
         Args:
             url: クロールするURL

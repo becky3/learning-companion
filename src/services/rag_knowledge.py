@@ -96,8 +96,8 @@ class RAGKnowledgeService:
     async def ingest_page(self, url: str) -> int:
         """単一ページ取り込み.
 
-        同一URLの再取り込み時は、既存チャンクを delete_by_source() で
-        削除してから新規追加する（upsert動作）。
+        同一URLの再取り込み時は、まず add_documents() による upsert を行い、
+        その後 delete_stale_chunks() で不要になったチャンクを削除する。
 
         Args:
             url: 取り込むページのURL
