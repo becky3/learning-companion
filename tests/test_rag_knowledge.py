@@ -322,7 +322,7 @@ class TestChatServiceIntegration:
         # このテストは実際のChatService統合後に実行される
         # ここではモックを使ったユニットテストを実装
 
-        from unittest.mock import AsyncMock, MagicMock
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         from src.services.chat import ChatService
 
@@ -357,15 +357,18 @@ class TestChatServiceIntegration:
             rag_service=mock_rag_service,
         )
 
-        # Act
-        response = await chat_service.respond(
-            user_id="U123",
-            text="What is Python?",
-            thread_ts="1234567890.000000",
-        )
+        # Act - get_settingsをモックして決定的なテストにする
+        mock_settings = MagicMock()
+        mock_settings.rag_retrieval_count = 5
+        with patch("src.config.settings.get_settings", return_value=mock_settings):
+            response = await chat_service.respond(
+                user_id="U123",
+                text="What is Python?",
+                thread_ts="1234567890.000000",
+            )
 
         # Assert
-        # Settingsのデフォルト rag_retrieval_count=5 が使われる
+        # モックした rag_retrieval_count=5 が使われる
         mock_rag_service.retrieve.assert_called_once_with("What is Python?", n_results=5)
         # LLMに渡されるメッセージを確認
         call_args = mock_llm.complete.call_args

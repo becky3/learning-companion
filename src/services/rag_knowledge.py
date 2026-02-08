@@ -137,7 +137,8 @@ class RAGKnowledgeService:
         await self._vector_store.delete_by_source(page.url)
 
         # DocumentChunkに変換
-        url_hash = hashlib.md5(page.url.encode()).hexdigest()[:8]
+        # SHA256の先頭16文字を使用（衝突確率が十分に低い）
+        url_hash = hashlib.sha256(page.url.encode()).hexdigest()[:16]
         document_chunks = [
             DocumentChunk(
                 id=f"{url_hash}_{i}",
