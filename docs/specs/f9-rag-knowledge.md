@@ -673,6 +673,8 @@ RAG_CRAWL_DELAY_SEC=1.0
 ### セキュリティ・クロール制御
 
 - [ ] **AC31**: `http` / `https` 以外のスキーム（`file:`, `ftp:` 等）が拒否されること
+- [ ] **AC32**: プライベートIP（127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16）へのアクセスが拒否されること
+- [ ] **AC33**: HTTPリダイレクトの追従が無効化されていること
 - [ ] **AC34**: 1回のクロールで取得するページ数が `RAG_MAX_CRAWL_PAGES` で制限されること
 - [ ] **AC35**: 同一ドメインへの連続リクエスト間に `RAG_CRAWL_DELAY_SEC` の待機が挿入されること
 
@@ -766,6 +768,12 @@ RAG_CRAWL_DELAY_SEC=1.0
 | `tests/test_web_crawler.py` | `test_ac14_crawl_page_extracts_text` | AC14 |
 | `tests/test_web_crawler.py` | `test_ac15_crawl_pages_isolates_errors` | AC15 |
 | `tests/test_web_crawler.py` | `test_ac31_non_http_scheme_rejected` | AC31 |
+| `tests/test_web_crawler.py` | `test_localhost_rejected` | AC32 |
+| `tests/test_web_crawler.py` | `test_loopback_ip_rejected` | AC32 |
+| `tests/test_web_crawler.py` | `test_private_ip_rejected` | AC32 |
+| `tests/test_web_crawler.py` | `test_link_local_ip_rejected` | AC32 |
+| `tests/test_web_crawler.py` | `test_crawl_page_rejects_redirect` | AC33 |
+| `tests/test_web_crawler.py` | `test_crawl_index_page_rejects_redirect` | AC33 |
 | `tests/test_web_crawler.py` | `test_ac34_max_crawl_pages_limit` | AC34 |
 | `tests/test_web_crawler.py` | `test_ac35_crawl_delay_between_requests` | AC35 |
 
