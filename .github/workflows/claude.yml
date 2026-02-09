@@ -37,3 +37,11 @@ jobs:
           bot_id: "209825114"
           claude_args: "--model claude-opus-4-5 --max-turns 100 --dangerously-skip-permissions"
           show_full_output: true
+          prompt: |
+            CLAUDE.md のルールに従って作業を進めてください。
+
+            【重要】タスク完了時の必須アクション:
+            1. PRを作成したら、必ず対応したIssueに「新規コメント」として完了報告を投稿すること
+               - 既存コメントの編集ではなく、新しいコメントを追加する（編集では通知が飛ばないため）
+            2. コマンド: `gh issue comment <Issue番号> --body "対応が完了しました。PR #<PR番号> をご確認ください。"`
+            3. PR作成後、Issueへの新規コメント投稿を忘れないでください
