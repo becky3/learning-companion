@@ -302,17 +302,18 @@ class SafeBrowsingClient:
                 raise SafetyCheckError(
                     url=urls_to_check[0] if len(urls_to_check) == 1 else "",
                     message=f"Safe Browsing API障害のためURL安全性を確認できません: {e}",
-                )
+                ) from e
 
         return results
 
     async def _call_api(self, urls: list[str]) -> dict[str, SafeBrowsingResult]:
         """Safe Browsing API を呼び出す."""
         request_body = self._build_request_body(urls)
-        api_url = f"{self.API_URL}?key={self._api_key}"
 
         async with aiohttp.ClientSession(timeout=self._timeout) as session:
-            async with session.post(api_url, json=request_body) as resp:
+            async with session.post(
+                self.API_URL, params={"key": self._api_key}, json=request_body
+            ) as resp:
                 if resp.status != 200:
                     error_text = await resp.text()
                     raise RuntimeError(
@@ -334,9 +335,10 @@ class SafeBrowsingClient:
         result = await self.check_url(url)
         return result.is_safe
 
-    def clear_cache(self) -> None:
+    async def clear_cache(self) -> None:
         """キャッシュをクリアする."""
-        self._cache.clear()
+        async with self._cache_lock:
+            self._cache.clear()
         logger.debug("Safe Browsing cache cleared")
 
     async def cleanup_expired_cache(self) -> int:

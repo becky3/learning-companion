@@ -420,7 +420,7 @@ Slackコマンド経由でユーザーが任意のURLを指定できるため、
 |--------|---|----------|------|
 | `RAG_URL_SAFETY_CHECK` | bool | `false` | URL安全性チェックの有効/無効 |
 | `GOOGLE_SAFE_BROWSING_API_KEY` | str | `""` | Google Safe Browsing APIキー |
-| `RAG_URL_SAFETY_CACHE_TTL` | int | `3600` | キャッシュTTL（秒） |
+| `RAG_URL_SAFETY_CACHE_TTL` | int | `300` | キャッシュTTL（秒） |
 | `RAG_URL_SAFETY_FAIL_OPEN` | bool | `true` | API障害時にフェイルオープンするか |
 | `RAG_URL_SAFETY_TIMEOUT` | float | `5.0` | APIタイムアウト（秒） |
 

@@ -99,7 +99,7 @@ class Settings(BaseSettings):
     # Safe Browsing (URL安全性チェック)
     rag_url_safety_check: bool = False
     google_safe_browsing_api_key: str = ""
-    rag_url_safety_cache_ttl: int = Field(default=3600, ge=0)  # キャッシュTTL秒（0=APIレスポンスに従う）
+    rag_url_safety_cache_ttl: int = Field(default=300, ge=0)  # キャッシュTTL秒 (0=デフォルトTTL使用)
     rag_url_safety_fail_open: bool = True  # API障害時の動作（True: URLを許可, False: URLを拒否）
     rag_url_safety_timeout: float = Field(default=5.0, gt=0)  # APIリクエストタイムアウト秒
 

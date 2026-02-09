@@ -79,6 +79,10 @@ class RAGKnowledgeService:
 
         Returns:
             {"pages_crawled": N, "chunks_stored": M, "errors": E, "unsafe_urls": U}
+
+        Raises:
+            SafetyCheckError: Safe Browsing APIでfail_open=False設定時、
+                API障害が発生した場合に送出される
         """
         # リンク集ページからURLリストを抽出
         urls = await self._web_crawler.crawl_index_page(index_url, url_pattern)

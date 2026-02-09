@@ -1143,6 +1143,7 @@ class TestSafeBrowsingIntegration:
             text="Safe content",
             crawled_at="2024-01-01T00:00:00+00:00",
         )
+        mock_vector_store.add_documents.return_value = 1
 
         # Act
         result = await rag_service_with_safe_browsing.ingest_page("https://safe.com")
@@ -1150,7 +1151,7 @@ class TestSafeBrowsingIntegration:
         # Assert
         mock_safe_browsing_client.check_url.assert_called_once_with("https://safe.com")
         mock_web_crawler.crawl_page.assert_called_once()
-        assert result > 0 or result == 0  # チャンク数
+        assert result == 1
 
     async def test_ac9_ingest_page_unsafe_url_rejected(
         self,

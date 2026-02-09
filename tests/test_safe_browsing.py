@@ -318,7 +318,8 @@ class TestSafeBrowsingCache:
         assert cleaned == 2
         assert len(client._cache) == 0
 
-    def test_clear_cache(self) -> None:
+    @pytest.mark.asyncio
+    async def test_clear_cache(self) -> None:
         """キャッシュのクリア."""
         client = SafeBrowsingClient(api_key="test-key")
         # 直接キャッシュに追加
@@ -328,7 +329,7 @@ class TestSafeBrowsingCache:
         )
 
         assert len(client._cache) == 1
-        client.clear_cache()
+        await client.clear_cache()
         assert len(client._cache) == 0
 
 
