@@ -37,6 +37,7 @@ from src.services.thread_history import ThreadHistoryService
 from src.services.topic_recommender import TopicRecommender
 from src.services.user_profiler import UserProfiler
 from src.services.web_crawler import WebCrawler
+from src.services.safe_browsing import create_safe_browsing_client
 from src.slack.app import create_app, start_socket_mode
 
 logger = logging.getLogger(__name__)
@@ -116,11 +117,16 @@ async def main() -> None:
                 max_pages=settings.rag_max_crawl_pages,
                 crawl_delay=settings.rag_crawl_delay_sec,
             )
+            # Safe Browsing クライアント（URL安全性チェック）
+            safe_browsing_client = create_safe_browsing_client(settings)
+            if safe_browsing_client:
+                logger.info("URL安全性チェック有効: Google Safe Browsing API")
             rag_service = RAGKnowledgeService(
                 vector_store,
                 web_crawler,
                 chunk_size=settings.rag_chunk_size,
                 chunk_overlap=settings.rag_chunk_overlap,
+                safe_browsing_client=safe_browsing_client,
             )
             logger.info("RAG有効: ナレッジベース機能が利用可能")
         else:

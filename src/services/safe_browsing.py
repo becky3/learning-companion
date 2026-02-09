@@ -105,7 +105,8 @@ class SafeBrowsingClient:
     """
 
     API_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
-    DEFAULT_CACHE_TTL = 300  # 5分（APIレスポンスに cacheDuration がない場合）
+    DEFAULT_CACHE_TTL = 300  # 5分（デフォルトTTL）
+    MAX_CACHE_SIZE = 1000  # キャッシュの最大エントリ数
 
     def __init__(
         self,
@@ -115,16 +116,18 @@ class SafeBrowsingClient:
         fail_open: bool = True,
         client_id: str = "ai-assistant",
         client_version: str = "1.0.0",
+        max_cache_size: int | None = None,
     ) -> None:
         """SafeBrowsingClient を初期化する.
 
         Args:
             api_key: Google Safe Browsing API キー
             timeout: APIリクエストのタイムアウト秒数
-            cache_ttl: キャッシュのTTL秒数（None の場合はAPIレスポンスに従う）
+            cache_ttl: キャッシュのTTL秒数（None の場合はデフォルトTTLを使用）
             fail_open: API障害時の動作（True: URLを許可, False: URLを拒否）
             client_id: クライアント識別子
             client_version: クライアントバージョン
+            max_cache_size: キャッシュの最大エントリ数（None の場合はデフォルト値を使用）
         """
         self._api_key = api_key
         self._timeout = aiohttp.ClientTimeout(total=timeout)
@@ -132,6 +135,7 @@ class SafeBrowsingClient:
         self._fail_open = fail_open
         self._client_id = client_id
         self._client_version = client_version
+        self._max_cache_size = max_cache_size if max_cache_size is not None else self.MAX_CACHE_SIZE
         self._cache: dict[str, CacheEntry] = {}
         self._cache_lock = asyncio.Lock()
 
@@ -162,11 +166,26 @@ class SafeBrowsingClient:
     async def _set_cache(
         self, url: str, result: SafeBrowsingResult, ttl: float | None = None
     ) -> None:
-        """結果をキャッシュに保存する."""
+        """結果をキャッシュに保存する.
+
+        キャッシュが最大サイズを超えた場合、最も古いエントリを削除する（LRU方式）。
+        """
         cache_key = self._get_cache_key(url)
-        effective_ttl = ttl or self._cache_ttl or self.DEFAULT_CACHE_TTL
+        # ttl=0 を有効値として扱うため、is not None で分岐
+        if ttl is not None:
+            effective_ttl = ttl
+        elif self._cache_ttl is not None:
+            effective_ttl = self._cache_ttl
+        else:
+            effective_ttl = self.DEFAULT_CACHE_TTL
         expires_at = time.time() + effective_ttl
         async with self._cache_lock:
+            # キャッシュ上限チェック: 上限に達している場合は最も古いエントリを削除
+            if len(self._cache) >= self._max_cache_size and cache_key not in self._cache:
+                # 最も期限が近い（古い）エントリを削除
+                oldest_key = min(self._cache.keys(), key=lambda k: self._cache[k].expires_at)
+                del self._cache[oldest_key]
+                logger.debug("Cache eviction: removed oldest entry (max size: %d)", self._max_cache_size)
             self._cache[cache_key] = CacheEntry(result=result, expires_at=expires_at)
 
     def _build_request_body(self, urls: list[str]) -> dict[str, Any]:
