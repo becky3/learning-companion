@@ -135,12 +135,14 @@ class VectorStore:
         self,
         query: str,
         n_results: int = 5,
+        similarity_threshold: float | None = None,
     ) -> list[RetrievalResult]:
         """クエリに類似するチャンクを検索する.
 
         Args:
             query: 検索クエリ
             n_results: 返却する結果の最大数
+            similarity_threshold: 類似度閾値（cosine距離）。指定時、この値より大きいdistanceの結果を除外
 
         Returns:
             検索結果のリスト（類似度の高い順）
@@ -149,22 +151,43 @@ class VectorStore:
         raw_query_embedding = await self._embedding.embed([query])
         query_embeddings: Embeddings = cast(Embeddings, raw_query_embedding)
 
+        # 閾値フィルタリングを行う場合、多めに取得してからフィルタリング
+        fetch_count = n_results
+        if similarity_threshold is not None:
+            # 閾値フィルタリング後にn_results件返すため、多めに取得
+            # 3倍（最低20件）: 閾値で除外される可能性を考慮し余裕を持って取得
+            fetch_count = max(n_results * 3, 20)
+
+        # コレクションサイズを超えないように制限（ChromaDBバージョンによる例外を防止）
+        collection_count = await asyncio.to_thread(self._collection.count)
+        if collection_count > 0:
+            fetch_count = min(fetch_count, collection_count)
+        else:
+            # コレクションが空の場合は空リストを返す
+            return []
+
         # ChromaDBで検索（同期APIなのでto_threadでラップ）
         results = await asyncio.to_thread(
             self._collection.query,
             query_embeddings=query_embeddings,
-            n_results=n_results,
+            n_results=fetch_count,
             include=[IncludeEnum.documents, IncludeEnum.metadatas, IncludeEnum.distances],
         )
 
         # 結果を変換
         retrieval_results: list[RetrievalResult] = []
+        excluded_count = 0
         if results["documents"] and results["documents"][0]:
             documents = results["documents"][0]
             metadatas = results["metadatas"][0] if results["metadatas"] else [{}] * len(documents)
             distances = results["distances"][0] if results["distances"] else [0.0] * len(documents)
 
             for doc, meta, dist in zip(documents, metadatas, distances):
+                # 閾値フィルタリング
+                if similarity_threshold is not None and dist > similarity_threshold:
+                    excluded_count += 1
+                    continue
+
                 retrieval_results.append(
                     RetrievalResult(
                         text=doc,
@@ -172,6 +195,17 @@ class VectorStore:
                         distance=dist,
                     )
                 )
+
+                # n_results件に達したら終了
+                if len(retrieval_results) >= n_results:
+                    break
+
+        if excluded_count > 0:
+            logger.debug(
+                "Similarity threshold filtering: excluded %d results (threshold=%.3f)",
+                excluded_count,
+                similarity_threshold,
+            )
 
         return retrieval_results
 

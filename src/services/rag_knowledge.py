@@ -255,7 +255,11 @@ class RAGKnowledgeService:
         from src.config.settings import get_settings
 
         settings = get_settings()
-        results = await self._vector_store.search(query, n_results=n_results)
+        results = await self._vector_store.search(
+            query,
+            n_results=n_results,
+            similarity_threshold=settings.rag_similarity_threshold,
+        )
 
         if not results:
             return RAGRetrievalResult(context="", sources=[])

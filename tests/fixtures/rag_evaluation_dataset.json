@@ -1,0 +1,117 @@
+{
+  "description": "RAG評価用テストデータセット - ドラゴンクエスト3攻略情報",
+  "version": "1.0.0",
+  "queries": [
+    {
+      "id": "q1",
+      "query": "まもりのマント 入手場所",
+      "description": "特定アイテムの入手場所を問うクエリ。正しいソースからのみ情報を取得すべき。",
+      "expected_sources": [
+        "https://example.com/dq3/item/mamorinomanto.html",
+        "https://example.com/dq3/dungeon/fuyuujou.html"
+      ],
+      "expected_keywords": ["ふゆうじょう", "かこのカオスしんでん", "まもりのマント"],
+      "negative_sources": [
+        "https://example.com/dq3/dungeon/shirennoshiro.html"
+      ],
+      "notes": "Issue #176: LLMが「しれんのしろ」のアイテムとして誤回答した事例"
+    },
+    {
+      "id": "q2",
+      "query": "しれんのしろ アイテム",
+      "description": "ダンジョン固有のアイテム情報。distance > 0.5 の無関係データが混入するケースの検証。",
+      "expected_sources": [
+        "https://example.com/dq3/dungeon/shirennoshiro.html"
+      ],
+      "expected_keywords": ["しれんのしろ", "ちからのたね", "すばやさのたね"],
+      "negative_sources": [
+        "https://example.com/ff1/dungeon/trial.html",
+        "https://example.com/dq6/dungeon/trial.html"
+      ],
+      "notes": "Issue #176: 異なるゲームのデータが同程度のdistanceでマッチする問題"
+    },
+    {
+      "id": "q3",
+      "query": "ゾーマ 攻略",
+      "description": "ラスボス攻略情報。関連性の高い情報が優先されるべき。",
+      "expected_sources": [
+        "https://example.com/dq3/boss/zoma.html",
+        "https://example.com/dq3/strategy/finalstage.html"
+      ],
+      "expected_keywords": ["ゾーマ", "ひかりのたま", "まおうのかげ"],
+      "negative_sources": [],
+      "notes": "基本的な検索精度テスト"
+    },
+    {
+      "id": "q4",
+      "query": "勇者 おすすめ装備",
+      "description": "キャラクター装備の推奨情報。複数の関連チャンクが期待される。",
+      "expected_sources": [
+        "https://example.com/dq3/job/yuusha.html",
+        "https://example.com/dq3/equipment/weapon.html",
+        "https://example.com/dq3/equipment/armor.html"
+      ],
+      "expected_keywords": ["おうじゃのけん", "ひかりのよろい", "ゆうしゃのたて"],
+      "negative_sources": [],
+      "notes": "複数ソースからの情報統合テスト"
+    },
+    {
+      "id": "q5",
+      "query": "ルイーダのさかば 場所",
+      "description": "特定施設の場所情報。単純なファクト検索。",
+      "expected_sources": [
+        "https://example.com/dq3/town/aliahan.html",
+        "https://example.com/dq3/facility/luida.html"
+      ],
+      "expected_keywords": ["アリアハン", "ルイーダのさかば", "仲間"],
+      "negative_sources": [],
+      "notes": "基本的な地名・施設検索"
+    },
+    {
+      "id": "q6",
+      "query": "さとりのしょ 入手方法",
+      "description": "レアアイテムの入手方法。複数の入手ルートがある場合のテスト。",
+      "expected_sources": [
+        "https://example.com/dq3/item/satorinosho.html",
+        "https://example.com/dq3/job/kenja.html"
+      ],
+      "expected_keywords": ["さとりのしょ", "けんじゃ", "てんしょくのしんでん", "ドロップ"],
+      "negative_sources": [],
+      "notes": "賢者への転職に必要なアイテム情報"
+    },
+    {
+      "id": "q7",
+      "query": "バラモス 弱点",
+      "description": "中ボスの弱点情報。特定の戦闘攻略情報の検索精度テスト。",
+      "expected_sources": [
+        "https://example.com/dq3/boss/baramos.html"
+      ],
+      "expected_keywords": ["バラモス", "イオナズン", "バイキルト"],
+      "negative_sources": [
+        "https://example.com/dq3/boss/zoma.html"
+      ],
+      "notes": "ボス間の情報混同を防ぐテスト"
+    },
+    {
+      "id": "q8",
+      "query": "すごろく場 景品",
+      "description": "ミニゲームの報酬情報。SFC/GBC版固有コンテンツ。",
+      "expected_sources": [
+        "https://example.com/dq3/minigame/sugoroku.html"
+      ],
+      "expected_keywords": ["すごろく", "ちいさなメダル", "景品"],
+      "negative_sources": [],
+      "notes": "ミニゲーム関連情報の検索"
+    }
+  ],
+  "metadata": {
+    "created_at": "2026-02-09",
+    "purpose": "RAG検索精度の定量評価（Precision/Recall計測）",
+    "related_issues": ["#176"],
+    "notes": [
+      "expected_sources: 検索結果に含まれるべきソースURL",
+      "negative_sources: 検索結果に含まれてはいけないソースURL（ハルシネーション検出用）",
+      "expected_keywords: 回答に含まれるべきキーワード（将来の回答品質評価用）"
+    ]
+  }
+}

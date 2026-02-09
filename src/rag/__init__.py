@@ -4,6 +4,16 @@
 """
 
 from src.rag.chunker import chunk_text
+from src.rag.evaluation import (
+    EvaluationDatasetQuery,
+    EvaluationReport,
+    PrecisionRecallResult,
+    QueryEvaluationResult,
+    calculate_precision_recall,
+    check_negative_sources,
+    evaluate_retrieval,
+    load_evaluation_dataset,
+)
 from src.rag.vector_store import DocumentChunk, RetrievalResult, VectorStore
 
 __all__ = [
@@ -11,4 +21,12 @@ __all__ = [
     "DocumentChunk",
     "RetrievalResult",
     "VectorStore",
+    "PrecisionRecallResult",
+    "QueryEvaluationResult",
+    "EvaluationReport",
+    "EvaluationDatasetQuery",
+    "calculate_precision_recall",
+    "check_negative_sources",
+    "load_evaluation_dataset",
+    "evaluate_retrieval",
 ]

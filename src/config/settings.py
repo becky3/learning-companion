@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     rag_retrieval_count: int = Field(default=5, ge=1)
     rag_max_crawl_pages: int = Field(default=50, ge=1)
     rag_crawl_delay_sec: float = Field(default=1.0, ge=0)
+    rag_similarity_threshold: float | None = Field(default=None, ge=0.0, le=2.0)  # cosine距離閾値
 
     # RAG評価・デバッグ (Phase 1)
     rag_debug_log_enabled: bool = False  # 本番ではPII漏洩リスクのためデフォルト無効
