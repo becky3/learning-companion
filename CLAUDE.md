@@ -23,7 +23,6 @@
 
 - `RAG_ENABLED` — RAG機能の有効/無効（`true` / `false`、デフォルト: `false`）
 - `EMBEDDING_PROVIDER` — Embeddingプロバイダー（`"local"` / `"online"`、デフォルト: `"local"`）
-- `RAG_ALLOWED_DOMAINS` — クロール許可ドメインのカンマ区切りリスト（SSRF対策、未設定時はクロール拒否）
 - 詳細設定は `docs/specs/f9-rag-knowledge.md` を参照
 
 ## 開発ルール
@@ -170,7 +169,7 @@ PRに対するレビュー指摘（Copilot、人間問わず）への対応は `
 |--------|------|--------|
 | `/doc-gen` | ドキュメント新規作成（仕様書・レトロ） | `/doc-gen spec feed-collection` |
 | `/doc-edit` | 既存ドキュメントの更新・修正 | `/doc-edit docs/specs/f2-feed-collection.md` |
-| `/check-pr` | PRの内容確認・指摘対応・実装継続 | `/check-pr 123` |
+| `/check-pr` | PRの内容確認・レビュー指摘対応・実装継続 | `/check-pr 123` |
 
 **定義ファイル**: `.claude/skills/` 配下
 **仕様書**: `docs/specs/doc-gen-skill.md`（`/doc-gen`, `/doc-edit` 用）
