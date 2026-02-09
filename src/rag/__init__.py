@@ -4,6 +4,11 @@
 """
 
 from src.rag.chunker import chunk_text
+from src.rag.evaluation import (
+    PrecisionRecallResult,
+    calculate_precision_recall,
+    check_negative_sources,
+)
 from src.rag.vector_store import DocumentChunk, RetrievalResult, VectorStore
 
 __all__ = [
@@ -11,4 +16,7 @@ __all__ = [
     "DocumentChunk",
     "RetrievalResult",
     "VectorStore",
+    "PrecisionRecallResult",
+    "calculate_precision_recall",
+    "check_negative_sources",
 ]

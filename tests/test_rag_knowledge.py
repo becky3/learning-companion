@@ -255,7 +255,10 @@ class TestRetrieve:
         assert "This is relevant content 1." in result.context
         assert "--- 参考情報 2 ---" in result.context
         assert "出典: https://example.com/page2" in result.context
-        mock_vector_store.search.assert_called_once_with("test query", n_results=5)
+        # similarity_threshold=None がデフォルトで渡される（モックでは設定されていない）
+        call_args = mock_vector_store.search.call_args
+        assert call_args[0][0] == "test query"
+        assert call_args[1]["n_results"] == 5
 
     async def test_ac19_retrieve_returns_empty_when_no_results(
         self,
@@ -567,6 +570,42 @@ class TestConfiguration:
             assert settings.rag_chunk_size == 1000
             assert settings.rag_chunk_overlap == 100
             assert settings.rag_retrieval_count == 10
+
+    def test_similarity_threshold_configurable(self) -> None:
+        """類似度閾値が環境変数で設定可能であること (Issue #190)."""
+        import os
+        from unittest.mock import patch
+
+        from src.config.settings import Settings
+
+        # 設定あり
+        with patch.dict(os.environ, {"RAG_SIMILARITY_THRESHOLD": "0.5"}):
+            settings = Settings()
+            assert settings.rag_similarity_threshold == 0.5
+
+        # 設定なし（デフォルト: None）
+        with patch.dict(os.environ, {}, clear=True):
+            settings = Settings(_env_file=None)
+            assert settings.rag_similarity_threshold is None
+
+    def test_similarity_threshold_validation(self) -> None:
+        """類似度閾値のバリデーション (Issue #190)."""
+        import os
+        from unittest.mock import patch
+
+        from pydantic import ValidationError
+
+        from src.config.settings import Settings
+
+        # 負の値は拒否
+        with patch.dict(os.environ, {"RAG_SIMILARITY_THRESHOLD": "-0.1"}):
+            with pytest.raises(ValidationError):
+                Settings()
+
+        # 2.0を超える値は拒否（cosine距離の最大値は2.0）
+        with patch.dict(os.environ, {"RAG_SIMILARITY_THRESHOLD": "2.5"}):
+            with pytest.raises(ValidationError):
+                Settings()
 
 
 class TestRAGDebugLog:
@@ -1091,6 +1130,62 @@ class TestFragmentNormalization:
         # Assert
         assert result == 5
         mock_vector_store.delete_by_source.assert_called_once_with("https://example.com/page")
+
+
+class TestSimilarityThreshold:
+    """類似度閾値フィルタリングのテスト (Issue #190)."""
+
+    async def test_retrieve_passes_threshold_to_search(
+        self,
+        rag_service: RAGKnowledgeService,
+        mock_vector_store: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """retrieve() が settings から閾値を読み取り search() に渡すこと."""
+        from unittest.mock import patch
+
+        # Arrange
+        mock_settings = MagicMock()
+        mock_settings.rag_debug_log_enabled = False
+        mock_settings.rag_similarity_threshold = 0.5
+        mock_vector_store.search.return_value = []
+
+        # Act
+        with patch("src.config.settings.get_settings", return_value=mock_settings):
+            await rag_service.retrieve("test query", n_results=5)
+
+        # Assert: search() に similarity_threshold が渡される
+        mock_vector_store.search.assert_called_once_with(
+            "test query",
+            n_results=5,
+            similarity_threshold=0.5,
+        )
+
+    async def test_retrieve_passes_none_threshold_when_not_set(
+        self,
+        rag_service: RAGKnowledgeService,
+        mock_vector_store: MagicMock,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """閾値が設定されていない場合は None を渡すこと."""
+        from unittest.mock import patch
+
+        # Arrange
+        mock_settings = MagicMock()
+        mock_settings.rag_debug_log_enabled = False
+        mock_settings.rag_similarity_threshold = None
+        mock_vector_store.search.return_value = []
+
+        # Act
+        with patch("src.config.settings.get_settings", return_value=mock_settings):
+            await rag_service.retrieve("test query", n_results=5)
+
+        # Assert: search() に None が渡される
+        mock_vector_store.search.assert_called_once_with(
+            "test query",
+            n_results=5,
+            similarity_threshold=None,
+        )
 
 
 class TestSafeBrowsingIntegration:
