@@ -1091,3 +1091,215 @@ class TestFragmentNormalization:
         # Assert
         assert result == 5
         mock_vector_store.delete_by_source.assert_called_once_with("https://example.com/page")
+
+
+class TestSafeBrowsingIntegration:
+    """Safe Browsing統合テスト (Issue #159)."""
+
+    @pytest.fixture
+    def mock_safe_browsing_client(self) -> MagicMock:
+        """モックSafeBrowsingClientを作成する."""
+        from src.services.safe_browsing import SafeBrowsingResult
+
+        mock = MagicMock()
+        # デフォルトは安全なURL
+        mock.check_url = AsyncMock(
+            return_value=SafeBrowsingResult(url="https://safe.com", is_safe=True)
+        )
+        mock.check_urls = AsyncMock(return_value={})
+        return mock
+
+    @pytest.fixture
+    def rag_service_with_safe_browsing(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+        mock_safe_browsing_client: MagicMock,
+    ) -> RAGKnowledgeService:
+        """Safe Browsing有効なRAGKnowledgeServiceを作成する."""
+        return RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            safe_browsing_client=mock_safe_browsing_client,
+        )
+
+    async def test_ingest_page_safe_url_allowed(
+        self,
+        rag_service_with_safe_browsing: RAGKnowledgeService,
+        mock_web_crawler: MagicMock,
+        mock_safe_browsing_client: MagicMock,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """安全なURLは取り込みが許可されること."""
+        from src.services.safe_browsing import SafeBrowsingResult
+
+        # Arrange
+        mock_safe_browsing_client.check_url.return_value = SafeBrowsingResult(
+            url="https://safe.com", is_safe=True
+        )
+        mock_web_crawler.crawl_page.return_value = CrawledPage(
+            url="https://safe.com",
+            title="Safe Page",
+            text="Safe content",
+            crawled_at="2024-01-01T00:00:00+00:00",
+        )
+        mock_vector_store.add_documents.return_value = 1
+
+        # Act
+        result = await rag_service_with_safe_browsing.ingest_page("https://safe.com")
+
+        # Assert
+        mock_safe_browsing_client.check_url.assert_called_once_with("https://safe.com")
+        mock_web_crawler.crawl_page.assert_called_once()
+        assert result == 1
+
+    async def test_ac9_ingest_page_unsafe_url_rejected(
+        self,
+        rag_service_with_safe_browsing: RAGKnowledgeService,
+        mock_web_crawler: MagicMock,
+        mock_safe_browsing_client: MagicMock,
+    ) -> None:
+        """AC9: rag add で危険なURL指定時、適切なエラーメッセージが返ること."""
+        from src.services.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
+
+        # Arrange
+        mock_safe_browsing_client.check_url.return_value = SafeBrowsingResult(
+            url="https://malware.com",
+            is_safe=False,
+            threats=[
+                ThreatMatch(
+                    threat_type=ThreatType.MALWARE,
+                    platform_type="ANY_PLATFORM",
+                    threat_url="https://malware.com",
+                )
+            ],
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="URLが安全ではありません") as exc_info:
+            await rag_service_with_safe_browsing.ingest_page("https://malware.com")
+
+        # エラーメッセージに脅威タイプが含まれること
+        assert "MALWARE" in str(exc_info.value)
+        assert "https://malware.com" in str(exc_info.value)
+
+        # クロールは実行されない
+        mock_web_crawler.crawl_page.assert_not_called()
+
+    async def test_ac10_ingest_from_index_filters_unsafe_urls(
+        self,
+        rag_service_with_safe_browsing: RAGKnowledgeService,
+        mock_web_crawler: MagicMock,
+        mock_safe_browsing_client: MagicMock,
+    ) -> None:
+        """AC10: rag crawl のリンク集内に危険URLがあった場合、そのURLのみスキップされること."""
+        from src.services.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
+
+        # Arrange
+        urls = [
+            "https://safe1.com",
+            "https://malware.com",
+            "https://safe2.com",
+        ]
+        mock_web_crawler.crawl_index_page.return_value = urls
+
+        mock_safe_browsing_client.check_urls.return_value = {
+            "https://safe1.com": SafeBrowsingResult(url="https://safe1.com", is_safe=True),
+            "https://malware.com": SafeBrowsingResult(
+                url="https://malware.com",
+                is_safe=False,
+                threats=[
+                    ThreatMatch(
+                        threat_type=ThreatType.MALWARE,
+                        platform_type="ANY_PLATFORM",
+                        threat_url="https://malware.com",
+                    )
+                ],
+            ),
+            "https://safe2.com": SafeBrowsingResult(url="https://safe2.com", is_safe=True),
+        }
+
+        mock_web_crawler.crawl_pages.return_value = [
+            CrawledPage(
+                url="https://safe1.com",
+                title="Safe 1",
+                text="Content 1",
+                crawled_at="2024-01-01T00:00:00+00:00",
+            ),
+            CrawledPage(
+                url="https://safe2.com",
+                title="Safe 2",
+                text="Content 2",
+                crawled_at="2024-01-01T00:00:00+00:00",
+            ),
+        ]
+
+        # Act
+        result = await rag_service_with_safe_browsing.ingest_from_index(
+            "https://example.com/index"
+        )
+
+        # Assert
+        assert result["unsafe_urls"] == 1
+        assert result["pages_crawled"] == 2  # 安全な2ページのみクロール
+        # safe URLs のみがクロールされる
+        mock_web_crawler.crawl_pages.assert_called_once_with(
+            ["https://safe1.com", "https://safe2.com"]
+        )
+
+    async def test_ac10_ingest_from_index_all_unsafe_skips_crawl(
+        self,
+        rag_service_with_safe_browsing: RAGKnowledgeService,
+        mock_web_crawler: MagicMock,
+        mock_safe_browsing_client: MagicMock,
+    ) -> None:
+        """AC10: 全URLが危険な場合、クロールがスキップされること."""
+        from src.services.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
+
+        # Arrange
+        urls = ["https://phishing.com"]
+        mock_web_crawler.crawl_index_page.return_value = urls
+        mock_safe_browsing_client.check_urls.return_value = {
+            "https://phishing.com": SafeBrowsingResult(
+                url="https://phishing.com",
+                is_safe=False,
+                threats=[
+                    ThreatMatch(
+                        threat_type=ThreatType.SOCIAL_ENGINEERING,
+                        platform_type="ANY_PLATFORM",
+                        threat_url="https://phishing.com",
+                    )
+                ],
+            ),
+        }
+
+        # Act
+        result = await rag_service_with_safe_browsing.ingest_from_index(
+            "https://example.com/index"
+        )
+
+        # Assert
+        assert result["pages_crawled"] == 0
+        assert result["unsafe_urls"] == 1
+        mock_web_crawler.crawl_pages.assert_not_called()
+
+    async def test_no_safe_browsing_client_skips_check(
+        self,
+        rag_service: RAGKnowledgeService,
+        mock_web_crawler: MagicMock,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Safe Browsingクライアントがない場合、チェックがスキップされること."""
+        # Arrange
+        mock_web_crawler.crawl_page.return_value = CrawledPage(
+            url="https://example.com",
+            title="Test",
+            text="Content",
+            crawled_at="2024-01-01T00:00:00+00:00",
+        )
+
+        # Act
+        await rag_service.ingest_page("https://example.com")
+
+        # Assert: チェックなしで正常に処理される
+        mock_web_crawler.crawl_page.assert_called_once()

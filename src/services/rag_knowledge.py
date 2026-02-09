@@ -16,6 +16,7 @@ from src.rag.chunker import chunk_text
 from src.rag.vector_store import DocumentChunk, VectorStore
 
 if TYPE_CHECKING:
+    from src.services.safe_browsing import SafeBrowsingClient
     from src.services.web_crawler import CrawledPage, WebCrawler
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ class RAGKnowledgeService:
         web_crawler: WebCrawler,
         chunk_size: int = 500,
         chunk_overlap: int = 50,
+        safe_browsing_client: SafeBrowsingClient | None = None,
     ) -> None:
         """RAGKnowledgeServiceを初期化する.
 
@@ -56,11 +58,13 @@ class RAGKnowledgeService:
             web_crawler: Webクローラー
             chunk_size: チャンクの最大文字数
             chunk_overlap: チャンク間のオーバーラップ文字数
+            safe_browsing_client: Safe Browsing クライアント（オプション）
         """
         self._vector_store = vector_store
         self._web_crawler = web_crawler
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
+        self._safe_browsing_client = safe_browsing_client
 
     async def ingest_from_index(
         self,
@@ -74,20 +78,52 @@ class RAGKnowledgeService:
             url_pattern: 正規表現パターンでリンクをフィルタリング（任意）
 
         Returns:
-            {"pages_crawled": N, "chunks_stored": M, "errors": E}
+            {"pages_crawled": N, "chunks_stored": M, "errors": E, "unsafe_urls": U}
+
+        Raises:
+            SafetyCheckError: Safe Browsing APIでfail_open=False設定時、
+                API障害が発生した場合に送出される
         """
         # リンク集ページからURLリストを抽出
         urls = await self._web_crawler.crawl_index_page(index_url, url_pattern)
         if not urls:
             logger.warning("No URLs found in index page: %s", index_url)
-            return {"pages_crawled": 0, "chunks_stored": 0, "errors": 0}
+            return {"pages_crawled": 0, "chunks_stored": 0, "errors": 0, "unsafe_urls": 0}
+
+        # Safe Browsing チェック（有効な場合のみ）
+        safe_urls = urls
+        unsafe_count = 0
+        if self._safe_browsing_client:
+            check_results = await self._safe_browsing_client.check_urls(urls)
+            safe_urls = []
+            for url in urls:
+                result = check_results.get(url)
+                if result and not result.is_safe:
+                    threat_types = [t.threat_type.value for t in result.threats]
+                    logger.warning(
+                        "Unsafe URL skipped: %s (threats: %s)", url, threat_types
+                    )
+                    unsafe_count += 1
+                else:
+                    safe_urls.append(url)
+            if unsafe_count > 0:
+                logger.info(
+                    "Safe Browsing: %d URLs skipped as unsafe out of %d",
+                    unsafe_count,
+                    len(urls),
+                )
+
+        if not safe_urls:
+            logger.warning("No safe URLs to crawl after Safe Browsing check")
+            return {"pages_crawled": 0, "chunks_stored": 0, "errors": 0, "unsafe_urls": unsafe_count}
 
         # 複数ページを並行クロール
-        pages = await self._web_crawler.crawl_pages(urls)
+        pages = await self._web_crawler.crawl_pages(safe_urls)
 
         # 各ページをチャンキングして保存
         total_chunks = 0
-        errors = len(urls) - len(pages)
+        # errorsはクロール失敗数（safe_urlsの数からpagesの数を引く）
+        errors = len(safe_urls) - len(pages)
 
         for page in pages:
             try:
@@ -98,16 +134,18 @@ class RAGKnowledgeService:
                 errors += 1
 
         logger.info(
-            "Ingested from index: pages=%d, chunks=%d, errors=%d",
+            "Ingested from index: pages=%d, chunks=%d, errors=%d, unsafe=%d",
             len(pages),
             total_chunks,
             errors,
+            unsafe_count,
         )
 
         return {
             "pages_crawled": len(pages),
             "chunks_stored": total_chunks,
             "errors": errors,
+            "unsafe_urls": unsafe_count,
         }
 
     async def ingest_page(self, url: str) -> int:
@@ -123,11 +161,24 @@ class RAGKnowledgeService:
             チャンク数
 
         Raises:
-            ValueError: URL検証に失敗した場合
+            ValueError: URL検証に失敗した場合、またはURLが危険と判定された場合
         """
         # URL検証を先に行い、失敗時は例外を投げる（ユーザーにエラー理由を伝えるため）
         # 戻り値（正規化済みURL）を以降の処理で使用
         validated_url = self._web_crawler.validate_url(url)
+
+        # Safe Browsing チェック（有効な場合のみ）
+        if self._safe_browsing_client:
+            result = await self._safe_browsing_client.check_url(validated_url)
+            if not result.is_safe:
+                threat_types = [t.threat_type.value for t in result.threats]
+                logger.warning(
+                    "Unsafe URL rejected: %s (threats: %s)", validated_url, threat_types
+                )
+                raise ValueError(
+                    f"URLが安全ではありません: {validated_url} "
+                    f"(検出された脅威: {', '.join(threat_types)})"
+                )
 
         page = await self._web_crawler.crawl_page(validated_url)
         if page is None:
