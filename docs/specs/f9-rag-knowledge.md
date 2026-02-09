@@ -409,7 +409,45 @@ Slackコマンド経由でユーザーが任意のURLを指定できるため、
   - 169.254.0.0/16（リンクローカル、AWS metadata endpoint 等）
   - IPv6 ループバック (::1)、ユニークローカル (fc00::/7)、リンクローカル (fe80::/10)
 - **リダイレクト無効化**: SSRFを防ぐため、HTTPリダイレクトの追従を無効化する
-- **URL安全性チェック（将来実装予定）**: Google Safe Browsing API によるマルウェア・フィッシング判定機能を検討中（Issue #159）
+
+### URL安全性チェック（Google Safe Browsing API）
+
+マルウェア・フィッシングサイトへのアクセスを防ぐため、Google Safe Browsing APIによる事前判定機能を提供する。
+
+**設定項目:**
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `RAG_URL_SAFETY_CHECK` | bool | `false` | URL安全性チェックの有効/無効 |
+| `GOOGLE_SAFE_BROWSING_API_KEY` | str | `""` | Google Safe Browsing APIキー |
+| `RAG_URL_SAFETY_CACHE_TTL` | int | `3600` | キャッシュTTL（秒） |
+| `RAG_URL_SAFETY_FAIL_OPEN` | bool | `true` | API障害時にフェイルオープンするか |
+| `RAG_URL_SAFETY_TIMEOUT` | float | `5.0` | APIタイムアウト（秒） |
+
+**動作:**
+
+1. `rag add` / `rag crawl` コマンド実行時、各URLをGoogle Safe Browsing APIで検証
+2. 脅威タイプ（MALWARE, SOCIAL_ENGINEERING, UNWANTED_SOFTWARE, POTENTIALLY_HARMFUL_APPLICATION）のいずれかが検出された場合、そのURLのクロールを拒否
+3. API障害時は `RAG_URL_SAFETY_FAIL_OPEN` 設定に従う（デフォルト: チェックをスキップしてクロール続行）
+
+**キャッシュ:**
+
+- APIレート制限対策として、判定結果をインメモリキャッシュ
+- デフォルトTTL: 3600秒、最大1000件
+
+**APIキー取得手順:**
+
+1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
+2. プロジェクトを作成または選択
+3. 「APIとサービス」→「ライブラリ」から「Safe Browsing API」を検索し有効化
+4. 「APIとサービス」→「認証情報」→「認証情報を作成」→「APIキー」を選択
+5. 作成されたAPIキーを `.env` の `GOOGLE_SAFE_BROWSING_API_KEY` に設定
+6. （推奨）APIキーの制限を設定し、Safe Browsing APIのみに限定
+
+**利用制限:**
+
+- 無料枠: 1日あたり10,000リクエスト
+- 超過時は課金が発生（詳細は[Google Cloud料金ページ](https://cloud.google.com/safe-browsing/pricing)を参照）
 
 **クロール制御**:
 
