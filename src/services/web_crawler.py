@@ -277,12 +277,8 @@ class WebCrawler:
             # 相対URLを絶対URLに変換
             absolute_url = urljoin(index_url, href)
 
-            # スキーム検証（http/https以外は除外）＋フラグメント除去
-            # validate_url() は正規化済み（フラグメント除去済み）URLを返す
-            try:
-                normalized_url = self.validate_url(absolute_url)
-            except ValueError:
-                continue
+            # フラグメント除去（DNS解決を含むvalidate_url()より先に実行）
+            normalized_url, _ = urldefrag(absolute_url)
 
             # 正規化済みURLで重複スキップ
             if normalized_url in seen:
@@ -290,6 +286,13 @@ class WebCrawler:
 
             # パターンフィルタリング（正規化済みURLに対して適用）
             if pattern and not pattern.search(normalized_url):
+                continue
+
+            # スキーム検証・SSRF対策（DNS解決を含むので最後に実行）
+            # 重複・パターンで弾かれたURLには問い合わせしない
+            try:
+                self.validate_url(normalized_url)
+            except ValueError:
                 continue
 
             seen.add(normalized_url)

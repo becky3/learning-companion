@@ -254,10 +254,26 @@ class RAGKnowledgeService:
             削除チャンク数
         """
         # フラグメントを除去して正規化
-        normalized_url, _ = urldefrag(source_url)
-        count = await self._vector_store.delete_by_source(normalized_url)
-        logger.info("Deleted %d chunks from source: %s", count, normalized_url)
-        return count
+        normalized_url, fragment = urldefrag(source_url)
+
+        # 正規化後のURLに紐づくチャンクを削除
+        total_deleted = await self._vector_store.delete_by_source(normalized_url)
+
+        # 後方互換: 以前はフラグメント付きURLで保存していた可能性があるため、
+        # 元のURL（フラグメント付き）でも削除を試みる
+        if fragment:
+            legacy_deleted = await self._vector_store.delete_by_source(source_url)
+            total_deleted += legacy_deleted
+            logger.info(
+                "Deleted %d chunks from sources: %s (normalized), %s (with fragment)",
+                total_deleted,
+                normalized_url,
+                source_url,
+            )
+        else:
+            logger.info("Deleted %d chunks from source: %s", total_deleted, normalized_url)
+
+        return total_deleted
 
     async def get_stats(self) -> dict[str, int]:
         """ナレッジベース統計.

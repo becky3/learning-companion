@@ -1058,12 +1058,35 @@ class TestFragmentNormalization:
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
     ) -> None:
-        """AC37: delete_source() がフラグメント付きURLを正規化して削除すること."""
+        """AC37: delete_source() がフラグメント付きURLを正規化して削除すること.
+
+        後方互換対応として、正規化済みURLとフラグメント付き元URLの両方で削除を試みる。
+        """
+        # Arrange: 正規化済みURLで3件、フラグメント付きURLで2件削除される
+        mock_vector_store.delete_by_source.side_effect = [3, 2]
+
+        # Act
+        result = await rag_service.delete_source("https://example.com/page#section")
+
+        # Assert: 合計5件削除
+        assert result == 5
+        # 正規化済みURL → フラグメント付き元URL の順で呼ばれる
+        assert mock_vector_store.delete_by_source.call_count == 2
+        calls = mock_vector_store.delete_by_source.call_args_list
+        assert calls[0][0][0] == "https://example.com/page"
+        assert calls[1][0][0] == "https://example.com/page#section"
+
+    async def test_delete_source_without_fragment(
+        self,
+        rag_service: RAGKnowledgeService,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """フラグメントなしURLの場合は1回だけdelete_by_sourceが呼ばれること."""
         # Arrange
         mock_vector_store.delete_by_source.return_value = 5
 
         # Act
-        result = await rag_service.delete_source("https://example.com/page#section")
+        result = await rag_service.delete_source("https://example.com/page")
 
         # Assert
         assert result == 5
