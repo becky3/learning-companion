@@ -12,23 +12,33 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
 
 ## 手順
 
-1. PR番号の決定
+1. PR番号の決定と変数設定
    - `$ARGUMENTS` が指定されていればその番号を使う
    - 未指定なら `gh pr view --json number -q .number` で現在ブランチのPRを検出
+   - 以降の手順では決定したPR番号を `$PR_NUMBER` として参照する
 
 2. PRブランチへのチェックアウト
    - 現在のブランチがPRのブランチでない場合:
+
      ```bash
      gh pr checkout $PR_NUMBER
      ```
 
 3. PR情報の確認と表示
+
    ```bash
-   gh pr view $PR_NUMBER --json title,body,headRefName,baseRefName,files
+   # PR基本情報の取得
+   gh pr view $PR_NUMBER --json title,body,headRefName,baseRefName
+
+   # 変更ファイル一覧の取得
+   gh pr view $PR_NUMBER --json files --jq '.files[].path'
+
+   # 差分の確認
    gh pr diff $PR_NUMBER
    ```
 
    以下の形式でサマリーを表示:
+
    ```text
    ## PR #番号 の概要
 
@@ -45,13 +55,13 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
 
 4. 未解決コメントの取得
    - owner/repo は `gh repo view --json owner,name` で取得
-   - 以下の GraphQL で未解決スレッドのみ抽出:
+   - 以下の GraphQL で未解決スレッドのみ抽出（`{owner}`, `{repo}`, `$PR_NUMBER` を実際の値に置換して実行）:
 
    ```bash
    gh api graphql -f query='
    {
      repository(owner: "{owner}", name: "{repo}") {
-       pullRequest(number: {pr_number}) {
+       pullRequest(number: $PR_NUMBER) {
          reviewThreads(first: 100) {
            nodes {
              isResolved
@@ -71,12 +81,14 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
    ```
 
 5. 指摘の一覧表示（ある場合）:
+
    ```text
    ### 未解決レビューコメント
 
    #### [N] ファイル:行番号 (@レビュアー)
    指摘内容の要約
    ```
+
    指摘がない場合は「未解決の指摘はありません」と表示
 
 6. 関連する仕様書の確認
