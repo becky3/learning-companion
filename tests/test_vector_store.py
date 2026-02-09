@@ -302,11 +302,11 @@ class TestVectorStoreFactory:
         assert store._collection_name == "knowledge"
 
 
-class TestSimilarityThreshold:
-    """類似度閾値フィルタリングのテスト (Issue #190)."""
+class TestAC38SimilarityThreshold:
+    """AC38: 類似度閾値フィルタリングのテスト."""
 
     @pytest.mark.asyncio
-    async def test_threshold_filters_distant_results(
+    async def test_ac38_threshold_filters_distant_results(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -335,7 +335,7 @@ class TestSimilarityThreshold:
         assert len(results_strict) < len(results_no_threshold)
 
     @pytest.mark.asyncio
-    async def test_threshold_none_returns_all(
+    async def test_ac38_threshold_none_returns_all(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -358,7 +358,7 @@ class TestSimilarityThreshold:
         assert len(results) == 3
 
     @pytest.mark.asyncio
-    async def test_threshold_respects_n_results(
+    async def test_ac38_threshold_respects_n_results(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -383,7 +383,7 @@ class TestSimilarityThreshold:
         assert len(results) <= 3
 
     @pytest.mark.asyncio
-    async def test_threshold_returns_empty_when_all_filtered(
+    async def test_ac38_threshold_returns_empty_when_all_filtered(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -403,12 +403,11 @@ class TestSimilarityThreshold:
             "短いクエリ", n_results=5, similarity_threshold=0.00001
         )
 
-        # Assert: 閾値が非常に厳しいので空になる可能性が高い
-        # （ベクトルの実装によっては結果が返る場合もあるが、閾値機能は動作している）
-        assert isinstance(results, list)
+        # Assert: 極端に厳しい閾値ではすべて除外され空リストになる
+        assert results == []
 
     @pytest.mark.asyncio
-    async def test_threshold_filtering_logs_excluded_count(
+    async def test_ac38_threshold_filtering_logs_excluded_count(
         self,
         ephemeral_store: VectorStore,
         caplog: pytest.LogCaptureFixture,
@@ -433,7 +432,9 @@ class TestSimilarityThreshold:
                 "テキスト", n_results=5, similarity_threshold=0.0001
             )
 
-        # Assert: 除外があった場合はログが出力される
-        # （実際に除外されるかはベクトルの実装による）
-        # ログが出力されないケースもあるので、エラーがないことを確認
-        assert True  # 正常に実行できればOK
+        # Assert: 厳しい閾値により除外が発生し、デバッグログが出力される
+        threshold_logs = [
+            r for r in caplog.records
+            if "Similarity threshold filtering" in r.message
+        ]
+        assert len(threshold_logs) > 0, "閾値フィルタリングのログが出力されていない"

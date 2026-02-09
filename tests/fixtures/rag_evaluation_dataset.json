@@ -72,7 +72,7 @@
       "query": "さとりのしょ 入手方法",
       "description": "レアアイテムの入手方法。複数の入手ルートがある場合のテスト。",
       "expected_sources": [
-        "https://example.com/dq3/item/satorinoshō.html",
+        "https://example.com/dq3/item/satorinosho.html",
         "https://example.com/dq3/job/kenja.html"
       ],
       "expected_keywords": ["さとりのしょ", "けんじゃ", "てんしょくのしんでん", "ドロップ"],

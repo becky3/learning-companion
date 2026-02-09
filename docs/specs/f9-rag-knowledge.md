@@ -747,6 +747,12 @@ RAG_CRAWL_DELAY_SEC=1.0
 - [ ] **AC28**: `EMBEDDING_PROVIDER` で `local` / `online` を切り替えられること
 - [ ] **AC29**: チャンクサイズ・オーバーラップ・検索件数が環境変数で設定可能であること
 
+### 類似度閾値フィルタリング（Phase 2）
+
+- [ ] **AC38**: `RAG_SIMILARITY_THRESHOLD` 設定で閾値フィルタリングが機能すること（閾値を超えるdistanceの結果を除外）
+- [ ] **AC39**: `calculate_precision_recall()` が正しく Precision/Recall/F1 を計算すること
+- [ ] **AC40**: `evaluate_retrieval()` がデータセットを読み込み評価レポートを生成すること
+
 ## 使用LLMプロバイダー
 
 | タスク | プロバイダー | 理由 |
