@@ -215,8 +215,13 @@ async def evaluate_retrieval(
 
     for dataset_query in queries:
         # RAG検索実行
-        result = await rag_service.retrieve(dataset_query.query, n_results=n_results)
-        retrieved_sources = result.sources
+        try:
+            result = await rag_service.retrieve(dataset_query.query, n_results=n_results)
+            retrieved_sources = result.sources
+        except Exception:
+            logger.exception("Failed to evaluate query: %s", dataset_query.id)
+            # エラー時は空の結果として処理を継続
+            retrieved_sources = []
 
         # Precision/Recall計算
         pr_result = calculate_precision_recall(

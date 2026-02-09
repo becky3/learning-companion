@@ -896,8 +896,86 @@ RAG_CRAWL_DELAY_SEC=1.0
 7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない。User-Agentはaiohttpデフォルトを使用し、将来的に対応を検討する
 8. **SSRF対策**: スキーム検証（http/httpsのみ）とリダイレクト無効化で対応。将来的にGoogle Safe Browsing APIによるURL安全性チェックを検討中（Issue #159）
 
+## Phase 2: 評価メトリクス・類似度閾値 (#176)
+
+### 類似度閾値フィルタリング
+
+**設定項目:**
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `RAG_SIMILARITY_THRESHOLD` | float \| None | `None` | cosine距離の閾値（0.0=完全一致、2.0=完全不一致）。この値より大きい距離の結果を除外。`None`の場合はフィルタリングなし。推奨値: `0.5`〜`0.7` |
+
+**動作:**
+
+1. `VectorStore.search()` で `similarity_threshold` パラメータを指定
+2. 閾値フィルタリング時は多めに取得（n_results × 3、最低20件）してからフィルタリング
+3. 除外件数はDEBUGログに出力
+
+### 評価メトリクス
+
+**Precision/Recall計測** (`src/rag/evaluation.py`):
+
+```python
+def calculate_precision_recall(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+) -> PrecisionRecallResult:
+    """Precision/Recall を計算する."""
+
+async def evaluate_retrieval(
+    rag_service: RAGKnowledgeService,
+    dataset_path: str,
+    n_results: int = 5,
+) -> EvaluationReport:
+    """データセットを使ってRAG検索の精度を評価する."""
+```
+
+**評価データセット** (`tests/fixtures/rag_evaluation_dataset.json`):
+
+```json
+{
+  "queries": [
+    {
+      "id": "q1",
+      "query": "質問文",
+      "expected_sources": ["期待されるソースURL"],
+      "negative_sources": ["含まれてはいけないソースURL"],
+      "expected_keywords": ["回答に含まれるべきキーワード"]
+    }
+  ]
+}
+```
+
+**戻り値型:**
+
+```python
+@dataclass
+class PrecisionRecallResult:
+    precision: float
+    recall: float
+    f1: float
+    true_positives: int
+    false_positives: int
+    false_negatives: int
+
+@dataclass
+class EvaluationReport:
+    queries_evaluated: int
+    average_precision: float
+    average_recall: float
+    average_f1: float
+    negative_source_violations: list[str]
+    query_results: list[QueryEvaluationResult]
+```
+
+**expected_keywords について:**
+
+`expected_keywords` は将来の整合性チェック機能（ハルシネーション検出）で使用予定。Phase 2 の評価メトリクスでは使用しない。
+
 ## 変更履歴
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-09 | Phase 2: 類似度閾値・評価メトリクス機能を追加 (#176) |
 | 2026-02-09 | URL正規化（フラグメント除去）による重複取り込み防止を追加 (#161) |

@@ -5,13 +5,23 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from src.rag.evaluation import (
+    EvaluationDatasetQuery,
+    EvaluationReport,
     PrecisionRecallResult,
+    QueryEvaluationResult,
     calculate_precision_recall,
     check_negative_sources,
+    evaluate_retrieval,
+    load_evaluation_dataset,
 )
+from src.services.rag_knowledge import RAGRetrievalResult
 
 
 class TestCalculatePrecisionRecall:
@@ -244,3 +254,254 @@ class TestPrecisionRecallResult:
         assert result.true_positives == 3
         assert result.false_positives == 1
         assert result.false_negatives == 2
+
+
+class TestLoadEvaluationDataset:
+    """load_evaluation_dataset() のテスト."""
+
+    def test_load_valid_dataset(self, tmp_path: Path) -> None:
+        """有効なデータセットを正しく読み込めること."""
+        dataset = {
+            "queries": [
+                {
+                    "id": "q1",
+                    "query": "テストクエリ1",
+                    "expected_sources": ["https://a.com"],
+                    "negative_sources": ["https://bad.com"],
+                    "expected_keywords": ["キーワード1"],
+                    "description": "テスト説明",
+                    "notes": "テストノート",
+                },
+                {
+                    "id": "q2",
+                    "query": "テストクエリ2",
+                    "expected_sources": ["https://b.com", "https://c.com"],
+                },
+            ]
+        }
+        dataset_path = tmp_path / "test_dataset.json"
+        dataset_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+
+        result = load_evaluation_dataset(str(dataset_path))
+
+        assert len(result) == 2
+        assert result[0].id == "q1"
+        assert result[0].query == "テストクエリ1"
+        assert result[0].expected_sources == ["https://a.com"]
+        assert result[0].negative_sources == ["https://bad.com"]
+        assert result[0].expected_keywords == ["キーワード1"]
+        assert result[1].id == "q2"
+        assert result[1].negative_sources == []  # デフォルト値
+
+    def test_load_empty_dataset(self, tmp_path: Path) -> None:
+        """空のデータセットを読み込んだ場合、空リストを返す."""
+        dataset = {"queries": []}
+        dataset_path = tmp_path / "empty_dataset.json"
+        dataset_path.write_text(json.dumps(dataset), encoding="utf-8")
+
+        result = load_evaluation_dataset(str(dataset_path))
+
+        assert result == []
+
+    def test_load_missing_file(self) -> None:
+        """存在しないファイルを読み込もうとした場合、FileNotFoundError."""
+        with pytest.raises(FileNotFoundError):
+            load_evaluation_dataset("/nonexistent/path.json")
+
+
+class TestEvaluateRetrieval:
+    """evaluate_retrieval() のテスト."""
+
+    @pytest.fixture
+    def mock_rag_service(self) -> MagicMock:
+        """モックRAGKnowledgeServiceを作成する."""
+        mock = MagicMock()
+        mock.retrieve = AsyncMock()
+        return mock
+
+    @pytest.fixture
+    def sample_dataset_path(self, tmp_path: Path) -> str:
+        """サンプルデータセットファイルを作成する."""
+        dataset = {
+            "queries": [
+                {
+                    "id": "q1",
+                    "query": "まもりのマント 入手場所",
+                    "expected_sources": ["https://example.com/dq3/item/mamori.html"],
+                    "negative_sources": ["https://example.com/dq3/dungeon/shiren.html"],
+                },
+                {
+                    "id": "q2",
+                    "query": "ゾーマ 攻略",
+                    "expected_sources": [
+                        "https://example.com/dq3/boss/zoma.html",
+                        "https://example.com/dq3/strategy/final.html",
+                    ],
+                    "negative_sources": [],
+                },
+            ]
+        }
+        dataset_path = tmp_path / "eval_dataset.json"
+        dataset_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+        return str(dataset_path)
+
+    async def test_evaluate_perfect_retrieval(
+        self,
+        mock_rag_service: MagicMock,
+        sample_dataset_path: str,
+    ) -> None:
+        """完璧な検索結果の場合のレポート生成."""
+        # q1: 期待どおりの結果を返す
+        # q2: 期待どおりの結果を返す
+        mock_rag_service.retrieve.side_effect = [
+            RAGRetrievalResult(
+                context="参考情報",
+                sources=["https://example.com/dq3/item/mamori.html"],
+            ),
+            RAGRetrievalResult(
+                context="参考情報",
+                sources=[
+                    "https://example.com/dq3/boss/zoma.html",
+                    "https://example.com/dq3/strategy/final.html",
+                ],
+            ),
+        ]
+
+        report = await evaluate_retrieval(mock_rag_service, sample_dataset_path)
+
+        assert report.queries_evaluated == 2
+        assert report.average_precision == 1.0
+        assert report.average_recall == 1.0
+        assert report.average_f1 == 1.0
+        assert report.negative_source_violations == []
+        assert len(report.query_results) == 2
+
+    async def test_evaluate_with_negative_violations(
+        self,
+        mock_rag_service: MagicMock,
+        sample_dataset_path: str,
+    ) -> None:
+        """禁止ソースが含まれている場合の検出."""
+        # q1: 禁止ソースが含まれている
+        mock_rag_service.retrieve.side_effect = [
+            RAGRetrievalResult(
+                context="参考情報",
+                sources=[
+                    "https://example.com/dq3/item/mamori.html",
+                    "https://example.com/dq3/dungeon/shiren.html",  # 禁止ソース
+                ],
+            ),
+            RAGRetrievalResult(
+                context="参考情報",
+                sources=["https://example.com/dq3/boss/zoma.html"],
+            ),
+        ]
+
+        report = await evaluate_retrieval(mock_rag_service, sample_dataset_path)
+
+        assert report.queries_evaluated == 2
+        assert report.negative_source_violations == ["q1"]
+        assert report.query_results[0].negative_violations == [
+            "https://example.com/dq3/dungeon/shiren.html"
+        ]
+
+    async def test_evaluate_partial_match(
+        self,
+        mock_rag_service: MagicMock,
+        sample_dataset_path: str,
+    ) -> None:
+        """部分一致の場合のPrecision/Recall計算."""
+        # q1: 正解を1件取得、不要なものも1件取得
+        # q2: 2件中1件のみ取得
+        mock_rag_service.retrieve.side_effect = [
+            RAGRetrievalResult(
+                context="参考情報",
+                sources=[
+                    "https://example.com/dq3/item/mamori.html",  # 正解
+                    "https://example.com/other.html",  # 不要
+                ],
+            ),
+            RAGRetrievalResult(
+                context="参考情報",
+                sources=["https://example.com/dq3/boss/zoma.html"],  # 2件中1件のみ
+            ),
+        ]
+
+        report = await evaluate_retrieval(mock_rag_service, sample_dataset_path)
+
+        assert report.queries_evaluated == 2
+        # q1: precision=0.5, recall=1.0
+        # q2: precision=1.0, recall=0.5
+        # 平均: precision=0.75, recall=0.75
+        assert report.average_precision == pytest.approx(0.75)
+        assert report.average_recall == pytest.approx(0.75)
+
+    async def test_evaluate_empty_dataset(
+        self,
+        mock_rag_service: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """空のデータセットの場合、ゼロ値のレポートを返す."""
+        empty_dataset = {"queries": []}
+        dataset_path = tmp_path / "empty.json"
+        dataset_path.write_text(json.dumps(empty_dataset), encoding="utf-8")
+
+        report = await evaluate_retrieval(mock_rag_service, str(dataset_path))
+
+        assert report.queries_evaluated == 0
+        assert report.average_precision == 0.0
+        assert report.average_recall == 0.0
+        assert report.average_f1 == 0.0
+        assert report.negative_source_violations == []
+        mock_rag_service.retrieve.assert_not_called()
+
+
+class TestEvaluationReportDataclass:
+    """EvaluationReport データクラスのテスト."""
+
+    def test_dataclass_fields(self) -> None:
+        """データクラスのフィールドが正しく設定されること."""
+        query_result = QueryEvaluationResult(
+            query_id="q1",
+            query="テスト",
+            precision=0.8,
+            recall=0.6,
+            f1=0.685,
+            retrieved_sources=["https://a.com"],
+            expected_sources=["https://a.com", "https://b.com"],
+            negative_violations=[],
+        )
+        report = EvaluationReport(
+            queries_evaluated=1,
+            average_precision=0.8,
+            average_recall=0.6,
+            average_f1=0.685,
+            negative_source_violations=[],
+            query_results=[query_result],
+        )
+
+        assert report.queries_evaluated == 1
+        assert report.average_precision == 0.8
+        assert report.average_recall == 0.6
+        assert report.average_f1 == 0.685
+        assert len(report.query_results) == 1
+
+
+class TestEvaluationDatasetQueryDataclass:
+    """EvaluationDatasetQuery データクラスのテスト."""
+
+    def test_default_values(self) -> None:
+        """デフォルト値が正しく設定されること."""
+        query = EvaluationDatasetQuery(
+            id="q1",
+            query="テスト",
+            expected_sources=["https://a.com"],
+        )
+
+        assert query.id == "q1"
+        assert query.query == "テスト"
+        assert query.expected_sources == ["https://a.com"]
+        assert query.negative_sources == []
+        assert query.expected_keywords == []
+        assert query.description == ""
+        assert query.notes == ""

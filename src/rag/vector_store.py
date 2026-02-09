@@ -155,6 +155,7 @@ class VectorStore:
         fetch_count = n_results
         if similarity_threshold is not None:
             # 閾値フィルタリング後にn_results件返すため、多めに取得
+            # 3倍（最低20件）: 閾値で除外される可能性を考慮し余裕を持って取得
             fetch_count = max(n_results * 3, 20)
 
         # ChromaDBで検索（同期APIなのでto_threadでラップ）
