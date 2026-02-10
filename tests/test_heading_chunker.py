@@ -3,9 +3,7 @@
 仕様: docs/specs/f9-rag-chunking-hybrid.md
 """
 
-import pytest
-
-from src.rag.heading_chunker import HeadingChunk, chunk_by_headings
+from src.rag.heading_chunker import chunk_by_headings
 
 
 class TestChunkByHeadings:

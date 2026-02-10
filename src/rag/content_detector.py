@@ -127,7 +127,7 @@ def _is_table_data(text: str) -> bool:
         return False
 
     structured_ratio = structured_row_count / total_lines
-    numeric_ratio = numeric_row_count / total_lines if total_lines > 0 else 0
+    numeric_ratio = numeric_row_count / total_lines  # total_lines >= 2 は保証済み
 
     # 構造化された行が30%以上、または数値行が20%以上
     return structured_ratio >= 0.3 or numeric_ratio >= 0.2
@@ -167,9 +167,24 @@ def split_by_content_type(text: str) -> list[ContentBlock]:
     current_heading_level = 0
 
     for line in lines:
-        # 見出し行の検出
+        # 見出し行の検出（Markdown）
         heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+        # HTML見出しの検出
+        html_heading_match = re.match(
+            r"^<h([1-6])[^>]*>(.*?)</h\1>$", line.strip(), re.IGNORECASE
+        )
+
+        detected_heading: str | None = None
+        detected_level: int = 0
+
         if heading_match:
+            detected_heading = heading_match.group(2).strip()
+            detected_level = len(heading_match.group(1))
+        elif html_heading_match:
+            detected_heading = html_heading_match.group(2).strip()
+            detected_level = int(html_heading_match.group(1))
+
+        if detected_heading is not None:
             # 前のブロックを確定
             if current_block_lines:
                 block_text = "\n".join(current_block_lines).strip()
@@ -186,8 +201,8 @@ def split_by_content_type(text: str) -> list[ContentBlock]:
                 current_block_lines = []
 
             # 新しい見出しを設定
-            current_heading = heading_match.group(2).strip()
-            current_heading_level = len(heading_match.group(1))
+            current_heading = detected_heading
+            current_heading_level = detected_level
             continue
 
         current_block_lines.append(line)

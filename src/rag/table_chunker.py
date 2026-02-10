@@ -172,8 +172,9 @@ def _parse_delimited_table(
         headers = _split_by_delimiter(lines[0], delimiter)
 
     # データ行をパース
+    # header_row指定時でも、1行目がヘッダーなら1行目はスキップ
     data_rows: list[list[str]] = []
-    start_idx = 0 if header_row else 1
+    start_idx = 1  # ヘッダー行は常にスキップ
 
     for line in lines[start_idx:]:
         cells = _split_by_delimiter(line, delimiter)
@@ -203,13 +204,15 @@ def _detect_delimiter(lines: list[str]) -> str | None:
     """テーブルの区切り文字を検出する."""
     # タブ区切りを優先
     tab_counts = [line.count("\t") for line in lines]
-    if all(c >= 1 for c in tab_counts[:3] if c):
+    tab_counts_head = [c for c in tab_counts[:3] if c]
+    if tab_counts_head and all(c >= 1 for c in tab_counts_head):
         return "\t"
 
     # 複数スペース区切り
     space_pattern = r"\s{2,}"
     space_matches = [len(re.findall(space_pattern, line)) for line in lines]
-    if all(m >= 1 for m in space_matches[:3] if m):
+    space_matches_head = [m for m in space_matches[:3] if m]
+    if space_matches_head and all(m >= 1 for m in space_matches_head):
         return space_pattern
 
     return None
@@ -256,5 +259,15 @@ def _format_table_chunk(
 
     if attributes:
         parts.append(", ".join(attributes))
+
+    # 周辺行をコンテキストとして追加（メイン行以外）
+    other_rows = [row for row in context_rows if row != main_row]
+    if other_rows:
+        context_parts: list[str] = []
+        for row in other_rows:
+            row_name = row[0] if row else ""
+            context_parts.append(row_name)
+        if context_parts:
+            parts.append(f"周辺行: {', '.join(context_parts)}")
 
     return "\n".join(parts)

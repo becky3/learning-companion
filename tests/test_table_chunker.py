@@ -3,9 +3,7 @@
 仕様: docs/specs/f9-rag-chunking-hybrid.md
 """
 
-import pytest
-
-from src.rag.table_chunker import TableChunk, chunk_table_data
+from src.rag.table_chunker import chunk_table_data
 
 
 class TestChunkTableData:

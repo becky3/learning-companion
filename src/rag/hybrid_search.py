@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -14,6 +15,15 @@ if TYPE_CHECKING:
     from src.rag.vector_store import RetrievalResult, VectorStore
 
 logger = logging.getLogger(__name__)
+
+
+def _generate_doc_id(source_url: str, chunk_index: int) -> str:
+    """ドキュメントIDを生成する.
+
+    VectorStoreと同じ形式（url_hash + "_" + chunk_index）で生成する。
+    """
+    url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
+    return f"{url_hash}_{chunk_index}"
 
 
 @dataclass
@@ -121,18 +131,25 @@ class HybridSearchEngine:
     ) -> list[HybridSearchResult]:
         """ベクトル検索結果のみを変換する."""
         results: list[HybridSearchResult] = []
+        rank = 0  # 閾値を満たすもののみでランク計算
 
-        for i, vr in enumerate(vector_results[:n_results]):
-            # 閾値フィルタリング
+        for i, vr in enumerate(vector_results):
+            # 閾値フィルタリング（先にフィルタしてからn_results件を取得）
             if similarity_threshold is not None and vr.distance > similarity_threshold:
                 continue
 
-            # RRFスコアを計算（ベクトル検索のランクのみ）
-            rrf_score = self._vector_weight / (self._rrf_k + i + 1)
+            # 必要件数に達したら終了
+            if len(results) >= n_results:
+                break
 
-            doc_id = str(vr.metadata.get("source_url", "")) + "_" + str(
-                vr.metadata.get("chunk_index", i)
-            )
+            # RRFスコアを計算（閾値を満たすもののランクで計算）
+            rrf_score = self._vector_weight / (self._rrf_k + rank + 1)
+            rank += 1
+
+            # VectorStoreと同じ形式でdoc_idを生成
+            source_url = str(vr.metadata.get("source_url", ""))
+            chunk_index = int(vr.metadata.get("chunk_index", i))
+            doc_id = _generate_doc_id(source_url, chunk_index)
 
             results.append(
                 HybridSearchResult(
@@ -188,9 +205,10 @@ class HybridSearchEngine:
 
         # ベクトル検索結果を処理
         for i, vr in enumerate(vector_results):
-            doc_id = str(vr.metadata.get("source_url", "")) + "_" + str(
-                vr.metadata.get("chunk_index", i)
-            )
+            # VectorStoreと同じ形式でdoc_idを生成
+            source_url = str(vr.metadata.get("source_url", ""))
+            chunk_index = int(vr.metadata.get("chunk_index", i))
+            doc_id = _generate_doc_id(source_url, chunk_index)
 
             # 閾値チェック（フィルタリングではなく、スコア計算に影響）
             if similarity_threshold is not None and vr.distance > similarity_threshold:
@@ -230,17 +248,48 @@ class HybridSearchEngine:
         # RRFスコアを計算してソート
         results: list[HybridSearchResult] = []
         for doc_id, data in doc_map.items():
-            vector_rrf = float(data.get("vector_rrf", 0.0) or 0.0)
-            bm25_rrf = float(data.get("bm25_rrf", 0.0) or 0.0)
+            # 型安全なキャスト（dictが含まれる可能性があるためisinstanceでガード）
+            raw_vector_rrf = data.get("vector_rrf", 0.0)
+            raw_bm25_rrf = data.get("bm25_rrf", 0.0)
+            vector_rrf = (
+                float(raw_vector_rrf)
+                if isinstance(raw_vector_rrf, (int, float))
+                else 0.0
+            )
+            bm25_rrf = (
+                float(raw_bm25_rrf)
+                if isinstance(raw_bm25_rrf, (int, float))
+                else 0.0
+            )
             rrf_score = vector_rrf + bm25_rrf
+
+            # 閾値超過かつBM25ヒットなしのドキュメントを除外
+            # vector_rrf == 0 は閾値超過を意味し、bm25_rrf == 0 はBM25ヒットなし
+            # 両方0の場合（両方でヒットしなかった）は結果に含めない
+            if vector_rrf == 0.0 and bm25_rrf == 0.0:
+                continue
+
+            # 型安全なキャスト
+            raw_vector_distance = data.get("vector_distance")
+            raw_bm25_score = data.get("bm25_score")
+            vector_distance: float | None = (
+                float(raw_vector_distance)
+                if isinstance(raw_vector_distance, (int, float))
+                else None
+            )
+            bm25_score: float | None = (
+                float(raw_bm25_score)
+                if isinstance(raw_bm25_score, (int, float))
+                else None
+            )
 
             results.append(
                 HybridSearchResult(
                     doc_id=doc_id,
                     text=str(data["text"]),
                     metadata=data["metadata"] if isinstance(data["metadata"], dict) else {},
-                    vector_distance=data["vector_distance"] if data["vector_distance"] is not None else None,  # type: ignore[arg-type]
-                    bm25_score=data["bm25_score"] if data["bm25_score"] is not None else None,  # type: ignore[arg-type]
+                    vector_distance=vector_distance,
+                    bm25_score=bm25_score,
                     rrf_score=rrf_score,
                 )
             )

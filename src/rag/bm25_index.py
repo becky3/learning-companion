@@ -99,20 +99,25 @@ class BM25Index:
             追加されたドキュメント数
         """
         added = 0
+        updated = 0
         for doc_id, text, source_url in documents:
             if doc_id in self._documents:
                 # 既存のドキュメントを更新
                 self._documents[doc_id] = text
                 self._doc_source_map[doc_id] = source_url
+                updated += 1
             else:
                 # 新規ドキュメントを追加
                 self._documents[doc_id] = text
                 self._doc_source_map[doc_id] = source_url
                 added += 1
 
-        if added > 0:
+        # 新規追加または更新があった場合はインデックス再構築が必要
+        if added > 0 or updated > 0:
             self._needs_rebuild = True
-            logger.debug("Added %d documents to BM25 index", added)
+            logger.debug(
+                "BM25 index: added %d, updated %d documents", added, updated
+            )
 
         return added
 

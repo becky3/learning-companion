@@ -55,6 +55,12 @@ line-length = 100
 [tool.mypy]
 python_version = "3.11"
 strict = true
+untyped_calls_exclude = ["fugashi", "rank_bm25"]
+
+[[tool.mypy.overrides]]
+module = ["fugashi", "fugashi.*", "rank_bm25", "rank_bm25.*"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

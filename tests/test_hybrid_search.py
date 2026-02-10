@@ -3,9 +3,6 @@
 仕様: docs/specs/f9-rag-chunking-hybrid.md
 """
 
-import pytest
-
-from src.rag.bm25_index import BM25Index
 from src.rag.hybrid_search import HybridSearchResult, reciprocal_rank_fusion
 
 

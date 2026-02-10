@@ -324,6 +324,8 @@ async def run_chunking_evaluation(
 
 ## アーキテクチャ
 
+> **Note**: 現在のPR (#211) では各コンポーネント（ContentTypeDetector, TableChunker, HeadingChunker, BM25Index, HybridSearchEngine）の**土台実装**を提供しています。RAGKnowledgeServiceへの統合および設定項目（`RAG_HYBRID_SEARCH_ENABLED`等）の参照は、将来の別PRで対応予定です。
+
 ```mermaid
 flowchart TB
     subgraph Ingestion["取り込みフロー"]
@@ -468,3 +470,4 @@ ai-assistant/
 | 日付 | 内容 |
 |------|------|
 | 2026-02-09 | 初版作成 (Issue #195) |
+| 2026-02-10 | PR #211 レビュー対応: 土台実装のみであることをアーキテクチャセクションに明記 |
