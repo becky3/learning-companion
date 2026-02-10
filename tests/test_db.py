@@ -70,8 +70,8 @@ async def test_ac4_conversation(session: AsyncSession) -> None:
     assert c.role == "user"
 
 
-async def test_learning_topic_crud(session: AsyncSession) -> None:
-    """LearningTopic テーブルの CRUD."""
+async def test_ac13_learning_topic_crud(session: AsyncSession) -> None:
+    """AC13: LearningTopic テーブルの CRUD."""
     topic = LearningTopic(
         topic="RSS 1.0形式での日付取得失敗",
         source="docs/retro/f2.md#3",
@@ -89,8 +89,8 @@ async def test_learning_topic_crud(session: AsyncSession) -> None:
     assert t.article_url is None
 
 
-async def test_learning_topic_status_update(session: AsyncSession) -> None:
-    """LearningTopic のステータス更新."""
+async def test_ac14_learning_topic_status_update(session: AsyncSession) -> None:
+    """AC14: LearningTopic のステータス更新."""
     from datetime import datetime
 
     topic = LearningTopic(
@@ -125,8 +125,8 @@ async def test_learning_topic_status_update(session: AsyncSession) -> None:
     assert t2.published_at is not None
 
 
-async def test_learning_topic_unique_constraint(session: AsyncSession) -> None:
-    """LearningTopic の topic 列の UNIQUE 制約."""
+async def test_ac15_learning_topic_unique_constraint(session: AsyncSession) -> None:
+    """AC15: LearningTopic の topic 列の UNIQUE 制約."""
     from sqlalchemy.exc import IntegrityError
 
     topic1 = LearningTopic(topic="重複テスト", source="docs/retro/test.md#1")

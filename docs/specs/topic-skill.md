@@ -198,6 +198,12 @@ published: false
 - [ ] AC11: 公開済み記事の一覧が表示される
 - [ ] AC12: 公開日順（降順）でソートされる
 
+### DBモデル（LearningTopic）
+
+- [ ] AC13: LearningTopicモデルのCRUD操作が正常に動作する
+- [ ] AC14: ステータス更新（pending → draft → published）とメタ情報記録が機能する
+- [ ] AC15: topic列のUNIQUE制約が機能する
+
 ## 関連ファイル
 
 | ファイル | 役割 |
@@ -212,17 +218,17 @@ published: false
 
 Claude Codeスキルは実行時テストが中心となるため、以下を確認:
 
-**DBモデルのテスト:**
+**DBモデルのテスト（AC13-15）:**
 
-- [ ] LearningTopicモデルのCRUD操作が正常に動作する
-- [ ] unique制約（topic）が機能する
+- `tests/test_db.py` で自動テストを実施
+- 詳細は受け入れ条件を参照
 
 **スキル実行テスト（手動）:**
 
-- [ ] `/topic` でレトロから候補が抽出される
-- [ ] `/topic <番号>` で記事が正しく生成される
-- [ ] `/topic done <番号> <url>` で公開記録が保存される
-- [ ] `/topic history` で履歴が表示される
+- [ ] `/topic` でレトロから候補が抽出される（AC1-3）
+- [ ] `/topic <番号>` で記事が正しく生成される（AC4-7）
+- [ ] `/topic done <番号> <url>` で公開記録が保存される（AC8-10）
+- [ ] `/topic history` で履歴が表示される（AC11-12）
 
 ## 拡張性
 
