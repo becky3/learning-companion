@@ -82,6 +82,8 @@ published: false
 
 ## TL;DR
 
+> この記事は開発中に起こった問題を元に、Claude Codeが自動生成しました。
+
 {3行で要約}
 
 ## 背景
