@@ -151,22 +151,28 @@ class RAGKnowledgeService:
             logger.warning("No safe URLs to crawl after Safe Browsing check")
             return {"pages_crawled": 0, "chunks_stored": 0, "errors": 0, "unsafe_urls": unsafe_count}
 
-        # 複数ページを順次クロール（進捗報告付き）
+        # 複数ページを並行クロール（進捗報告付き）
+        # WebCrawler.crawl_page() は内部でセマフォ制御と遅延を行う
         total_urls = len(safe_urls)
+        tasks = [
+            asyncio.create_task(self._web_crawler.crawl_page(url))
+            for url in safe_urls
+        ]
+
         pages: list[CrawledPage] = []
-        for i, url in enumerate(safe_urls):
-            page = await self._web_crawler.crawl_page(url)
+        completed_count = 0
+        for coro in asyncio.as_completed(tasks):
+            page = await coro
+            completed_count += 1
             if page is not None:
                 pages.append(page)
 
-            # 進捗コールバック呼び出し
-            crawled_count = i + 1
+            # 進捗コールバック呼び出し（エラーを隔離）
             if progress_callback:
-                await progress_callback(crawled_count, total_urls)
-
-            # クロール間隔を挿入（最後のURL以外）
-            if i < total_urls - 1:
-                await asyncio.sleep(self._web_crawler._crawl_delay)
+                try:
+                    await progress_callback(completed_count, total_urls)
+                except Exception:
+                    logger.debug("Progress callback failed", exc_info=True)
 
         # 各ページをチャンキングして保存
         total_chunks = 0

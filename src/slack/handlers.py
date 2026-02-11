@@ -482,18 +482,24 @@ async def _handle_rag_crawl(
 
     # 1. 開始メッセージを即座に投稿
     if say:
-        await say(  # type: ignore[operator]
-            text="クロールを開始しました... (リンク収集中)",
-            thread_ts=thread_ts,
-        )
+        try:
+            await say(  # type: ignore[operator]
+                text="クロールを開始しました... (リンク収集中)",
+                thread_ts=thread_ts,
+            )
+        except Exception:
+            logger.debug("Failed to post start message", exc_info=True)
 
     # 2. 進捗コールバックを定義
     async def progress_callback(crawled: int, total: int) -> None:
         if say and crawled % progress_interval == 0:
-            await say(  # type: ignore[operator]
-                text=f"└─ {crawled}ページ取得中...",
-                thread_ts=thread_ts,
-            )
+            try:
+                await say(  # type: ignore[operator]
+                    text=f"└─ {crawled}ページ取得中...",
+                    thread_ts=thread_ts,
+                )
+            except Exception:
+                logger.debug("Failed to post progress message", exc_info=True)
 
     try:
         # 3. クロール実行（進捗コールバック付き）
@@ -508,11 +514,15 @@ async def _handle_rag_crawl(
             f"エラー: {result['errors']}件"
         )
         if say:
-            await say(  # type: ignore[operator]
-                text=completion_message,
-                thread_ts=thread_ts,
-            )
-            return ""  # 通常の応答は不要（進捗メッセージで対応済み）
+            try:
+                await say(  # type: ignore[operator]
+                    text=completion_message,
+                    thread_ts=thread_ts,
+                )
+                return ""  # 通常の応答は不要（進捗メッセージで対応済み）
+            except Exception:
+                logger.debug("Failed to post completion message", exc_info=True)
+                # 投稿に失敗した場合はフォールバックメッセージを返す
 
         # sayがない場合は従来の応答を返す
         return (

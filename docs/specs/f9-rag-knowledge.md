@@ -986,10 +986,10 @@ RAG_CRAWL_PROGRESS_INTERVAL=5
 
 | テストファイル | テスト | 対応AC |
 |--------------|--------|--------|
-| `tests/test_handlers.py` | `test_ac42_rag_crawl_posts_start_message` | AC42 |
-| `tests/test_handlers.py` | `test_ac43_rag_crawl_posts_progress_messages` | AC43 |
-| `tests/test_handlers.py` | `test_ac44_rag_crawl_posts_completion_summary` | AC44 |
-| `tests/test_handlers.py` | `test_ac45_progress_messages_in_thread_only` | AC45 |
+| `tests/test_slack_rag_handlers.py` | `test_ac42_rag_crawl_posts_start_message` | AC42 |
+| `tests/test_slack_rag_handlers.py` | `test_ac43_rag_crawl_posts_progress_messages` | AC43 |
+| `tests/test_slack_rag_handlers.py` | `test_ac44_rag_crawl_posts_completion_summary` | AC44 |
+| `tests/test_slack_rag_handlers.py` | `test_ac45_progress_messages_in_thread_only` | AC45 |
 
 ### テスト戦略
 
