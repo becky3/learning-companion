@@ -1,7 +1,7 @@
 ---
 description: "PR Review Toolkit による包括的PRレビュー"
 argument-hint: "[review-aspects]"
-allowed-tools: ["Bash", "Glob", "Grep", "Read", "Task"]
+allowed-tools: Bash, Glob, Grep, Read, Task
 ---
 
 # 包括的PRレビュー

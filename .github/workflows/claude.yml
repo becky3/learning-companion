@@ -40,7 +40,7 @@ jobs:
 
             ## レビュー手順
 
-            1. **変更内容の把握**: `git diff origin/main...HEAD` で変更差分を確認
+            1. **変更内容の把握**: `git diff origin/${{ github.base_ref }}...HEAD` で変更差分を確認
 
             2. **PR Review Toolkit エージェントを使用してレビュー**:
                以下のエージェントを順次実行し、それぞれの観点でレビューを行ってください。
