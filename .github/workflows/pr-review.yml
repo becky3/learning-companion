@@ -113,7 +113,7 @@ jobs:
 
                コード行コメント投稿コマンド:
                ```bash
-               gh api repos/${{ github.repository }}/pulls/${{ steps.pr-number.outputs.number }}/comments \
+               gh api "repos/${{ github.repository }}/pulls/${{ steps.pr-number.outputs.number }}/comments" \
                  -f body="[<エージェント名>] <問題の説明>" \
                  -f path="<ファイルパス>" \
                  -F line=<行番号> \
