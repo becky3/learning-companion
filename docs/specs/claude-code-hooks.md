@@ -25,6 +25,17 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 ```json
 {
   "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'CRITICAL RULE: 矛盾がある場合は必ずユーザーに確認すること'"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "matcher": "*",
@@ -67,6 +78,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 - `Notification`: ユーザー入力待ち時（選択肢提示、許可ダイアログ、アイドル状態など）
 - `PermissionRequest`: ツール実行の許可ダイアログ表示時のみ
 - `Stop`: Claude がタスク完了時
+- `PreCompact`: コンテキスト圧縮前（重要なルールを再注入するために使用）
 - その他のイベント: `SessionStart`, `SessionEnd`, `PreToolUse`, `PostToolUse` など
 
 **注意**: 選択肢提示（AskUserQuestion）は `Notification` イベントで捕捉する。`PermissionRequest` はツール実行許可のみ。
@@ -131,6 +143,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 - [x] AC4: Linux環境で `notify-send` 通知が表示される
 - [x] AC5: Windows環境で PowerShell 通知が表示される
 - [x] AC6: 通知が表示されない環境でもエラーなく動作する
+- [x] AC7: `PreCompact` フックでコンテキスト圧縮前に重要なルールが注入される
 
 ## 技術的な注意点
 
@@ -167,6 +180,12 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 - `Start-Sleep` 時間短縮
 - PowerShell Core 優先利用
 - ※詳細は「技術的な注意点」のパフォーマンスセクションを参照
+
+**Phase 2.2 (コンテキスト圧縮対策)** — 完了:
+
+- `PreCompact` フック追加
+- コンテキスト圧縮時に重要なルールを再注入
+- 「矛盾がある場合は必ずユーザーに確認する」ルールを保持
 
 **Phase 3 (最適化)** — 未実装:
 
