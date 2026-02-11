@@ -33,10 +33,15 @@ jobs:
       - name: Get base branch
         id: base
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             BASE=$(gh pr view ${{ github.event.issue.number }} --json baseRefName -q .baseRefName)
           else
             BASE="${{ github.base_ref }}"
+          fi
+          if [ -z "$BASE" ]; then
+            echo "Error: Failed to get base branch" >&2
+            exit 1
           fi
           echo "ref=$BASE" >> $GITHUB_OUTPUT
         env:
@@ -45,10 +50,15 @@ jobs:
       - name: Get PR head commit
         id: pr-head
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             COMMIT_ID=$(gh pr view ${{ github.event.issue.number }} --json headRefOid -q .headRefOid)
           else
             COMMIT_ID="${{ github.event.pull_request.head.sha }}"
+          fi
+          if [ -z "$COMMIT_ID" ]; then
+            echo "Error: Failed to get PR head commit" >&2
+            exit 1
           fi
           echo "sha=$COMMIT_ID" >> $GITHUB_OUTPUT
         env:
