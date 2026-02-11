@@ -2,7 +2,7 @@
 
 ## 概要
 
-RAG検索精度の自動評価パイプラインを構築した。CLIツールによる評価実行、JSON/Markdownレポート出力、ベースライン比較によるリグレッション検出、GitHub Actionsでの自動評価ワークフローを実装した。
+RAG検索精度の自動評価パイプラインを構築した。CLIツールによる評価実行、JSON/Markdownレポート出力、ベースライン比較によるリグレッション検出を実装。test-runnerサブエージェントがRAG関連コード変更時に自動実行する仕組みを整備した。
 
 ## 実装範囲
 
@@ -19,7 +19,7 @@ RAG検索精度の自動評価パイプラインを構築した。CLIツール�
 | `src/rag/cli.py` | RAG評価CLI（evaluate, init-test-db サブコマンド） |
 | `tests/test_rag_cli.py` | CLIテスト 13件 |
 | `tests/fixtures/rag_test_documents.json` | テスト用ドキュメントフィクスチャ |
-| `.github/workflows/rag-evaluation.yml` | 週次/手動/PR評価ワークフロー |
+| `.claude/agents/test-runner.md` | RAG精度テスト自動実行ルールを追記 |
 | `docs/specs/f9-rag-auto-evaluation.md` | Phase 3 仕様書 |
 
 ### CLI機能
@@ -46,11 +46,11 @@ python -m src.rag.cli init-test-db \
 
 | メンバー | 担当 | 成果 |
 |----------|------|------|
-| アヴドゥル | テストドキュメント、GitHub Actions | 2タスク完了 |
+| アヴドゥル | テストドキュメント | タスク完了 |
 | 花京院 | CLI実装、CLIテスト | 2タスク完了 |
 | 承太郎（リーダー） | 全体統括、品質レビュー | レビュー完了 |
 
-並行作業により、依存関係のないタスク（テストドキュメント、GitHub Actions）を同時進行できた。
+並行作業により、依存関係のないタスクを同時進行できた。
 
 ### 2. 既存コードの活用
 
@@ -100,11 +100,18 @@ test-runner、code-reviewer、doc-reviewer サブエージェントを活用:
 
 **対応**: code-reviewer の Warning として検出。今後の改善として、設定オブジェクトへの直接代入や関数スコープ内でのみ有効な方法を検討。
 
-### 3. GitHub Actions の連携設計
+### 3. GitHub Actions ワークフローの不要性
 
-**問題**: `init-test-db` で作成されるChromaDBのディレクトリと、`evaluate` ステップで使用される設定が連携していない可能性。
+**問題**: 当初、GitHub ActionsでRAG精度テストを自動実行するワークフローを設計していたが、実行にはOpenAI APIキー等の設定が必要で、かつRAG精度テストはコード変更時のみ必要なため、CIワークフローとしては過剰だった。
 
-**対応**: code-reviewer の Suggestion として検出。ワークフロー内で `CHROMADB_PERSIST_DIR` 環境変数を統一することで対応可能。
+**経緯**:
+1. 仕様書に GitHub Actions ワークフローを含めてしまった
+2. ワークフロー実装後、401エラー（OpenAI APIキー未設定）が発生
+3. ユーザー指摘でワークフローの必要性を再検討
+
+**対応**: ワークフローを削除し、test-runnerサブエージェントがRAG関連コード変更時に自動で精度テストを実行する方式に変更。
+
+**教訓**: CIワークフローを設計する前に、その機能が本当にCI/CD自動化として必要か、ローカル実行で十分かを検討する。
 
 ## 今後の課題
 
