@@ -182,6 +182,22 @@ SendMessage:
 - バグ調査: `バグ #123 を調査。3人で異なる仮説を検証`
 - レビュー: `PR #456 をレビュー。セキュリティ/パフォーマンス/テストの3観点で`
 
+## メンバーのスポーン
+
+Task ツールでメンバーをスポーンする際は、**必ず `mode: "bypassPermissions"` を設定する**。
+
+```
+Task(
+    subagent_type="general-purpose",
+    name="member-name",
+    team_name="team-name",
+    mode="bypassPermissions",  # ← 必須
+    prompt="..."
+)
+```
+
+**理由**: `mode` を設定しないと、メンバーからの SendMessage の content がリーダーに配信されない問題がある（Issue #224）。
+
 ## 注意事項
 
 - トークンコスト増大（各メンバーが独立コンテキスト）
