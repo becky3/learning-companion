@@ -38,9 +38,10 @@ jobs:
           claude_args: "--model claude-opus-4-5 --max-turns 100 --dangerously-skip-permissions"
           show_full_output: true
 
-      # Slack通知（ワークフロー完了時）
+      # Slack通知（長時間タスクのため完了通知が有用）
       - name: Slack notification
         if: always()
+        continue-on-error: true
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}

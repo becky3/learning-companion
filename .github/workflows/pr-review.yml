@@ -66,8 +66,10 @@ jobs:
 
             4. 問題がない場合は「レビューの結果、重大な問題は検出されませんでした」と報告
 
+      # Slack通知（成功時は冗長なため失敗時のみ。claude.ymlとは意図的に異なる）
       - name: Slack notification
         if: failure()
+        continue-on-error: true
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
