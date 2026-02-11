@@ -48,6 +48,16 @@
 - doc-reviewer（ドキュメントレビュー）
 - test-runner（テスト実行）
 
+**重要**: 品質チェックタスクを定義する際は、**3つ全てを明示的に指示すること**。「code-reviewer と test-runner」のように一部だけ書くと、doc-reviewer が漏れる。
+
+```
+❌ NG: 「code-reviewer と test-runner でレビュー」
+   → doc-reviewer が漏れ、ドキュメント変更がレビューされない
+
+✅ OK: 「code-reviewer, doc-reviewer, test-runner でレビュー」
+   → 3つ全てが実行される
+```
+
 ### ストーリーテラー（語り部）
 
 チームには必ず1名、プロセス全体を見守る「ストーリーテラー」を含める。
