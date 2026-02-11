@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urldefrag
@@ -98,12 +99,17 @@ class RAGKnowledgeService:
         self,
         index_url: str,
         url_pattern: str = "",
+        progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, int]:
         """リンク集ページから一括取り込み.
 
         Args:
             index_url: リンク集ページのURL
             url_pattern: 正規表現パターンでリンクをフィルタリング（任意）
+            progress_callback: 進捗コールバック関数（オプション）
+                引数: (crawled: int, total: int)
+                crawled: クロール完了ページ数
+                total: 総ページ数
 
         Returns:
             {"pages_crawled": N, "chunks_stored": M, "errors": E, "unsafe_urls": U}
@@ -145,8 +151,28 @@ class RAGKnowledgeService:
             logger.warning("No safe URLs to crawl after Safe Browsing check")
             return {"pages_crawled": 0, "chunks_stored": 0, "errors": 0, "unsafe_urls": unsafe_count}
 
-        # 複数ページを並行クロール
-        pages = await self._web_crawler.crawl_pages(safe_urls)
+        # 複数ページを並行クロール（進捗報告付き）
+        # WebCrawler.crawl_page() は内部でセマフォ制御と遅延を行う
+        total_urls = len(safe_urls)
+        tasks = [
+            asyncio.create_task(self._web_crawler.crawl_page(url))
+            for url in safe_urls
+        ]
+
+        pages: list[CrawledPage] = []
+        completed_count = 0
+        for coro in asyncio.as_completed(tasks):
+            page = await coro
+            completed_count += 1
+            if page is not None:
+                pages.append(page)
+
+            # 進捗コールバック呼び出し（エラーを隔離）
+            if progress_callback:
+                try:
+                    await progress_callback(completed_count, total_urls)
+                except Exception:
+                    logger.debug("Progress callback failed", exc_info=True)
 
         # 各ページをチャンキングして保存
         total_chunks = 0

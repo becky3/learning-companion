@@ -217,6 +217,7 @@ async def main() -> None:
             timezone=settings.timezone,
             env_name=settings.env_name,
             rag_service=rag_service,
+            rag_crawl_progress_interval=settings.rag_crawl_progress_interval,
         )
 
         # Socket Mode で起動（グレースフルシャットダウン対応）

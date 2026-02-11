@@ -130,8 +130,8 @@ class TestHandleRagCrawl:
     """_handle_rag_crawl関数のテスト."""
 
     @pytest.mark.asyncio
-    async def test_success(self) -> None:
-        """クロール成功時のレスポンス."""
+    async def test_success_without_say(self) -> None:
+        """クロール成功時のレスポンス（say関数なし、従来の動作）."""
         mock_rag = MagicMock()
         mock_rag.ingest_from_index = AsyncMock(
             return_value={"pages_crawled": 5, "chunks_stored": 20, "errors": 0}
@@ -144,9 +144,11 @@ class TestHandleRagCrawl:
         assert "クロール完了" in result
         assert "5" in result
         assert "20" in result
-        mock_rag.ingest_from_index.assert_called_once_with(
-            "https://example.com/docs", "/api/"
-        )
+        # progress_callbackが渡されることを確認（関数オブジェクトなのでany()でチェック）
+        mock_rag.ingest_from_index.assert_called_once()
+        call_args = mock_rag.ingest_from_index.call_args
+        assert call_args[0] == ("https://example.com/docs", "/api/")
+        assert "progress_callback" in call_args[1]
 
     @pytest.mark.asyncio
     async def test_no_url(self) -> None:
@@ -183,6 +185,136 @@ class TestHandleRagCrawl:
 
         assert "エラー" in result
         assert "ドメインが許可されていません" in result
+
+
+class TestHandleRagCrawlProgressFeedback:
+    """_handle_rag_crawl 進捗フィードバック機能のテスト (AC42-AC45)."""
+
+    @pytest.mark.asyncio
+    async def test_ac42_rag_crawl_posts_start_message(self) -> None:
+        """AC42: rag crawl実行時、即座に開始メッセージがスレッド内に投稿されること."""
+        mock_rag = MagicMock()
+        mock_rag.ingest_from_index = AsyncMock(
+            return_value={"pages_crawled": 5, "chunks_stored": 20, "errors": 0}
+        )
+        mock_say = AsyncMock()
+
+        await _handle_rag_crawl(
+            mock_rag,
+            "https://example.com/docs",
+            "",
+            say=mock_say,
+            thread_ts="1234567890.123456",
+        )
+
+        # 開始メッセージが投稿されたことを確認
+        calls = mock_say.call_args_list
+        assert len(calls) >= 1
+        first_call = calls[0]
+        assert first_call.kwargs.get("thread_ts") == "1234567890.123456"
+        assert "クロールを開始しました" in first_call.kwargs.get("text", "")
+        assert "リンク収集中" in first_call.kwargs.get("text", "")
+
+    @pytest.mark.asyncio
+    async def test_ac43_rag_crawl_posts_progress_messages(self) -> None:
+        """AC43: クロール中、progress_intervalページごとに進捗メッセージが投稿されること."""
+        mock_rag = MagicMock()
+
+        # ingest_from_indexがprogress_callbackを呼び出すようにする
+        async def mock_ingest(url: str, pattern: str, progress_callback: object = None) -> dict[str, int]:
+            if progress_callback:
+                # 10ページ分の進捗を報告（interval=5なので5, 10で2回投稿される）
+                for i in range(1, 11):
+                    await progress_callback(i, 10)  # type: ignore[misc]
+            return {"pages_crawled": 10, "chunks_stored": 50, "errors": 0}
+
+        mock_rag.ingest_from_index = mock_ingest
+        mock_say = AsyncMock()
+
+        await _handle_rag_crawl(
+            mock_rag,
+            "https://example.com/docs",
+            "",
+            say=mock_say,
+            thread_ts="1234567890.123456",
+            progress_interval=5,  # 5ページごとに報告
+        )
+
+        # 全ての呼び出しを取得
+        calls = mock_say.call_args_list
+        # 開始メッセージ + 進捗メッセージ(5, 10) + 完了メッセージ = 4回
+        assert len(calls) >= 3  # 最低でも開始 + 進捗 + 完了
+
+        # 進捗メッセージの内容を確認（開始と完了以外）
+        progress_calls = [
+            c for c in calls
+            if "ページ取得中" in c.kwargs.get("text", "")
+        ]
+        assert len(progress_calls) == 2  # 5ページ目と10ページ目
+        for call in progress_calls:
+            assert call.kwargs.get("thread_ts") == "1234567890.123456"
+
+    @pytest.mark.asyncio
+    async def test_ac44_rag_crawl_posts_completion_summary(self) -> None:
+        """AC44: クロール完了時、結果サマリーがスレッド内に投稿されること."""
+        mock_rag = MagicMock()
+        mock_rag.ingest_from_index = AsyncMock(
+            return_value={"pages_crawled": 15, "chunks_stored": 128, "errors": 2}
+        )
+        mock_say = AsyncMock()
+
+        await _handle_rag_crawl(
+            mock_rag,
+            "https://example.com/docs",
+            "",
+            say=mock_say,
+            thread_ts="1234567890.123456",
+        )
+
+        # 完了メッセージが投稿されたことを確認
+        calls = mock_say.call_args_list
+        # 最後の呼び出しが完了メッセージ
+        last_call = calls[-1]
+        assert last_call.kwargs.get("thread_ts") == "1234567890.123456"
+        completion_text = last_call.kwargs.get("text", "")
+        assert "完了" in completion_text
+        assert "15ページ" in completion_text
+        assert "128チャンク" in completion_text
+        assert "エラー: 2件" in completion_text
+
+    @pytest.mark.asyncio
+    async def test_ac45_progress_messages_in_thread_only(self) -> None:
+        """AC45: 進捗メッセージはスレッド内のみに投稿され、チャンネルへの通知は発生しないこと."""
+        mock_rag = MagicMock()
+
+        async def mock_ingest(url: str, pattern: str, progress_callback: object = None) -> dict[str, int]:
+            if progress_callback:
+                await progress_callback(5, 10)  # type: ignore[misc]
+            return {"pages_crawled": 10, "chunks_stored": 50, "errors": 0}
+
+        mock_rag.ingest_from_index = mock_ingest
+        mock_say = AsyncMock()
+
+        await _handle_rag_crawl(
+            mock_rag,
+            "https://example.com/docs",
+            "",
+            say=mock_say,
+            thread_ts="1234567890.123456",
+            progress_interval=5,
+        )
+
+        # 全ての呼び出しでthread_tsが指定されていることを確認
+        for call in mock_say.call_args_list:
+            # thread_tsが指定されている = スレッド内投稿
+            assert call.kwargs.get("thread_ts") == "1234567890.123456", (
+                f"thread_tsが指定されていない呼び出しがあります: {call}"
+            )
+            # reply_broadcast=True が指定されていないことを確認
+            # (指定されるとチャンネルにも通知される)
+            assert call.kwargs.get("reply_broadcast") is not True, (
+                f"reply_broadcast=Trueが指定されています: {call}"
+            )
 
 
 class TestHandleRagAdd:
