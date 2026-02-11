@@ -33,6 +33,7 @@ jobs:
       - name: Get base branch
         id: base
         run: |
+          set +e  # Disable default bash -e to use explicit error handling
           set -uo pipefail
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             if ! BASE=$(gh pr view ${{ github.event.issue.number }} --json baseRefName -q .baseRefName 2>&1); then
@@ -55,6 +56,7 @@ jobs:
       - name: Get PR head commit
         id: pr-head
         run: |
+          set +e  # Disable default bash -e to use explicit error handling
           set -uo pipefail
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             if ! COMMIT_ID=$(gh pr view ${{ github.event.issue.number }} --json headRefOid -q .headRefOid 2>&1); then
@@ -77,6 +79,7 @@ jobs:
       - name: Get PR number
         id: pr-number
         run: |
+          set +e  # Disable default bash -e to use explicit error handling
           set -uo pipefail
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             PR_NUMBER="${{ github.event.issue.number }}"
@@ -87,8 +90,8 @@ jobs:
             echo "Error: PR number is empty" >&2
             exit 1
           fi
-          # 数値バリデーション
-          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+          # 数値バリデーション（0は無効なPR番号）
+          if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
             echo "Error: PR number is not a valid integer: '$PR_NUMBER'" >&2
             echo "This indicates GitHub event payload is malformed or missing expected fields" >&2
             exit 1
