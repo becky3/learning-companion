@@ -92,11 +92,39 @@ flowchart LR
 
 ### 出力例（正常系）
 
+#### rag crawl（リアルタイム進捗表示）
+
 ```
-bot: クロール完了しました。
-     取り込みページ数: 15
-     チャンク数: 128
-     エラー: 2件（タイムアウト）
+ユーザー: @bot rag crawl https://example.com/docs
+
+bot: クロールを開始しました... (リンク収集中)
+  └─ [親スレッド内に進捗メッセージを投稿]
+
+  └─ 5ページ取得中...
+  └─ 10ページ取得中...
+  └─ 完了: 15ページ / 128チャンク / エラー: 2件
+```
+
+**進捗フィードバック仕様**:
+
+- **開始メッセージ**: コマンド受信後、即座に「クロールを開始しました... (リンク収集中)」を投稿
+- **進捗メッセージ**: クロール中、一定間隔で進捗状況をスレッド内に投稿
+  - 形式: `└─ {取得済みページ数}ページ取得中...`
+  - 投稿間隔: `RAG_CRAWL_PROGRESS_INTERVAL` ページごと（デフォルト: 5）
+- **完了メッセージ**: 処理完了後、結果サマリーをスレッド内に投稿
+  - 形式: `└─ 完了: {ページ数}ページ / {チャンク数}チャンク / エラー: {エラー数}件`
+
+**設計ポイント**:
+
+- スレッド内投稿により、チャンネルへの通知過多を防止
+- リアクション絵文字ではなくメッセージにすることで、詳細な進捗情報を提供
+- 開始メッセージで即座にフィードバックを返し、ユーザーの不安を解消
+- 進捗間隔は設定可能（大量ページクロール時のメッセージ数を制御）
+
+#### rag add / status / delete
+
+```
+bot: ページを取り込みました: https://example.com/page (8チャンク)
 
 bot: ナレッジベース統計:
      総チャンク数: 342
@@ -619,6 +647,100 @@ _RAG_KEYWORDS = ("rag",)
 
 `register_handlers()` に `rag_service: RAGKnowledgeService | None = None` 引数を追加。
 
+**クロール進捗フィードバック実装**:
+
+`rag crawl` コマンドでは、処理の進捗をスレッド内にリアルタイムで投稿する。
+
+```python
+async def _handle_rag_crawl(
+    rag_service: RAGKnowledgeService,
+    url: str,
+    pattern: str,
+    raw_url_token: str = "",
+    say: object | None = None,
+    thread_ts: str = "",
+    progress_interval: int = 5,
+) -> str:
+    """RAGクロール処理（進捗フィードバック付き）.
+
+    Args:
+        rag_service: RAGナレッジサービス
+        url: クロール対象URL
+        pattern: URLフィルタパターン
+        raw_url_token: 生のURLトークン（エラー表示用）
+        say: Slack say関数（進捗メッセージ投稿用）
+        thread_ts: スレッドタイムスタンプ
+        progress_interval: 進捗報告間隔（ページ数）
+    """
+    if not url:
+        # ... エラー処理 ...
+
+    # 1. 開始メッセージを即座に投稿
+    if say:
+        await say(
+            text="クロールを開始しました... (リンク収集中)",
+            thread_ts=thread_ts,
+        )
+
+    # 2. 進捗コールバックを定義
+    async def progress_callback(crawled: int, total: int) -> None:
+        if say and crawled % progress_interval == 0:
+            await say(
+                text=f"└─ {crawled}ページ取得中...",
+                thread_ts=thread_ts,
+            )
+
+    # 3. クロール実行（進捗コールバック付き）
+    result = await rag_service.ingest_from_index(
+        url, pattern, progress_callback=progress_callback
+    )
+
+    # 4. 完了メッセージを投稿
+    if say:
+        await say(
+            text=(
+                f"└─ 完了: {result['pages_crawled']}ページ / "
+                f"{result['chunks_stored']}チャンク / "
+                f"エラー: {result['errors']}件"
+            ),
+            thread_ts=thread_ts,
+        )
+
+    return ""  # 通常の応答は不要（進捗メッセージで対応済み）
+```
+
+**進捗コールバックの設計**:
+
+`RAGKnowledgeService.ingest_from_index()` にオプショナルな `progress_callback` 引数を追加する:
+
+```python
+async def ingest_from_index(
+    self,
+    index_url: str,
+    url_pattern: str = "",
+    progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
+) -> dict[str, int]:
+    """リンク集ページから一括取り込み.
+
+    Args:
+        index_url: リンク集ページのURL
+        url_pattern: URLフィルタパターン
+        progress_callback: 進捗コールバック関数（オプション）
+            引数: (crawled: int, total: int)
+            crawled: クロール完了ページ数
+            total: 総ページ数
+
+    Returns:
+        結果辞書
+    """
+```
+
+**スレッド投稿のポイント**:
+
+- `thread_ts` を指定することで、元のメッセージのスレッド内に投稿される
+- チャンネルへの通知を避けるため、`reply_broadcast=False` は明示不要（デフォルト動作）
+- `say()` 関数は `slack_bolt` の標準機能を使用するため、追加のAPI呼び出しは不要
+
 ### サービス初期化 (`src/main.py`)
 
 ```python
@@ -661,6 +783,7 @@ class Settings(BaseSettings):
     rag_retrieval_count: int = 5
     rag_max_crawl_pages: int = 50
     rag_crawl_delay_sec: float = 1.0
+    rag_crawl_progress_interval: int = 5  # 進捗報告間隔（ページ数）
 ```
 
 ### 環境変数 (`.env`)
@@ -677,6 +800,7 @@ RAG_CHUNK_OVERLAP=50
 RAG_RETRIEVAL_COUNT=5
 RAG_MAX_CRAWL_PAGES=50
 RAG_CRAWL_DELAY_SEC=1.0
+RAG_CRAWL_PROGRESS_INTERVAL=5
 ```
 
 ## 受け入れ条件
@@ -741,6 +865,13 @@ RAG_CRAWL_DELAY_SEC=1.0
 - [ ] **AC24**: `rag add <URL>` で単一ページの取り込みができること
 - [ ] **AC25**: `rag status` でナレッジベースの統計が表示されること
 - [ ] **AC26**: `rag delete <URL>` でソースURL指定の削除ができること
+
+### クロール進捗フィードバック
+
+- [ ] **AC42**: `rag crawl` コマンド実行時、即座に開始メッセージがスレッド内に投稿されること
+- [ ] **AC43**: クロール中、`RAG_CRAWL_PROGRESS_INTERVAL` ページごとに進捗メッセージがスレッド内に投稿されること
+- [ ] **AC44**: クロール完了時、結果サマリー（ページ数・チャンク数・エラー数）がスレッド内に投稿されること
+- [ ] **AC45**: 進捗メッセージはスレッド内のみに投稿され、チャンネルへの通知は発生しないこと
 
 ### 設定
 
@@ -850,6 +981,15 @@ RAG_CRAWL_DELAY_SEC=1.0
 | `tests/test_rag_knowledge.py` | `test_ac27_rag_enabled_toggle` | AC27 |
 | `tests/test_rag_knowledge.py` | `test_ac28_embedding_provider_switch` | AC28 |
 | `tests/test_rag_knowledge.py` | `test_ac29_configurable_parameters` | AC29 |
+
+### クロール進捗フィードバック
+
+| テストファイル | テスト | 対応AC |
+|--------------|--------|--------|
+| `tests/test_handlers.py` | `test_ac42_rag_crawl_posts_start_message` | AC42 |
+| `tests/test_handlers.py` | `test_ac43_rag_crawl_posts_progress_messages` | AC43 |
+| `tests/test_handlers.py` | `test_ac44_rag_crawl_posts_completion_summary` | AC44 |
+| `tests/test_handlers.py` | `test_ac45_progress_messages_in_thread_only` | AC45 |
 
 ### テスト戦略
 
@@ -984,5 +1124,6 @@ class EvaluationReport:
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-11 | クロール進捗フィードバック機能を追加（案2: リアルタイム進捗・スレッド内投稿）(#158) |
 | 2026-02-09 | Phase 2: 類似度閾値・評価メトリクス機能を追加 (#176) |
 | 2026-02-09 | URL正規化（フラグメント除去）による重複取り込み防止を追加 (#161) |
