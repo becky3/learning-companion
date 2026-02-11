@@ -9,15 +9,39 @@ permissions:
 on:
   pull_request:
     types: [opened]
+  issue_comment:
+    types: [created]
 
 jobs:
   pr-review:
-    if: github.actor == 'becky3'
+    # PR作成時 OR PRへの /re-review コメント時に実行
+    if: |
+      github.actor == 'becky3' && (
+        github.event_name == 'pull_request' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.pull_request &&
+         contains(github.event.comment.body, '/re-review'))
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # issue_comment イベント時はPRのマージコミットをチェックアウト
+          ref: ${{ github.event_name == 'issue_comment' && format('refs/pull/{0}/merge', github.event.issue.number) || '' }}
+
+      - name: Get base branch
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ]; then
+            BASE=$(gh pr view ${{ github.event.issue.number }} --json baseRefName -q .baseRefName)
+          else
+            BASE="${{ github.base_ref }}"
+          fi
+          echo "ref=$BASE" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - uses: anthropics/claude-code-action@5994afaaa7f44611addc97a696a135acff5fd218 # v1.0.46
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -31,7 +55,7 @@ jobs:
 
             ## レビュー手順
 
-            1. **変更内容の把握**: `git diff origin/${{ github.base_ref }}...HEAD` で変更差分を確認
+            1. **変更内容の把握**: `git diff origin/${{ steps.base.outputs.ref }}...HEAD` で変更差分を確認
 
             2. **PR Review Toolkit エージェントを使用してレビュー**:
                以下のエージェントを順次実行し、それぞれの観点でレビューを行ってください。
