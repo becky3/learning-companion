@@ -460,15 +460,61 @@ async def _handle_rag_crawl(
     url: str,
     pattern: str,
     raw_url_token: str = "",
+    say: object | None = None,
+    thread_ts: str = "",
+    progress_interval: int = 5,
 ) -> str:
-    """RAGクロール処理."""
+    """RAGクロール処理（進捗フィードバック付き）.
+
+    Args:
+        rag_service: RAGナレッジサービス
+        url: クロール対象URL
+        pattern: URLフィルタパターン
+        raw_url_token: 生のURLトークン（エラー表示用）
+        say: Slack say関数（進捗メッセージ投稿用）
+        thread_ts: スレッドタイムスタンプ
+        progress_interval: 進捗報告間隔（ページ数）
+    """
     if not url:
         if raw_url_token:
             return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
         return "エラー: URLを指定してください。\n例: `@bot rag crawl https://example.com/docs [パターン]`"
 
+    # 1. 開始メッセージを即座に投稿
+    if say:
+        await say(  # type: ignore[operator]
+            text="クロールを開始しました... (リンク収集中)",
+            thread_ts=thread_ts,
+        )
+
+    # 2. 進捗コールバックを定義
+    async def progress_callback(crawled: int, total: int) -> None:
+        if say and crawled % progress_interval == 0:
+            await say(  # type: ignore[operator]
+                text=f"└─ {crawled}ページ取得中...",
+                thread_ts=thread_ts,
+            )
+
     try:
-        result = await rag_service.ingest_from_index(url, pattern)
+        # 3. クロール実行（進捗コールバック付き）
+        result = await rag_service.ingest_from_index(
+            url, pattern, progress_callback=progress_callback
+        )
+
+        # 4. 完了メッセージを投稿
+        completion_message = (
+            f"└─ 完了: {result['pages_crawled']}ページ / "
+            f"{result['chunks_stored']}チャンク / "
+            f"エラー: {result['errors']}件"
+        )
+        if say:
+            await say(  # type: ignore[operator]
+                text=completion_message,
+                thread_ts=thread_ts,
+            )
+            return ""  # 通常の応答は不要（進捗メッセージで対応済み）
+
+        # sayがない場合は従来の応答を返す
         return (
             f"クロール完了しました。\n"
             f"取り込みページ数: {result['pages_crawled']}\n"
@@ -615,6 +661,7 @@ def register_handlers(
     timezone: str = "Asia/Tokyo",
     env_name: str = "",
     rag_service: RAGKnowledgeService | None = None,
+    rag_crawl_progress_interval: int = 5,
 ) -> None:
     """app_mention および message ハンドラを登録する."""
 
@@ -787,7 +834,9 @@ def register_handlers(
 
             if subcommand == "crawl":
                 response_text = await _handle_rag_crawl(
-                    rag_service, url, pattern, raw_url_token
+                    rag_service, url, pattern, raw_url_token,
+                    say=say, thread_ts=thread_ts,
+                    progress_interval=rag_crawl_progress_interval,
                 )
             elif subcommand == "add":
                 response_text = await _handle_rag_add(rag_service, url, raw_url_token)
@@ -804,7 +853,9 @@ def register_handlers(
                     "• `@bot rag delete <URL>` — ソースURL指定で削除"
                 )
 
-            await say(text=response_text, thread_ts=thread_ts)  # type: ignore[operator]
+            # 進捗フィードバック済みの場合（空文字列）はメッセージ投稿をスキップ
+            if response_text:
+                await say(text=response_text, thread_ts=thread_ts)  # type: ignore[operator]
             return
 
         # 配信テストキーワード (F2)

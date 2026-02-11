@@ -44,6 +44,8 @@ def mock_web_crawler() -> MagicMock:
     mock.crawl_pages = AsyncMock(return_value=[])
     # validate_url は入力URLをそのまま返す（検証OK）
     mock.validate_url = MagicMock(side_effect=lambda url: url)
+    # クロール間隔（進捗フィードバック機能で使用）
+    mock._crawl_delay = 0.0  # テスト時は遅延なし
     return mock
 
 
@@ -76,7 +78,8 @@ class TestIngestFromIndex:
             "https://example.com/page1",
             "https://example.com/page2",
         ]
-        mock_web_crawler.crawl_pages.return_value = [
+        # crawl_page は URL ごとに個別に呼ばれる（順次クロール）
+        pages = [
             CrawledPage(
                 url="https://example.com/page1",
                 title="Page 1",
@@ -90,6 +93,7 @@ class TestIngestFromIndex:
                 crawled_at="2024-01-01T00:00:00+00:00",
             ),
         ]
+        mock_web_crawler.crawl_page.side_effect = pages
         mock_vector_store.add_documents.return_value = 1
 
         # Act
@@ -105,7 +109,8 @@ class TestIngestFromIndex:
         mock_web_crawler.crawl_index_page.assert_called_once_with(
             "https://example.com/index", r"page\d"
         )
-        mock_web_crawler.crawl_pages.assert_called_once()
+        # crawl_page が各URLに対して呼ばれたことを確認
+        assert mock_web_crawler.crawl_page.call_count == 2
 
     async def test_ingest_from_index_with_errors(
         self,
@@ -119,14 +124,16 @@ class TestIngestFromIndex:
             "https://example.com/page1",
             "https://example.com/page2",
         ]
-        mock_web_crawler.crawl_pages.return_value = [
+        # crawl_page: page1は成功、page2は失敗（Noneを返す）
+        mock_web_crawler.crawl_page.side_effect = [
             CrawledPage(
                 url="https://example.com/page1",
                 title="Page 1",
                 text="Content",
                 crawled_at="2024-01-01T00:00:00+00:00",
             ),
-        ]  # 1件のみ成功
+            None,  # page2 は失敗
+        ]
 
         # Act
         result = await rag_service.ingest_from_index("https://example.com/index")
@@ -1315,7 +1322,8 @@ class TestSafeBrowsingIntegration:
             "https://safe2.com": SafeBrowsingResult(url="https://safe2.com", is_safe=True),
         }
 
-        mock_web_crawler.crawl_pages.return_value = [
+        # crawl_page は各安全なURLに対して個別に呼ばれる
+        mock_web_crawler.crawl_page.side_effect = [
             CrawledPage(
                 url="https://safe1.com",
                 title="Safe 1",
@@ -1338,10 +1346,8 @@ class TestSafeBrowsingIntegration:
         # Assert
         assert result["unsafe_urls"] == 1
         assert result["pages_crawled"] == 2  # 安全な2ページのみクロール
-        # safe URLs のみがクロールされる
-        mock_web_crawler.crawl_pages.assert_called_once_with(
-            ["https://safe1.com", "https://safe2.com"]
-        )
+        # safe URLs のみがクロールされる（crawl_page が2回呼ばれる）
+        assert mock_web_crawler.crawl_page.call_count == 2
 
     async def test_ac10_ingest_from_index_all_unsafe_skips_crawl(
         self,
