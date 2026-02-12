@@ -10,7 +10,7 @@ INPUT=$(cat)
 
 # [4] stdin 読み取り失敗時は fail-open
 if [ -z "$INPUT" ]; then
-    echo "leader-guard: stdin から入力を取得できませんでした（fail-open）" >&2
+    echo "leader-guard: stdin が空です。PreToolUseフックへの入力がありません（fail-open）" >&2
     exit 0
 fi
 
@@ -18,12 +18,18 @@ fi
 if command -v jq > /dev/null 2>&1; then
     PERMISSION_MODE=$(echo "$INPUT" | jq -r '.permission_mode // empty')
 else
-    PERMISSION_MODE=$(echo "$INPUT" | grep -o '"permission_mode"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"permission_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+    GREP_RESULT=$(echo "$INPUT" | grep -o '"permission_mode"[[:space:]]*:[[:space:]]*"[^"]*"') || true
+    if [ -z "$GREP_RESULT" ]; then
+        echo "leader-guard: grep による permission_mode の抽出に失敗しました（fail-open）" >&2
+        exit 0
+    fi
+    PERMISSION_MODE=$(echo "$GREP_RESULT" | sed 's/.*"permission_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 fi
 
 # [3][5][8] permission_mode が空の場合は fail-open
 if [ -z "$PERMISSION_MODE" ]; then
-    echo "leader-guard: permission_mode を取得できませんでした（fail-open）" >&2
+    echo "leader-guard: permission_mode フィールドが存在しないか空です（fail-open）" >&2
+    echo "leader-guard: 受信した入力の先頭100文字: ${INPUT:0:100}" >&2
     exit 0
 fi
 
@@ -52,6 +58,7 @@ if [ ! -r "$TEAMS_DIR" ]; then
 fi
 
 # サブディレクトリが1つでもあるか確認
+shopt -s nullglob
 has_teams=false
 for entry in "$TEAMS_DIR"/*/; do
     if [ -d "$entry" ]; then
@@ -59,6 +66,7 @@ for entry in "$TEAMS_DIR"/*/; do
         break
     fi
 done
+shopt -u nullglob
 
 if [ "$has_teams" = false ]; then
     exit 0
