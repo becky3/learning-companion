@@ -346,7 +346,7 @@ stateDiagram-v2
    - 指摘あり + 上限未到達 → `claude-code-action` で `/check-pr` を実行し自動修正 → 対応済みスレッドを `resolveReviewThread` で resolve → `BECKY3_PAT` で `/review` コメント投稿（再レビュートリガー）
    - 指摘なし + 禁止パターンなし → マージ判定へ
 6. **マージ判定**: 4条件（レビュー指摘ゼロ、CI全通過、コンフリクトなし、`auto:failed` なし）を全て確認
-7. **自動マージ**: 条件クリアで `gh pr merge --squash` を `BECKY3_PAT` で実行
+7. **自動マージ**: 条件クリアで `gh pr merge --merge` を `BECKY3_PAT` で実行
 
 **エラー時の共通挙動:**
 
@@ -624,7 +624,7 @@ flowchart TD
 | コンフリクトなし | `gh pr view --json mergeable` が `MERGEABLE` |
 | `auto:failed` なし | PRのラベルに `auto:failed` が含まれない |
 
-マージ方式: `gh pr merge --squash`（中間コミットを1つにまとめる）
+マージ方式: `gh pr merge --merge`（通常マージ）
 マージ先: `develop` ブランチ（main への直接マージは禁止）
 
 ## 失敗時の振る舞い

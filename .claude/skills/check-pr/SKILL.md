@@ -136,11 +136,115 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
       別Issueとして対応する理由
       ```
 
-12. 修正をコミット & push:
+12. 対応済みレビュースレッドの resolve:
+
+    エラーハンドリング方針（auto-fix.yml と統一）:
+
+    | エラー種別 | 対応 |
+    |-----------|------|
+    | 認証/権限エラー（owner/repo取得失敗、全件resolve失敗） | exit 1 で即停止 |
+    | 一時的API障害（個別resolve失敗、スレッド取得失敗） | `::warning::` でログし続行 |
+    | データ不存在（PR番号不正、スレッド0件） | ログ出力しスキップ |
+    | 取得失敗（非クリティカル） | デフォルト値で続行 |
+
+    - owner/repo の取得とバリデーション（失敗時は認証/権限エラーの可能性 → exit 1）:
+
+      ```bash
+      # owner/repo の取得と検証（認証/権限エラー → exit 1）
+      if ! OWNER=$(gh repo view --json owner --jq '.owner.login' 2>&1); then
+        echo "::error::Failed to get repository owner: $OWNER"
+        exit 1
+      fi
+      if ! REPO=$(gh repo view --json name --jq '.name' 2>&1); then
+        echo "::error::Failed to get repository name: $REPO"
+        exit 1
+      fi
+
+      # PR番号の数値バリデーション（データ不存在 → スキップ）
+      if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+        echo "::warning::Invalid PR number: '$PR_NUMBER'. Skipping thread resolution."
+        exit 1
+      fi
+      ```
+
+    - 未解決スレッドの取得（失敗時は一時的API障害の可能性 → warning で続行）:
+
+      ```bash
+      THREADS=""
+      QUERY_SUCCESS=true
+      if ! THREADS=$(gh api graphql -f query="
+      {
+        repository(owner: \"$OWNER\", name: \"$REPO\") {
+          pullRequest(number: $PR_NUMBER) {
+            reviewThreads(first: 100) {
+              # 注意: 100スレッドを超える場合はページネーション未対応
+              nodes {
+                id
+                isResolved
+              }
+            }
+          }
+        }
+      }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' 2>&1); then
+        QUERY_SUCCESS=false
+        # 認証エラー（401/403）→ 即停止
+        if echo "$THREADS" | grep -qE '401|403|authentication|forbidden'; then
+          echo "::error::Authentication/permission error: $THREADS"
+          exit 1
+        fi
+        # 一時的障害 → warning でスキップ
+        echo "::warning::Failed to query review threads: $THREADS"
+        echo "Skipping thread resolution due to API error"
+        THREADS=""
+      fi
+      ```
+
+    - ステップ7で「対応済み」と判断したスレッドのみを resolve する。未対応の指摘は resolve しない
+    - 失敗カウンターで全件失敗を検知（全件失敗は認証エラーの可能性 → exit 1）:
+
+      ```bash
+      if [ -z "$THREADS" ]; then
+        if [ "$QUERY_SUCCESS" = true ]; then
+          echo "No unresolved threads to resolve. Skipping."
+        else
+          echo "::warning::Skipping resolve due to query failure."
+        fi
+      else
+        RESOLVED=0
+        FAILED=0
+        while IFS= read -r THREAD_ID; do
+          [ -z "$THREAD_ID" ] && continue
+          # 個別失敗は一時的障害の可能性 → warning で続行
+          if ! ERROR=$(gh api graphql -f query='
+          mutation($threadId: ID!) {
+            resolveReviewThread(input: { threadId: $threadId }) {
+              thread { isResolved }
+            }
+          }' -f threadId="$THREAD_ID" 2>&1); then
+            FAILED=$((FAILED + 1))
+            echo "::warning::Failed to resolve thread $THREAD_ID: $ERROR"
+          else
+            RESOLVED=$((RESOLVED + 1))
+          fi
+        done <<< "$THREADS"
+
+        echo "Resolved: $RESOLVED, Failed: $FAILED"
+        # 全件失敗は認証/権限エラーの可能性 → exit 1
+        if [ "$RESOLVED" -eq 0 ] && [ "$FAILED" -gt 0 ]; then
+          echo "::error::All thread resolutions failed. Possible causes:"
+          echo "::error::- Insufficient token permissions"
+          echo "::error::- API rate limit exceeded"
+          echo "::error::- GraphQL query syntax error"
+          exit 1
+        fi
+      fi
+      ```
+
+13. 修正をコミット & push:
     - コミットメッセージ:
       - 指摘対応のみ: `fix: レビュー指摘対応 (PR #番号)`
       - 実装継続: `feat: 実装内容の説明 (PR #番号)`
     - 変更内容を箇条書きでコミットメッセージに含める
     - ドキュメント更新がある場合はコミットメッセージにその旨も含める
 
-13. 対応結果のサマリーを表示
+14. 対応結果のサマリーを表示

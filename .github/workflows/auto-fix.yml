@@ -1,0 +1,592 @@
+# Auto Fix — レビュー指摘の自動修正ワークフロー
+#
+# エラーハンドリング方針:
+#   認証/権限エラー        → exit 1（即停止）
+#   一時的API障害          → リトライ or warning で続行
+#   データ不存在(PR未作成等) → skip=true で正常終了
+#   取得失敗(非クリティカル) → デフォルト値で続行
+#   セキュリティ必須処理の失敗 → exit 1（禁止パターンチェック等）
+#   エラーハンドラ内の失敗  → ベストエフォート（ログのみ）
+
+name: Auto Fix
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+on:
+  workflow_run:
+    workflows: ["PR Review"]
+    types: [completed]
+
+jobs:
+  auto-fix:
+    # PR Review が success で完了した場合のみ実行（スキップ/失敗は除外）
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get PR number from workflow_run
+        id: pr-info
+        run: |
+          set -euo pipefail
+
+          # workflow_run.pull_requests 配列からPR番号を取得
+          PR_NUMBER=$(echo '${{ toJson(github.event.workflow_run.pull_requests) }}' | jq -r '.[0].number // empty')
+
+          # pull_requests が空の場合、ブランチ名から検索
+          if [ -z "$PR_NUMBER" ]; then
+            BRANCH="${{ github.event.workflow_run.head_branch }}"
+            if [ -z "$BRANCH" ]; then
+              echo "::error::PR branch not found in workflow_run event"
+              exit 1
+            fi
+            if ! PR_NUMBER=$(gh pr list --head "$BRANCH" --json number --jq '.[0].number // empty'); then
+              echo "::error::Failed to search PR by branch name: $BRANCH"
+              exit 1
+            fi
+          fi
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "::notice::No PR found for this workflow run. Skipping."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 数値バリデーション
+          if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Invalid PR number: '$PR_NUMBER'"
+            exit 1
+          fi
+
+          echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+          echo "PR number: $PR_NUMBER"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      - name: Check auto:failed label
+        if: steps.pr-info.outputs.skip != 'true'
+        id: check-failed
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          # 方針: 一時的API障害 → warning で安全側（skip）に倒す
+          if ! LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
+            echo "::warning::Failed to get PR labels: $LABELS. Skipping as precaution."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if echo "$LABELS" | grep -q "^auto:failed$"; then
+            echo "::notice::PR #$PR_NUMBER has auto:failed label. Skipping."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "skip=false" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      - name: Check loop count
+        if: steps.pr-info.outputs.skip != 'true' && steps.check-failed.outputs.skip != 'true'
+        id: loop-check
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          # auto-fix ループのマーカーコメント数をカウント
+          # auto-fix.yml が /check-pr 実行前に投稿する「auto-fix: レビュー指摘への自動対応」コメントを対象
+          if ! LOOP_COUNT=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("auto-fix: レビュー指摘への自動対応")))] | length' 2>&1); then
+            echo "::warning::Failed to get loop count: $LOOP_COUNT. Defaulting to 0."
+            LOOP_COUNT=0
+          fi
+
+          # 数値バリデーション（API応答が不正な場合はデフォルト0で継続）
+          if ! [[ "$LOOP_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "::warning::Invalid loop count value: '$LOOP_COUNT'. Defaulting to 0."
+            LOOP_COUNT=0
+          fi
+
+          echo "loop_count=$LOOP_COUNT" >> $GITHUB_OUTPUT
+          echo "Loop count: $LOOP_COUNT"
+
+          if [ "$LOOP_COUNT" -ge 3 ]; then
+            echo "limit_reached=true" >> $GITHUB_OUTPUT
+            echo "::warning::Loop limit reached ($LOOP_COUNT >= 3)"
+          else
+            echo "limit_reached=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Check review result
+        if: steps.pr-info.outputs.skip != 'true' && steps.check-failed.outputs.skip != 'true'
+        id: review-result
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+          TRIGGER_RUN_ID="${{ github.event.workflow_run.id }}"
+
+          # 方針: 一時的API障害 → リトライで対応
+          # トリガー元 run の created_at、PR HEAD SHA、レビューコメント検索を
+          # 一連のリトライループで処理（最大5回、10秒間隔）
+          LATEST_REVIEW=""
+          for i in $(seq 1 5); do
+            # トリガー元の workflow_run の created_at を取得
+            if ! RUN_CREATED_AT=$(gh api "repos/${{ github.repository }}/actions/runs/${TRIGGER_RUN_ID}" --jq '.created_at' 2>&1); then
+              echo "::warning::Failed to get workflow run created_at (attempt $i/5): $RUN_CREATED_AT"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
+            fi
+            if [ -z "$RUN_CREATED_AT" ]; then
+              echo "::warning::Workflow run created_at is empty (attempt $i/5)"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
+            fi
+
+            # PR の HEAD SHA を取得（commit SHA 検証に使用）
+            if ! PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>&1); then
+              echo "::warning::Failed to get PR HEAD SHA (attempt $i/5): $PR_HEAD_SHA"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
+            fi
+
+            # レビューコメントを検索（created_at + commit SHA でフィルタ）
+            if ! LATEST_REVIEW=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --paginate --jq "[.[] | select(
+                .user.login == \"claude[bot]\" and
+                .created_at >= \"${RUN_CREATED_AT}\" and
+                ((.body | contains(\"<!-- auto-fix:no-issues commit=${PR_HEAD_SHA}\")) or (.body | contains(\"<!-- auto-fix:has-issues commit=${PR_HEAD_SHA}\")))
+              )] | last" 2>&1); then
+              echo "::warning::Failed to fetch PR comments (attempt $i/5): $LATEST_REVIEW"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
+            fi
+
+            if [ -n "$LATEST_REVIEW" ] && [ "$LATEST_REVIEW" != "null" ]; then
+              break
+            fi
+
+            if [ "$i" -lt 5 ]; then
+              echo "No review comment found yet (attempt $i/5). Retrying in 10s..."
+              sleep 10
+            fi
+          done
+
+          echo "Trigger run created at: ${RUN_CREATED_AT:-unknown}"
+          echo "PR HEAD SHA: ${PR_HEAD_SHA:-unknown}"
+
+          if [ -z "$LATEST_REVIEW" ] || [ "$LATEST_REVIEW" = "null" ]; then
+            echo "::error::No review comment found after 5 attempts. PR Review workflow may have failed to post results."
+            exit 1
+          elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -q '<!-- auto-fix:no-issues -->'; then
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "Review result: No issues found"
+          else
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+            echo "Review result: Issues found"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Check forbidden patterns
+        if: steps.pr-info.outputs.skip != 'true' && steps.check-failed.outputs.skip != 'true'
+        id: forbidden-check
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          # PRの変更ファイル一覧を取得
+          # 方針: セキュリティ必須処理の失敗 → exit 1（禁止パターンチェックのバイパス防止）
+          if ! CHANGED_FILES=$(gh pr view "$PR_NUMBER" --json files --jq '.files[].path' 2>&1); then
+            echo "::error::Failed to get changed files: $CHANGED_FILES"
+            exit 1
+          fi
+
+          FORBIDDEN_FOUND=""
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            # CLAUDE.md
+            if [ "$file" = "CLAUDE.md" ]; then
+              FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file}\n"
+              continue
+            fi
+
+            # .claude/settings.json
+            if [ "$file" = ".claude/settings.json" ]; then
+              FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file}\n"
+              continue
+            fi
+
+            # .env*
+            if [[ "$file" == .env* ]]; then
+              FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file}\n"
+              continue
+            fi
+
+            # pyproject.toml の dependencies 変更検出
+            if [ "$file" = "pyproject.toml" ]; then
+              if ! DIFF=$(gh pr diff "$PR_NUMBER" -- "$file" 2>&1); then
+                echo "::error::Failed to get diff for pyproject.toml: $DIFF"
+                # 安全側に倒す: diff取得失敗時は依存関係変更ありと見なす
+                FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (diff取得失敗のため要手動確認)\n"
+                continue
+              fi
+              # 追加行・削除行の両方を対象にする
+              if echo "$DIFF" | grep -qE '^[+-].*dependencies'; then
+                FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (dependencies変更)\n"
+              fi
+              continue
+            fi
+
+            # .github/workflows/* は develop 向き緩和で対象外
+
+          done <<< "$CHANGED_FILES"
+
+          if [ -n "$FORBIDDEN_FOUND" ]; then
+            echo "forbidden=true" >> $GITHUB_OUTPUT
+            FORBIDDEN_LIST=$(echo -e "$FORBIDDEN_FOUND" | head -c 1000)
+            echo "forbidden_files<<EOF" >> $GITHUB_OUTPUT
+            echo "$FORBIDDEN_LIST" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "::warning::Forbidden patterns found"
+          else
+            echo "forbidden=false" >> $GITHUB_OUTPUT
+            echo "No forbidden patterns found"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # --- 分岐処理 ---
+
+      # ループ上限到達 + 指摘あり → auto:failed 付与
+      - name: Handle loop limit reached
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.loop-check.outputs.limit_reached == 'true' &&
+          steps.review-result.outputs.has_issues == 'true'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+          LOOP_COUNT="${{ steps.loop-check.outputs.loop_count }}"
+
+          gh issue edit "$PR_NUMBER" --add-label "auto:failed"
+          gh pr comment "$PR_NUMBER" --body "## auto-fix: ループ上限到達
+
+          レビュー→修正ループが上限（${LOOP_COUNT}回/3回）に達しました。
+          未解決の指摘が残っているため、\`auto:failed\` ラベルを付与して自動処理を停止します。
+
+          **次のアクション**: 管理者が手動で指摘に対応してください。
+          対応完了後、\`auto:failed\` を除去して \`/review\` コメントを投稿すると再開できます。
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # 禁止パターン検出 → auto:failed 付与
+      - name: Handle forbidden patterns
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.forbidden-check.outputs.forbidden == 'true'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          gh issue edit "$PR_NUMBER" --add-label "auto:failed"
+          gh pr comment "$PR_NUMBER" --body "## auto-fix: 禁止パターン検出
+
+          以下のファイルが変更に含まれているため、自動マージを停止します:
+
+          \`\`\`
+          ${{ steps.forbidden-check.outputs.forbidden_files }}
+          \`\`\`
+
+          これらのファイルは自動マージの対象外です（セキュリティ・安定性のため）。
+
+          **次のアクション**: 管理者が手動でレビュー・マージしてください。
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # 指摘あり + 上限未到達 → ループマーカーコメント投稿 + claude-code-action で自動修正
+      - name: Post loop marker comment
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.loop-check.outputs.limit_reached != 'true' &&
+          steps.forbidden-check.outputs.forbidden != 'true' &&
+          steps.review-result.outputs.has_issues == 'true'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+          LOOP_COUNT="${{ steps.loop-check.outputs.loop_count }}"
+          NEXT_COUNT=$((LOOP_COUNT + 1))
+
+          gh pr comment "$PR_NUMBER" --body "## auto-fix: レビュー指摘への自動対応 (${NEXT_COUNT}/3)
+
+          レビュー指摘を検出しました。\`/check-pr\` で自動修正を開始します。
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      - name: Checkout for auto-fix
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.loop-check.outputs.limit_reached != 'true' &&
+          steps.forbidden-check.outputs.forbidden != 'true' &&
+          steps.review-result.outputs.has_issues == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Auto-fix with Claude
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.loop-check.outputs.limit_reached != 'true' &&
+          steps.forbidden-check.outputs.forbidden != 'true' &&
+          steps.review-result.outputs.has_issues == 'true'
+        id: auto-fix
+        uses: anthropics/claude-code-action@5994afaaa7f44611addc97a696a135acff5fd218 # v1.0.46
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          bot_name: "claude[bot]"
+          bot_id: "209825114"
+          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 50 --dangerously-skip-permissions"
+          show_full_output: true
+          direct_prompt: |
+            PR #${{ steps.pr-info.outputs.number }} のレビュー指摘に対応してください。
+
+            `/check-pr ${{ steps.pr-info.outputs.number }}` スキルを実行して、未解決のレビュー指摘に対応してください。
+
+      # NOTE: スレッドの resolve は check-pr スキル内で「対応済みと判断したスレッドのみ」を対象に実行される。
+      # auto-fix.yml 側で無条件に全スレッドを resolve すると、未対応の指摘までクローズされるため、
+      # ここでは resolve を行わない。
+
+      # /review 再リクエスト（BECKY3_PAT でワークフロー連鎖）
+      - name: Request re-review
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.loop-check.outputs.limit_reached != 'true' &&
+          steps.forbidden-check.outputs.forbidden != 'true' &&
+          steps.review-result.outputs.has_issues == 'true'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          # BECKY3_PAT で /review コメントを投稿（pr-review.yml の再トリガー）
+          gh pr comment "$PR_NUMBER" --body "/review"
+        env:
+          GH_TOKEN: ${{ secrets.BECKY3_PAT }}
+          GH_REPO: ${{ github.repository }}
+
+      # 指摘なし + 禁止パターンなし → マージ判定
+      - name: Merge check
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.review-result.outputs.has_issues == 'false' &&
+          steps.forbidden-check.outputs.forbidden != 'true'
+        id: merge-check
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          MERGE_READY=true
+          REASONS=""
+
+          # 条件1: レビュー指摘ゼロ（既に has_issues=false で確認済み）
+          echo "✅ Condition 1: No review issues"
+
+          # 条件2: CI全チェック通過（GitHub API の statusCheckRollup を使用）
+          if ! CI_RESULT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '
+            if .statusCheckRollup == null then
+              "no_checks"
+            else
+              ([.statusCheckRollup[] |
+                select(
+                  (has("state") and .state != "SUCCESS" and .state != "NEUTRAL") or
+                  (has("conclusion") and .conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")
+                )
+              ] | length | tostring)
+            end
+          ' 2>&1); then
+            MERGE_READY=false
+            REASONS="${REASONS}\n- ❌ GitHub API error: Cannot verify CI status"
+            echo "::warning::Failed to check CI status (API error, not CI failure): $CI_RESULT"
+            echo "❌ Condition 2: API error (not CI failure)"
+          elif [ "$CI_RESULT" = "no_checks" ]; then
+            echo "✅ Condition 2: No CI checks configured"
+          elif [ "$CI_RESULT" = "0" ]; then
+            echo "✅ Condition 2: CI checks passed"
+          else
+            MERGE_READY=false
+            REASONS="${REASONS}\n- ❌ CI checks not all passing ($CI_RESULT failing)"
+            echo "❌ Condition 2: CI checks failed"
+          fi
+
+          # 条件3: コンフリクトなし（方針: 一時的API障害 → 安全側に倒してマージ拒否）
+          if ! MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable' 2>&1); then
+            MERGE_READY=false
+            REASONS="${REASONS}\n- ❌ GitHub API error: Cannot verify mergeable status"
+            echo "::warning::Failed to check mergeable status (API error): $MERGEABLE"
+            echo "❌ Condition 3: API error (not conflict)"
+          elif [ "$MERGEABLE" != "MERGEABLE" ]; then
+            MERGE_READY=false
+            REASONS="${REASONS}\n- ❌ PR has conflicts (status: $MERGEABLE)"
+            echo "❌ Condition 3: Conflicts detected"
+          else
+            echo "✅ Condition 3: No conflicts"
+          fi
+
+          # 条件4: auto:failed ラベルなし（方針: 一時的API障害 → 安全側に倒してマージ拒否）
+          if ! LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
+            MERGE_READY=false
+            REASONS="${REASONS}\n- ❌ GitHub API error: Cannot verify labels"
+            echo "::warning::Failed to retrieve labels (API error): $LABELS"
+            echo "❌ Condition 4: API error (not label issue)"
+          elif echo "$LABELS" | grep -q "^auto:failed$"; then
+            MERGE_READY=false
+            REASONS="${REASONS}\n- ❌ auto:failed label present"
+            echo "❌ Condition 4: auto:failed label found"
+          else
+            echo "✅ Condition 4: No auto:failed label"
+          fi
+
+          echo "merge_ready=$MERGE_READY" >> $GITHUB_OUTPUT
+
+          if [ "$MERGE_READY" = "true" ]; then
+            echo "All merge conditions met"
+          else
+            echo "Merge conditions not met"
+            echo "reasons<<EOF" >> $GITHUB_OUTPUT
+            echo -e "$REASONS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # 段階的マージ解禁 Step 1: ドライラン（判定結果の通知のみ）
+      - name: Merge (dry-run)
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.review-result.outputs.has_issues == 'false' &&
+          steps.forbidden-check.outputs.forbidden != 'true' &&
+          steps.merge-check.outputs.merge_ready == 'true'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          gh pr comment "$PR_NUMBER" --body "## auto-fix: マージ判定結果（ドライラン）
+
+          全てのマージ条件を満たしています:
+          - ✅ レビュー指摘ゼロ
+          - ✅ CI全チェック通過
+          - ✅ コンフリクトなし
+          - ✅ auto:failed ラベルなし
+
+          **ドライランモード**: 現在は判定結果の通知のみです。実際のマージは管理者が手動で行ってください。
+
+          \`\`\`bash
+          gh pr merge $PR_NUMBER --merge
+          \`\`\`
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+
+          # --- 段階的マージ解禁 Step 2 以降でコメントアウトを解除 ---
+          # gh pr merge "$PR_NUMBER" --merge
+        env:
+          GH_TOKEN: ${{ secrets.BECKY3_PAT }}
+          GH_REPO: ${{ github.repository }}
+
+      # マージ条件未達の通知
+      - name: Merge conditions not met
+        if: |
+          steps.pr-info.outputs.skip != 'true' &&
+          steps.check-failed.outputs.skip != 'true' &&
+          steps.review-result.outputs.has_issues == 'false' &&
+          steps.forbidden-check.outputs.forbidden != 'true' &&
+          steps.merge-check.outputs.merge_ready == 'false'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          gh pr comment "$PR_NUMBER" --body "## auto-fix: マージ条件未達
+
+          レビュー指摘はありませんが、以下の条件を満たしていません:
+
+          ${{ steps.merge-check.outputs.reasons }}
+
+          **次のアクション**: 上記の条件を解消してから \`/review\` で再レビューを実行してください。
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # エラー時の auto:failed 付与
+      - name: Handle errors
+        if: failure() && steps.pr-info.outputs.skip != 'true' && steps.pr-info.outputs.number != ''
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          # ラベル付与を試行
+          if ! LABEL_ERR=$(gh issue edit "$PR_NUMBER" --add-label "auto:failed" 2>&1); then
+            echo "::error::Failed to add auto:failed label: $LABEL_ERR"
+          fi
+
+          # コメント投稿を試行
+          if ! COMMENT_ERR=$(gh pr comment "$PR_NUMBER" --body "## auto-fix: エラー発生
+
+          自動修正処理中にエラーが発生しました。\`auto:failed\` ラベルを付与して自動処理を停止します。
+
+          **次のアクション**: [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) を確認し、問題を解消してください。
+          対応完了後、\`auto:failed\` を除去して \`/review\` コメントを投稿すると再開できます。" 2>&1); then
+            echo "::error::Failed to post error comment: $COMMENT_ERR"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # Slack通知（失敗時のみ）
+      - name: Slack notification
+        if: failure()
+        continue-on-error: true
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          mention: here
+          if_mention: failure
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+# concurrency 制御（ブランチ名ベース）
+# NOTE: workflow_run イベントではPR番号が事前に不明なため、
+# ブランチ名で制御する。同一ブランチのPRは1つのため実質PR単位の制御。
+concurrency:
+  group: auto-fix-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
