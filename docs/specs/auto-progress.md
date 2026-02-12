@@ -301,7 +301,7 @@ stateDiagram-v2
 |----------|------|---------|------|
 | `claude.yml` | 既存改修 | `issues[labeled]` 追加 | `auto-implement` ラベルで自動実装開始 |
 | `pr-review.yml` | 据え置き | 変更なし | PR自動レビュー |
-| `auto-fix.yml` | 新規 | `issue_comment[created]` | レビュー指摘の自動修正 + マージ判定 |
+| `auto-fix.yml` | 新規 | `workflow_run[completed]`（pr-review.yml） | レビュー指摘の自動修正 + マージ判定 |
 | `auto-triage.yml` | 新規（Phase 2） | `issues[opened, edited]`, `schedule` | Issue分析・ラベル自動付与 |
 | `post-merge.yml` | 新規（Phase 2） | `pull_request[closed]` | マージ後の次Issue自動ピックアップ |
 | `release.yml` | 新規（Phase 2） | `schedule`（週1回） | develop → main の定期リリースPR作成 |
@@ -321,26 +321,32 @@ stateDiagram-v2
 
 **トリガー条件:**
 
-- イベント: `issue_comment[created]`（PRへのコメント作成時）
-- 発火条件（全て満たす）:
-  1. PRへのコメントである
-  2. `github-actions[bot]` によるコメントである
-  3. コメント本文に「PR Review Toolkit 自動レビュー結果」を含む
-  4. `auto:failed` ラベルが付いていない
-- 同時実行制御: PR番号ごとの concurrency グループ（cancel-in-progress: false）
+- イベント: `workflow_run[completed]`（pr-review.yml の完了時）
+- 発火条件:
+  1. pr-review.yml が `completed`（成功/失敗問わず）
+  2. 対象PRに `auto:failed` ラベルが付いていない
+- 理由: pr-review.yml の全レビュアー（prt-* ツール群）がコメント投稿を完了してから auto-fix を開始するため。`issue_comment` トリガーではコメント逐次投稿による早期発火のリスクがある
+- 同時実行制御: workflow_run から対象PR番号を取得し、PR番号ごとの concurrency グループで制御（cancel-in-progress: false）
+
+**対象レビューツール:**
+
+- auto-fix ループの修正対象は pr-review.yml が実行する prt-* ツール群のインラインコメントのみ
+- GitHub 組み込みの Copilot PR Reviewer は auto-fix ループの対象外（GitHub 側の制御であり、投稿タイミングを管理できないため）
+- Copilot の指摘は管理者が手動確認、または自動ループ安定後に再導入を検討
 
 **処理フロー:**
 
-1. **ループ回数チェック**: PR内の `github-actions[bot]` による「レビュー指摘への自動対応」コメント数をカウント。3回以上なら上限到達
-2. **レビュー結果判定（機械可読フラグ方式）**: レビューコメント本文に `<!-- auto-fix:no-issues -->` HTML コメントがあれば指摘なしと判定
-3. **禁止パターンチェック**: PRの変更ファイルを走査し、禁止パターン（`CLAUDE.md`, `.claude/settings.json`, `.env*`, `pyproject.toml` の dependencies 変更）に該当するか判定。`.github/workflows/*` は develop 向き緩和により対象外
-4. **分岐処理**:
+1. **対象PR特定**: workflow_run イベントのペイロードから、トリガー元の pr-review.yml が処理したPR番号を取得
+2. **ループ回数チェック**: PR内の `github-actions[bot]` による「レビュー指摘への自動対応」コメント数をカウント。3回以上なら上限到達
+3. **レビュー結果判定（機械可読フラグ方式）**: pr-review.yml が投稿したレビューコメント本文に `<!-- auto-fix:no-issues -->` HTML コメントがあれば指摘なしと判定
+4. **禁止パターンチェック**: PRの変更ファイルを走査し、禁止パターン（`CLAUDE.md`, `.claude/settings.json`, `.env*`, `pyproject.toml` の dependencies 変更）に該当するか判定。`.github/workflows/*` は develop 向き緩和により対象外
+5. **分岐処理**:
    - ループ上限到達 + 指摘あり → `auto:failed` 付与 + PRコメントで通知
    - 禁止パターン検出 → `auto:failed` 付与 + PRコメントで通知
    - 指摘あり + 上限未到達 → `claude-code-action` で `/check-pr` を実行し自動修正 → 対応済みスレッドを `resolveReviewThread` で resolve → `BECKY3_PAT` で `/review` コメント投稿（再レビュートリガー）
    - 指摘なし + 禁止パターンなし → マージ判定へ
-5. **マージ判定**: 4条件（レビュー指摘ゼロ、CI全通過、コンフリクトなし、`auto:failed` なし）を全て確認
-6. **自動マージ**: 条件クリアで `gh pr merge --squash` を `BECKY3_PAT` で実行
+6. **マージ判定**: 4条件（レビュー指摘ゼロ、CI全通過、コンフリクトなし、`auto:failed` なし）を全て確認
+7. **自動マージ**: 条件クリアで `gh pr merge --squash` を `BECKY3_PAT` で実行
 
 **エラー時の共通挙動:**
 
@@ -790,7 +796,7 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 
 ### Phase 1
 
-- [ ] AC5: pr-review.yml のレビュー結果コメント投稿後、auto-fix.yml が自動的に起動する
+- [ ] AC5: pr-review.yml の完了後（`workflow_run[completed]`）、auto-fix.yml が自動的に起動する
 - [ ] AC6: auto-fix.yml が既存の check-pr スキルを使用してレビュー指摘に自動対応する
 - [ ] AC7: 対応済みのレビュースレッドが `resolveReviewThread` で自動的に resolve される
 - [ ] AC8: 修正後に `/review` が自動投稿され、pr-review.yml の再レビューがトリガーされる
