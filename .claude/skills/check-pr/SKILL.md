@@ -163,7 +163,7 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
       # PR番号の数値バリデーション（データ不存在 → スキップ）
       if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
         echo "::warning::Invalid PR number: '$PR_NUMBER'. Skipping thread resolution."
-        # resolve をスキップして次のステップに進む
+        exit 1
       fi
       ```
 
@@ -171,11 +171,13 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
 
       ```bash
       THREADS=""
+      QUERY_SUCCESS=true
       if ! THREADS=$(gh api graphql -f query="
       {
         repository(owner: \"$OWNER\", name: \"$REPO\") {
           pullRequest(number: $PR_NUMBER) {
             reviewThreads(first: 100) {
+              # 注意: 100スレッドを超える場合はページネーション未対応
               nodes {
                 id
                 isResolved
@@ -184,6 +186,13 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
           }
         }
       }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' 2>&1); then
+        QUERY_SUCCESS=false
+        # 認証エラー（401/403）→ 即停止
+        if echo "$THREADS" | grep -qE '401|403|authentication|forbidden'; then
+          echo "::error::Authentication/permission error: $THREADS"
+          exit 1
+        fi
+        # 一時的障害 → warning でスキップ
         echo "::warning::Failed to query review threads: $THREADS"
         echo "Skipping thread resolution due to API error"
         THREADS=""
@@ -195,7 +204,11 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
 
       ```bash
       if [ -z "$THREADS" ]; then
-        echo "No unresolved threads to resolve. Skipping."
+        if [ "$QUERY_SUCCESS" = true ]; then
+          echo "No unresolved threads to resolve. Skipping."
+        else
+          echo "::warning::Skipping resolve due to query failure."
+        fi
       else
         RESOLVED=0
         FAILED=0
