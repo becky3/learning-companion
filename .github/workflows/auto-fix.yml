@@ -1,3 +1,13 @@
+# Auto Fix — レビュー指摘の自動修正ワークフロー
+#
+# エラーハンドリング方針:
+#   認証/権限エラー        → exit 1（即停止）
+#   一時的API障害          → リトライ or warning で続行
+#   データ不存在(PR未作成等) → skip=true で正常終了
+#   取得失敗(非クリティカル) → デフォルト値で続行
+#   セキュリティ必須処理の失敗 → exit 1（禁止パターンチェック等）
+#   エラーハンドラ内の失敗  → ベストエフォート（ログのみ）
+
 name: Auto Fix
 
 permissions:
@@ -64,9 +74,11 @@ jobs:
           set -euo pipefail
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
 
-          if ! LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name'); then
-            echo "::error::Failed to get PR labels. PR may not exist or API error occurred."
-            exit 1
+          # 方針: 一時的API障害 → warning で安全側（skip）に倒す
+          if ! LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
+            echo "::warning::Failed to get PR labels: $LABELS. Skipping as precaution."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
           if echo "$LABELS" | grep -q "^auto:failed$"; then
@@ -121,37 +133,40 @@ jobs:
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
           TRIGGER_RUN_ID="${{ github.event.workflow_run.id }}"
 
-          # トリガー元の workflow_run の created_at を取得して、それ以降のコメントのみ対象
-          if ! RUN_CREATED_AT=$(gh api "repos/${{ github.repository }}/actions/runs/${TRIGGER_RUN_ID}" --jq '.created_at' 2>&1); then
-            echo "::error::Failed to get workflow run created_at: $RUN_CREATED_AT"
-            exit 1
-          fi
-          if [ -z "$RUN_CREATED_AT" ]; then
-            echo "::error::Workflow run created_at is empty"
-            exit 1
-          fi
-          echo "Trigger run created at: $RUN_CREATED_AT"
-
-          # PR の HEAD SHA を取得（レビュー結果の commit SHA 検証に使用）
-          if ! PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>&1); then
-            echo "::error::Failed to get PR HEAD SHA: $PR_HEAD_SHA"
-            exit 1
-          fi
-          echo "PR HEAD SHA: $PR_HEAD_SHA"
-
-          # pr-review.yml が投稿した最新のレビューコメントから auto-fix フラグを検索
-          # created_at がトリガー元 run 以降 + commit SHA が一致するコメントのみ対象
-          # リトライ: pr-review.yml のコメント投稿遅延に対応（最大5回、10秒間隔）
+          # 方針: 一時的API障害 → リトライで対応
+          # トリガー元 run の created_at、PR HEAD SHA、レビューコメント検索を
+          # 一連のリトライループで処理（最大5回、10秒間隔）
           LATEST_REVIEW=""
           for i in $(seq 1 5); do
+            # トリガー元の workflow_run の created_at を取得
+            if ! RUN_CREATED_AT=$(gh api "repos/${{ github.repository }}/actions/runs/${TRIGGER_RUN_ID}" --jq '.created_at' 2>&1); then
+              echo "::warning::Failed to get workflow run created_at (attempt $i/5): $RUN_CREATED_AT"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
+            fi
+            if [ -z "$RUN_CREATED_AT" ]; then
+              echo "::warning::Workflow run created_at is empty (attempt $i/5)"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
+            fi
+
+            # PR の HEAD SHA を取得（commit SHA 検証に使用）
+            if ! PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>&1); then
+              echo "::warning::Failed to get PR HEAD SHA (attempt $i/5): $PR_HEAD_SHA"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
+            fi
+
+            # レビューコメントを検索（created_at + commit SHA でフィルタ）
             if ! LATEST_REVIEW=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
               --paginate --jq "[.[] | select(
                 .user.login == \"claude[bot]\" and
                 .created_at >= \"${RUN_CREATED_AT}\" and
                 ((.body | contains(\"<!-- auto-fix:no-issues commit=${PR_HEAD_SHA}\")) or (.body | contains(\"<!-- auto-fix:has-issues commit=${PR_HEAD_SHA}\")))
               )] | last" 2>&1); then
-              echo "::error::Failed to fetch PR comments (attempt $i/5): $LATEST_REVIEW"
-              exit 1
+              echo "::warning::Failed to fetch PR comments (attempt $i/5): $LATEST_REVIEW"
+              if [ "$i" -lt 5 ]; then sleep 10; fi
+              continue
             fi
 
             if [ -n "$LATEST_REVIEW" ] && [ "$LATEST_REVIEW" != "null" ]; then
@@ -164,8 +179,11 @@ jobs:
             fi
           done
 
+          echo "Trigger run created at: ${RUN_CREATED_AT:-unknown}"
+          echo "PR HEAD SHA: ${PR_HEAD_SHA:-unknown}"
+
           if [ -z "$LATEST_REVIEW" ] || [ "$LATEST_REVIEW" = "null" ]; then
-            echo "::error::No review comment found after 5 attempts (created after $RUN_CREATED_AT). PR Review workflow may have failed to post results."
+            echo "::error::No review comment found after 5 attempts. PR Review workflow may have failed to post results."
             exit 1
           elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -q '<!-- auto-fix:no-issues -->'; then
             echo "has_issues=false" >> $GITHUB_OUTPUT
@@ -185,6 +203,7 @@ jobs:
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
 
           # PRの変更ファイル一覧を取得
+          # 方針: セキュリティ必須処理の失敗 → exit 1（禁止パターンチェックのバイパス防止）
           if ! CHANGED_FILES=$(gh pr view "$PR_NUMBER" --json files --jq '.files[].path' 2>&1); then
             echo "::error::Failed to get changed files: $CHANGED_FILES"
             exit 1
@@ -426,11 +445,12 @@ jobs:
             echo "❌ Condition 2: CI checks failed"
           fi
 
-          # 条件3: コンフリクトなし
+          # 条件3: コンフリクトなし（方針: 一時的API障害 → 安全側に倒してマージ拒否）
           if ! MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable' 2>&1); then
             MERGE_READY=false
-            REASONS="${REASONS}\n- ❌ Failed to check mergeable status: $MERGEABLE"
-            echo "❌ Condition 3: Failed to check mergeable status"
+            REASONS="${REASONS}\n- ❌ GitHub API error: Cannot verify mergeable status"
+            echo "::warning::Failed to check mergeable status (API error): $MERGEABLE"
+            echo "❌ Condition 3: API error (not conflict)"
           elif [ "$MERGEABLE" != "MERGEABLE" ]; then
             MERGE_READY=false
             REASONS="${REASONS}\n- ❌ PR has conflicts (status: $MERGEABLE)"
@@ -439,11 +459,12 @@ jobs:
             echo "✅ Condition 3: No conflicts"
           fi
 
-          # 条件4: auto:failed ラベルなし（再チェック）
+          # 条件4: auto:failed ラベルなし（方針: 一時的API障害 → 安全側に倒してマージ拒否）
           if ! LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
             MERGE_READY=false
-            REASONS="${REASONS}\n- ❌ Failed to retrieve labels: $LABELS"
-            echo "❌ Condition 4: Failed to retrieve labels"
+            REASONS="${REASONS}\n- ❌ GitHub API error: Cannot verify labels"
+            echo "::warning::Failed to retrieve labels (API error): $LABELS"
+            echo "❌ Condition 4: API error (not label issue)"
           elif echo "$LABELS" | grep -q "^auto:failed$"; then
             MERGE_READY=false
             REASONS="${REASONS}\n- ❌ auto:failed label present"
