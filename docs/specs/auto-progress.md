@@ -79,38 +79,10 @@ main 向き PR が作成 → pr-review.yml で自動レビュー → 管理者�
 
 **Phase 2: 定期リリース（release.yml）**
 
-```yaml
-name: Scheduled Release
-
-on:
-  schedule:
-    - cron: '0 0 * * 1'  # 毎週月曜 0:00 UTC（JST 09:00）
-
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check for unreleased changes
-        id: check
-        run: |
-          DIFF=$(git rev-list --count main..develop)
-          echo "commits=$DIFF" >> $GITHUB_OUTPUT
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create release PR
-        if: steps.check.outputs.commits != '0'
-        run: |
-          gh pr create --base main --head develop \
-            --title "Release $(date +%Y-%m-%d): develop → main" \
-            --body "週次自動リリース。develop が main より ${{ steps.check.outputs.commits }} コミット先行。"
-        env:
-          GH_TOKEN: ${{ secrets.BECKY3_PAT }}
-```
+- スケジュール: 毎週月曜 0:00 UTC（JST 09:00）
+- 処理: develop と main の差分コミット数をチェックし、差分があれば develop → main のリリースPRを自動作成
+- リリースPRの自動作成には `BECKY3_PAT` を使用（pr-review.yml の自動レビューをトリガーするため）
+- 差分がなければ何もしない
 
 **main への自動マージは Phase 2 でも手動維持**。将来的に自動化する場合も、GitHub 通知で猶予期間（「30分以内に auto:failed がなければ自動マージ」）を設ける。
 
@@ -330,221 +302,51 @@ stateDiagram-v2
 
 ### claude.yml 改修内容
 
-**変更1: on トリガーに `labeled` を追加**
+**変更点:**
 
-```yaml
-on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-  issues:
-    types: [opened, assigned, labeled]  # labeled を追加
-  pull_request_review:
-    types: [submitted]
-```
-
-**変更2: if 条件にラベル判定を追加**
-
-```yaml
-jobs:
-  claude:
-    if: |
-      github.actor == 'becky3' && (
-        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-        (github.event_name == 'issues' && contains(github.event.issue.body, '@claude')) ||
-        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-        (github.event_name == 'issues' && github.event.action == 'labeled' &&
-         github.event.label.name == 'auto-implement' &&
-         !contains(join(github.event.issue.labels.*.name, ','), 'auto:failed'))
-      )
-```
+1. **トリガー追加**: `issues` イベントに `labeled` アクションを追加
+2. **if 条件追加**: 既存の `@claude` メンション判定に加え、以下の条件を OR で追加:
+   - `issues` イベントの `labeled` アクション
+   - 付与されたラベルが `auto-implement`
+   - `auto:failed` ラベルが付いていない（停止中は発火しない）
+3. **既存機能への影響なし**: `@claude` メンションによる手動トリガーは従来通り動作
 
 ### auto-fix.yml 設計
 
-```yaml
-name: Auto Fix Review Comments
+**トリガー条件:**
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
+- イベント: `issue_comment[created]`（PRへのコメント作成時）
+- 発火条件（全て満たす）:
+  1. PRへのコメントである
+  2. `github-actions[bot]` によるコメントである
+  3. コメント本文に「PR Review Toolkit 自動レビュー結果」を含む
+  4. `auto:failed` ラベルが付いていない
+- 同時実行制御: PR番号ごとの concurrency グループ（cancel-in-progress: false）
 
-on:
-  issue_comment:
-    types: [created]
+**処理フロー:**
 
-jobs:
-  auto-fix:
-    # 発火条件:
-    # 1. PRへのコメント
-    # 2. github-actions[bot] によるコメント
-    # 3. "PR Review Toolkit 自動レビュー結果" を含む
-    # 4. auto:failed ラベルなし（失敗/停止中は処理しない）
-    if: |
-      github.event.issue.pull_request &&
-      github.event.comment.user.login == 'github-actions[bot]' &&
-      contains(github.event.comment.body, 'PR Review Toolkit 自動レビュー結果') &&
-      !contains(join(github.event.issue.labels.*.name, ','), 'auto:failed')
+1. **ループ回数チェック**: PR内の `github-actions[bot]` による「レビュー指摘への自動対応」コメント数をカウント。3回以上なら上限到達
+2. **レビュー結果判定（機械可読フラグ方式）**: レビューコメント本文に `<!-- auto-fix:no-issues -->` HTML コメントがあれば指摘なしと判定
+3. **禁止パターンチェック**: PRの変更ファイルを走査し、禁止パターン（`CLAUDE.md`, `.claude/settings.json`, `.env*`, `pyproject.toml` の dependencies 変更）に該当するか判定。`.github/workflows/*` は develop 向き緩和により対象外
+4. **分岐処理**:
+   - ループ上限到達 + 指摘あり → `auto:failed` 付与 + PRコメントで通知
+   - 禁止パターン検出 → `auto:failed` 付与 + PRコメントで通知
+   - 指摘あり + 上限未到達 → `claude-code-action` で `/check-pr` を実行し自動修正 → 対応済みスレッドを `resolveReviewThread` で resolve → `BECKY3_PAT` で `/review` コメント投稿（再レビュートリガー）
+   - 指摘なし + 禁止パターンなし → マージ判定へ
+5. **マージ判定**: 4条件（レビュー指摘ゼロ、CI全通過、コンフリクトなし、`auto:failed` なし）を全て確認
+6. **自動マージ**: 条件クリアで `gh pr merge --squash` を `BECKY3_PAT` で実行
 
-    runs-on: ubuntu-latest
+**エラー時の共通挙動:**
 
-    concurrency:
-      group: auto-fix-${{ github.event.issue.number }}
-      cancel-in-progress: false
+- 全ステップで失敗時は `auto:failed` ラベル付与 + PRコメントで理由を通知
 
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ format('refs/pull/{0}/merge', github.event.issue.number) }}
+**使用シークレット:**
 
-      # ループ回数チェック（最大3回）
-      - name: Check review iteration count
-        id: iteration
-        run: |
-          set -euo pipefail
-          PR_NUMBER="${{ github.event.issue.number }}"
-          COUNT=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --jq '[.[] | select(.user.login == "github-actions[bot]" and
-              (.body | contains("レビュー指摘への自動対応")))] | length')
-          echo "count=$COUNT" >> $GITHUB_OUTPUT
-          if [ "$COUNT" -ge 3 ]; then
-            echo "max_reached=true" >> $GITHUB_OUTPUT
-          else
-            echo "max_reached=false" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # レビュー結果パース（機械可読フラグ方式）
-      # pr-review.yml が出力する HTML コメント <!-- auto-fix:no-issues --> を検出
-      - name: Parse review result
-        id: parse
-        run: |
-          set -euo pipefail
-          BODY=$(gh api "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}" --jq .body)
-          if echo "$BODY" | grep -qF '<!-- auto-fix:no-issues -->'; then
-            echo "has_issues=false" >> $GITHUB_OUTPUT
-          else
-            echo "has_issues=true" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 禁止パターンチェック
-      - name: Check forbidden file changes
-        id: forbidden
-        run: |
-          set -euo pipefail
-          PR_NUMBER="${{ github.event.issue.number }}"
-          CHANGED_FILES=$(gh pr view "$PR_NUMBER" --json files --jq '.files[].path')
-          FORBIDDEN=false
-          for FILE in $CHANGED_FILES; do
-            case "$FILE" in
-              # .github/workflows/* は develop 向き緩和により除外
-              CLAUDE.md|.claude/settings.json|.env*) FORBIDDEN=true ;;
-              pyproject.toml)
-                if gh pr diff "$PR_NUMBER" -- "$FILE" | grep -q '^\+.*dependencies'; then
-                  FORBIDDEN=true
-                fi
-                ;;
-            esac
-          done
-          echo "has_forbidden=$FORBIDDEN" >> $GITHUB_OUTPUT
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # ループ上限到達時 → auto:failed
-      - name: Handle max iterations
-        if: steps.iteration.outputs.max_reached == 'true' && steps.parse.outputs.has_issues == 'true'
-        run: |
-          PR_NUMBER="${{ github.event.issue.number }}"
-          gh issue edit "$PR_NUMBER" --add-label "auto:failed"
-          gh pr comment "$PR_NUMBER" --body "自動修正ループが上限（3回）に達しました。手動対応が必要です。"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 禁止パターン検出時 → auto:failed
-      - name: Handle forbidden files
-        if: steps.forbidden.outputs.has_forbidden == 'true'
-        run: |
-          PR_NUMBER="${{ github.event.issue.number }}"
-          gh issue edit "$PR_NUMBER" --add-label "auto:failed"
-          gh pr comment "$PR_NUMBER" --body "自動マージ禁止ファイルが含まれています。手動レビュー・マージが必要です。"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 指摘あり → Claude で自動修正
-      - uses: anthropics/claude-code-action@v1
-        if: |
-          steps.parse.outputs.has_issues == 'true' &&
-          steps.iteration.outputs.max_reached == 'false'
-        with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          bot_name: "claude[bot]"
-          bot_id: "209825114"
-          claude_args: "--model claude-opus-4-6 --max-turns 60 --dangerously-skip-permissions"
-          prompt: |
-            このPRに対する自動レビューで指摘が検出されました。
-            /check-pr ${{ github.event.issue.number }} を実行して指摘に対応してください。
-            対応完了後、対応済みのレビュースレッドを resolveReviewThread で resolve してください。
-
-      # 修正後 → /review 再リクエスト（PATで連鎖トリガー）
-      - name: Request re-review
-        if: |
-          steps.parse.outputs.has_issues == 'true' &&
-          steps.iteration.outputs.max_reached == 'false'
-        run: |
-          gh pr comment ${{ github.event.issue.number }} --body "/review"
-        env:
-          GH_TOKEN: ${{ secrets.BECKY3_PAT }}
-
-      # 指摘なし → マージ判定
-      - name: Check merge readiness
-        id: merge-check
-        if: |
-          steps.parse.outputs.has_issues == 'false' &&
-          steps.forbidden.outputs.has_forbidden == 'false'
-        run: |
-          set -euo pipefail
-          PR_NUMBER="${{ github.event.issue.number }}"
-
-          # CI チェック状態
-          CI_FAILURES=$(gh pr checks "$PR_NUMBER" --json state \
-            --jq '[.[] | select(.state != "SUCCESS" and .state != "SKIPPED")] | length' \
-            || echo "999")
-
-          # マージ可能性
-          MERGEABLE=$(gh pr view "$PR_NUMBER" --json mergeable --jq '.mergeable')
-
-          # auto:failed チェック（失敗/停止中はマージしない）
-          HAS_FAILED=$(gh pr view "$PR_NUMBER" --json labels \
-            --jq '[.labels[].name | select(. == "auto:failed")] | length')
-
-          if [ "$CI_FAILURES" = "0" ] && [ "$MERGEABLE" = "MERGEABLE" ] && [ "$HAS_FAILED" = "0" ]; then
-            echo "ready=true" >> $GITHUB_OUTPUT
-          else
-            echo "ready=false" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # 自動マージ実行
-      - name: Auto merge
-        if: steps.merge-check.outputs.ready == 'true'
-        run: |
-          set -euo pipefail
-          PR_NUMBER="${{ github.event.issue.number }}"
-          gh pr merge "$PR_NUMBER" --squash \
-            --subject "$(gh pr view $PR_NUMBER --json title --jq .title) (#${PR_NUMBER})"
-        env:
-          GH_TOKEN: ${{ secrets.BECKY3_PAT }}
-
-```
+| シークレット | 用途 |
+|-------------|------|
+| `CLAUDE_CODE_OAUTH_TOKEN` | claude-code-action の認証 |
+| `BECKY3_PAT` | `/review` コメント投稿（ワークフロー連鎖）+ 自動マージ実行 |
+| `GITHUB_TOKEN` | その他のGitHub API操作（ラベル付与、PRチェック等） |
 
 ## Resolve conversation 自動化
 
@@ -644,13 +446,8 @@ check-pr スキル（`.claude/skills/check-pr/SKILL.md`）のステップ11（�
 
 **第5層: concurrency グループ**
 
-```yaml
-concurrency:
-  group: auto-fix-${{ github.event.issue.number }}
-  cancel-in-progress: false
-```
-
-- 同じPRに対する同時実行を防止
+- PR番号ごとの concurrency グループで同じPRに対する同時実行を防止
+- `cancel-in-progress: false`（進行中のジョブはキャンセルしない）
 
 **第6層: マージ前4条件チェック**
 
@@ -888,6 +685,21 @@ GitHub Actions は `GITHUB_TOKEN` で作成したイベントでは同一リポ�
 | `CLAUDE_CODE_OAUTH_TOKEN` | 既存。claude-code-action の認証 | — |
 | `BECKY3_PAT` | 新規。ワークフロー連鎖トリガー + 自動マージ | `repo`, `workflow` |
 
+**BECKY3_PAT の作成手順（推奨: Fine-grained PAT）:**
+
+1. GitHub Settings > Developer settings > Personal access tokens > **Fine-grained tokens**
+2. Repository access: `becky3/ai-assistant` のみ（最小権限の原則）
+3. Permissions: Contents (Read and write), Pull requests (Read and write), Workflows (Read and write)
+4. Expiration: 最大90日（定期的なローテーションが必要）
+5. Token を作成し、リポジトリの Settings > Secrets and variables > Actions に `BECKY3_PAT` として登録
+
+**セキュリティ注記:**
+
+- **Fine-grained PAT を推奨**: リポジトリ単位でスコープを限定でき、漏洩時の影響を最小化できる
+- **Classic PAT は非推奨**: `repo` + `workflow` スコープが全リポジトリに適用されるため、漏洩時に全リポジトリへの書き込み権限が流出するリスクがある
+- **代替案: GitHub App トークン**: より細かい権限制御が可能。将来的に PAT の管理コストが問題になった場合に検討する
+- **ローテーション**: Fine-grained PAT は有効期限があるため、期限切れ前に再作成が必要。GitHub Actions のシークレット更新も忘れないこと
+
 ## 導入ロードマップ
 
 ### Phase 0: 最小構成（即日）
@@ -911,11 +723,16 @@ GitHub Actions は `GITHUB_TOKEN` で作成したイベントでは同一リポ�
 
 ### Phase 2: フルサイクル自動化
 
-- auto-triage.yml の新規作成（Issue自動分析・ラベル付与）
+**必須:**
+
 - post-merge.yml の新規作成（マージ後の次Issue自動ピックアップ）
 - release.yml の新規作成（develop → main の定期リリースPR自動作成）
-- 変更規模の自動判定
-- revert PR の自動作成
+
+**検討（運用状況を見て判断）:**
+
+- auto-triage.yml の新規作成（Issue自動分析・ラベル付与）
+- 変更規模の自動判定（`auto:failed` 付与による大規模変更のブロック）
+- revert PR の自動作成（develop でテストが壊れた場合の自動ロールバック）
 
 ### 段階的マージ解禁
 
@@ -946,43 +763,43 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 
 - [ ] AC1: `auto-implement` ラベルをIssueに付与すると claude.yml が自動実行される
 - [ ] AC2: `auto:failed` ラベルが付いたIssueでは `auto-implement` を付与してもワークフローが実行されない
-- [ ] AC4: 既存の `@claude` メンション機能に影響がない
-- [ ] AC5: CLAUDE.md に自動進行ルールセクションが追加されている
+- [ ] AC3: 既存の `@claude` メンション機能に影響がない
+- [ ] AC4: CLAUDE.md に自動進行ルールセクションが追加されている
 
 ### Phase 1
 
-- [ ] AC6: pr-review.yml のレビュー結果コメント投稿後、auto-fix.yml が自動的に起動する
-- [ ] AC7: auto-fix.yml が既存の check-pr スキルを使用してレビュー指摘に自動対応する
-- [ ] AC8: 対応済みのレビュースレッドが `resolveReviewThread` で自動的に resolve される
-- [ ] AC9: 修正後に `/review` が自動投稿され、pr-review.yml の再レビューがトリガーされる
-- [ ] AC10: レビュー→修正ループが最大3回で停止し、超過時は `auto:failed` ラベルが付与される
-- [ ] AC11: レビュー指摘ゼロ・CI全通過・コンフリクトなし・auto:failedなしの4条件を全て満たす場合のみ自動マージが実行される
-- [ ] AC12: 禁止パターンに該当するファイルが変更に含まれるPRは自動マージされず `auto:failed` ラベルが付与される
-- [ ] AC13: 同じPRに対する auto-fix.yml の同時実行が concurrency で防止される
-- [ ] AC14: `BECKY3_PAT` シークレットが登録されている
-- [ ] AC24: feature ブランチが develop をベースに作成される
-- [ ] AC25: 自動マージが develop ブランチに対して実行される（main には直接マージしない）
-- [ ] AC26: develop ブランチに保護ルールが設定されている（CI必須、PR必須）
-- [ ] AC27: main ブランチに保護ルールが設定されている（承認必須、手動マージのみ）
+- [ ] AC5: pr-review.yml のレビュー結果コメント投稿後、auto-fix.yml が自動的に起動する
+- [ ] AC6: auto-fix.yml が既存の check-pr スキルを使用してレビュー指摘に自動対応する
+- [ ] AC7: 対応済みのレビュースレッドが `resolveReviewThread` で自動的に resolve される
+- [ ] AC8: 修正後に `/review` が自動投稿され、pr-review.yml の再レビューがトリガーされる
+- [ ] AC9: レビュー→修正ループが最大3回で停止し、超過時は `auto:failed` ラベルが付与される
+- [ ] AC10: レビュー指摘ゼロ・CI全通過・コンフリクトなし・auto:failedなしの4条件を全て満たす場合のみ自動マージが実行される
+- [ ] AC11: 禁止パターンに該当するファイルが変更に含まれるPRは自動マージされず `auto:failed` ラベルが付与される
+- [ ] AC12: 同じPRに対する auto-fix.yml の同時実行が concurrency で防止される
+- [ ] AC13: `BECKY3_PAT` シークレットが登録されている
+- [ ] AC14: feature ブランチが develop をベースに作成される
+- [ ] AC15: 自動マージが develop ブランチに対して実行される（main には直接マージしない）
+- [ ] AC16: develop ブランチに保護ルールが設定されている（CI必須、PR必須）
+- [ ] AC17: main ブランチに保護ルールが設定されている（承認必須、手動マージのみ）
 
 ### Phase 1（自動設計フェーズ）
 
-- [ ] AC15: 仕様書がないIssueに `auto-implement` が付与された場合、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進む
-- [ ] AC16: Issue内容が曖昧な場合、`auto:failed` ラベルが付与され、不明点がIssueにコメントされる
-- [ ] AC17: 自動生成された仕様書がPRに含まれてコミットされる
+- [ ] AC18: 仕様書がないIssueに `auto-implement` が付与された場合、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進む
+- [ ] AC19: Issue内容が曖昧な場合、`auto:failed` ラベルが付与され、不明点がIssueにコメントされる
+- [ ] AC20: 自動生成された仕様書がPRに含まれてコミットされる
 
 ### Phase 1（実行テスト通知）
 
-- [ ] AC18: `src/` 配下の変更を含むPRが自動マージされた場合、`auto:review-batch` レビューIssueにチェックリストが追記される
-- [ ] AC19: `docs/` 配下のみの変更PRではレビューIssueへの追記が行われない
-- [ ] AC20: チェックリストが仕様書のACから自動生成される
+- [ ] AC21: `src/` 配下の変更を含むPRが自動マージされた場合、`auto:review-batch` レビューIssueにチェックリストが追記される
+- [ ] AC22: `docs/` 配下のみの変更PRではレビューIssueへの追記が行われない
+- [ ] AC23: チェックリストが仕様書のACから自動生成される
 
 ### Phase 2
 
-- [ ] AC21: Issue作成・更新時に auto-triage.yml が仕様書の有無を分析し、適切なラベルを自動付与する
-- [ ] AC22: PRマージ後に post-merge.yml が次の `auto-implement` 候補Issueをピックアップする
-- [ ] AC23: 変更ファイル数20超 or 差分行数500超のPRに `auto:failed` ラベルが付与される
-- [ ] AC28: release.yml が週次で develop → main のリリースPRを自動作成する（差分がある場合のみ）
+- [ ] AC24: Issue作成・更新時に auto-triage.yml が仕様書の有無を分析し、適切なラベルを自動付与する
+- [ ] AC25: PRマージ後に post-merge.yml が次の `auto-implement` 候補Issueをピックアップする
+- [ ] AC26: 変更ファイル数20超 or 差分行数500超のPRに `auto:failed` ラベルが付与される
+- [ ] AC27: release.yml が週次で develop → main のリリースPRを自動作成する（差分がある場合のみ）
 
 ## テスト方針
 
