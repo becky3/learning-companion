@@ -91,14 +91,14 @@ jobs:
           # auto-fix.yml が /check-pr 実行前に投稿する「auto-fix: レビュー指摘への自動対応」コメントを対象
           if ! LOOP_COUNT=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
             --paginate --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("auto-fix: レビュー指摘への自動対応")))] | length' 2>&1); then
-            echo "::error::Failed to get loop count: $LOOP_COUNT"
-            exit 1
+            echo "::warning::Failed to get loop count: $LOOP_COUNT. Defaulting to 0."
+            LOOP_COUNT=0
           fi
 
-          # 数値バリデーション
+          # 数値バリデーション（API応答が不正な場合はデフォルト0で継続）
           if ! [[ "$LOOP_COUNT" =~ ^[0-9]+$ ]]; then
-            echo "::error::Invalid loop count value: '$LOOP_COUNT'"
-            exit 1
+            echo "::warning::Invalid loop count value: '$LOOP_COUNT'. Defaulting to 0."
+            LOOP_COUNT=0
           fi
 
           echo "loop_count=$LOOP_COUNT" >> $GITHUB_OUTPUT
@@ -132,21 +132,40 @@ jobs:
           fi
           echo "Trigger run created at: $RUN_CREATED_AT"
 
-          # pr-review.yml が投稿した最新のレビューコメントから auto-fix フラグを検索
-          # created_at がトリガー元 run 以降のコメントのみ対象にして過去のコメントによる誤判定を防止
-          if ! LATEST_REVIEW=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-            --paginate --jq "[.[] | select(
-              .user.login == \"claude[bot]\" and
-              .created_at >= \"${RUN_CREATED_AT}\" and
-              ((.body | contains(\"<!-- auto-fix:no-issues -->\")) or (.body | contains(\"<!-- auto-fix:has-issues -->\")))
-            )] | last" 2>&1); then
-            echo "::error::Failed to fetch PR comments: $LATEST_REVIEW"
+          # PR の HEAD SHA を取得（レビュー結果の commit SHA 検証に使用）
+          if ! PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>&1); then
+            echo "::error::Failed to get PR HEAD SHA: $PR_HEAD_SHA"
             exit 1
           fi
+          echo "PR HEAD SHA: $PR_HEAD_SHA"
+
+          # pr-review.yml が投稿した最新のレビューコメントから auto-fix フラグを検索
+          # created_at がトリガー元 run 以降 + commit SHA が一致するコメントのみ対象
+          # リトライ: pr-review.yml のコメント投稿遅延に対応（最大5回、10秒間隔）
+          LATEST_REVIEW=""
+          for i in $(seq 1 5); do
+            if ! LATEST_REVIEW=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+              --paginate --jq "[.[] | select(
+                .user.login == \"claude[bot]\" and
+                .created_at >= \"${RUN_CREATED_AT}\" and
+                ((.body | contains(\"<!-- auto-fix:no-issues commit=${PR_HEAD_SHA}\")) or (.body | contains(\"<!-- auto-fix:has-issues commit=${PR_HEAD_SHA}\")))
+              )] | last" 2>&1); then
+              echo "::error::Failed to fetch PR comments (attempt $i/5): $LATEST_REVIEW"
+              exit 1
+            fi
+
+            if [ -n "$LATEST_REVIEW" ] && [ "$LATEST_REVIEW" != "null" ]; then
+              break
+            fi
+
+            if [ "$i" -lt 5 ]; then
+              echo "No review comment found yet (attempt $i/5). Retrying in 10s..."
+              sleep 10
+            fi
+          done
 
           if [ -z "$LATEST_REVIEW" ] || [ "$LATEST_REVIEW" = "null" ]; then
-            # レビューコメントが見つからない場合はエラー（pr-review.yml が正常完了しているのにコメントが見つからないのは異常）
-            echo "::error::No review comment found for this run (created after $RUN_CREATED_AT). PR Review workflow may have failed to post results."
+            echo "::error::No review comment found after 5 attempts (created after $RUN_CREATED_AT). PR Review workflow may have failed to post results."
             exit 1
           elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -q '<!-- auto-fix:no-issues -->'; then
             echo "has_issues=false" >> $GITHUB_OUTPUT
@@ -394,9 +413,9 @@ jobs:
             end
           ' 2>&1); then
             MERGE_READY=false
-            REASONS="${REASONS}\n- ❌ Failed to check CI status"
-            echo "::warning::Failed to check CI status: $CI_RESULT"
-            echo "❌ Condition 2: Failed to check CI status"
+            REASONS="${REASONS}\n- ❌ GitHub API error: Cannot verify CI status"
+            echo "::warning::Failed to check CI status (API error, not CI failure): $CI_RESULT"
+            echo "❌ Condition 2: API error (not CI failure)"
           elif [ "$CI_RESULT" = "no_checks" ]; then
             echo "✅ Condition 2: No CI checks configured"
           elif [ "$CI_RESULT" = "0" ]; then
