@@ -50,7 +50,7 @@ argument-hint: "[diff|full] [file-path]"
 
 1. 変更差分の取得（以下の優先順位で試行）:
    - 作業ツリーの変更（未ステージ）: `git diff -- <file>`
-   - ベースブランチとの比較: `git diff "$(git merge-base HEAD origin/main)" HEAD -- <file>`
+   - ベースブランチとの比較: `git diff "$(git merge-base HEAD origin/develop)" HEAD -- <file>`
    - ステージング済みの変更: `git diff --cached -- <file>`
    - 直近コミットの差分（フォールバック）: `git show HEAD -- <file>`
    - すべて空の場合のみ「変更なし」として終了

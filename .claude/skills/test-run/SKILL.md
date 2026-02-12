@@ -48,7 +48,7 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 変更ファイルの取得（以下の優先順位で試行）:
 
 1. 作業ツリーの変更（未ステージ・ステージング両方）: `git diff --name-only`
-2. ベースブランチとの比較: `base=$(git merge-base HEAD origin/main) && git diff --name-only "$base" HEAD`
+2. ベースブランチとの比較: `base=$(git merge-base HEAD origin/develop) && git diff --name-only "$base" HEAD`
 3. ステージング済みの変更のみ: `git diff --cached --name-only`
 4. 直近コミットの差分（フォールバック）: `git show --name-only --format="" HEAD`
 5. すべて失敗した場合 → `full` モードにフォールバック
