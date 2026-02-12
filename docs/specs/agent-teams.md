@@ -63,8 +63,8 @@
 - 作業が必要な場合は、既存メンバーに割り振るか、新メンバーをspawn
 - **ツール制約**: Edit / Write ツールの使用は原則禁止
   - 許可する例外: dashboard.md の更新、CLAUDE.md 等の運用ルール更新、チーム管理に直接必要なファイル操作のみ
-- **技術的実装**: PreToolUse フック（`.claude/scripts/leader-guard.sh`）が stdin の `permission_mode` でリーダー/メンバーを判別し、リーダーかつチーム稼働中（`~/.claude/teams/` 配下にディレクトリが存在する場合）に Edit/Write をブロックする
-- **例外**: 全メンバーがブロックされている場合のみ、リーダーが一時的に作業を代行可
+- **技術的実装**: PreToolUse フック（`.claude/scripts/leader-guard.sh`）が stdin の `permission_mode` でリーダー/メンバーを判別し、リーダーかつチーム稼働中（`~/.claude/teams/` 配下にディレクトリが存在する場合）に Edit/Write をブロックする。エラー時は fail-open（ブロックしない）
+- **例外**: 全メンバーがブロックされている場合のみ、リーダーが一時的に作業を代行可。例外運用時は leader-guard が自動解除されないため、ユーザーが手動で承認する形になる
 
 ### メンバー自律行動
 

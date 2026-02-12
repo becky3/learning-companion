@@ -119,6 +119,12 @@ PreToolUse フック（`.claude/scripts/leader-guard.sh`）が Edit/Write 使用
 - `~/.claude/teams/` 配下にサブディレクトリが存在しない → チーム非稼働 → 何もせず exit 0
 - リーダー + チーム稼働中 → stdout に deny 応答の JSON を出力してブロック
 - **常に exit 0**: 非0だとエラー扱いになるため
+- **fail-open 設計**: stdin 読み取り失敗、`permission_mode` 取得失敗、`HOME` 未定義、ディレクトリ読み取り権限なし等のエラー時はブロックせず通過する（運用支援ツールであり、ユーザーの作業を止めない）
+
+**例外運用について**:
+
+- 例外（dashboard.md 更新、CLAUDE.md 更新、全メンバーブロック時の代行）は運用ルールとして存在するが、leader-guard は例外を自動判別しない
+- 例外時はフックがブロックした後、ユーザーが手動で承認する形になる
 
 ### キャラクター維持
 

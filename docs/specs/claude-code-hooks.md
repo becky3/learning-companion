@@ -138,6 +138,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
   2. `~/.claude/teams/` 配下にサブディレクトリなし → チーム非稼働 → 何もせず通過
   3. リーダー + チーム稼働中 → stdout に deny 応答 JSON を出力してブロック
 - **終了コード**: 常に exit 0（非0はエラー扱い）
+- **fail-open 設計**: stdin 読み取り失敗、`permission_mode` 取得失敗、`HOME` 未定義、ディレクトリ読み取り権限なし等のエラー時はブロックせず通過する
 
 関連仕様: [agent-teams.md](agent-teams.md)（リーダー管理専任ルール）
 
