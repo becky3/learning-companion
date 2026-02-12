@@ -62,6 +62,10 @@ module = ["fugashi", "fugashi.*", "rank_bm25", "rank_bm25.*"]
 ignore_missing_imports = true
 follow_imports = "skip"
 
+[[tool.mypy.overrides]]
+module = ["feedparser", "feedparser.*", "apscheduler", "apscheduler.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 

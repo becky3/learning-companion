@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from html import unescape
 from time import mktime
 
-import feedparser  # type: ignore[import-untyped]
+import feedparser
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
