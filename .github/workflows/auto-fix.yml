@@ -75,7 +75,10 @@ jobs:
 
           # auto-implement 経由のPR（claude/issue-* ブランチ）のみ対象
           BRANCH="${{ github.event.workflow_run.head_branch }}"
-          if [[ "$BRANCH" == claude/issue-* ]]; then
+          if [ -z "$BRANCH" ]; then
+            echo "in_scope=false" >> $GITHUB_OUTPUT
+            echo "::warning::workflow_run.head_branch is empty. Skipping."
+          elif [[ "$BRANCH" == claude/issue-* ]]; then
             echo "in_scope=true" >> $GITHUB_OUTPUT
             echo "Branch '$BRANCH' matches auto-implement pattern"
           else
@@ -201,7 +204,7 @@ jobs:
           if [ -z "$LATEST_REVIEW" ] || [ "$LATEST_REVIEW" = "null" ]; then
             echo "::error::No review comment found after 5 attempts. PR Review workflow may have failed to post results."
             exit 1
-          elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -q '<!-- auto-fix:no-issues -->'; then
+          elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -q '<!-- auto-fix:no-issues'; then
             echo "has_issues=false" >> $GITHUB_OUTPUT
             echo "Review result: No issues found"
           else
@@ -417,7 +420,14 @@ jobs:
           set -euo pipefail
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
 
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::REPO_OWNER_PAT is not set"
+            exit 1
+          fi
+
           # REPO_OWNER_PAT で /review コメントを投稿（pr-review.yml の再トリガー）
+          # NOTE: pr-review.yml の if 条件は github.actor == 'becky3' を要求する。
+          # REPO_OWNER_PAT の所有者がリポジトリオーナー (becky3) である前提で動作する。
           gh pr comment "$PR_NUMBER" --body "/review"
         env:
           GH_TOKEN: ${{ secrets.REPO_OWNER_PAT }}
@@ -523,6 +533,11 @@ jobs:
         run: |
           set -euo pipefail
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::REPO_OWNER_PAT is not set"
+            exit 1
+          fi
 
           gh pr comment "$PR_NUMBER" --body "## auto-fix: マージ判定結果（ドライラン）
 
