@@ -24,28 +24,28 @@ gitGraph
     branch develop
     checkout develop
     commit id: "dev-start"
-    branch feature/f1-chat-1
+    branch feature/f1-chat-#1
     commit id: "feat-1"
     checkout develop
-    merge feature/f1-chat-1
-    branch feature/f2-feed-2
+    merge feature/f1-chat-#1
+    branch feature/f2-feed-#2
     commit id: "feat-2"
     checkout develop
-    merge feature/f2-feed-2
+    merge feature/f2-feed-#2
     checkout main
     merge develop id: "release-v1"
     checkout develop
-    branch bugfix/fix-typo-10
+    branch bugfix/fix-typo-#10
     commit id: "fix-1"
     checkout develop
-    merge bugfix/fix-typo-10
+    merge bugfix/fix-typo-#10
 ```
 
 ### 常設ブランチ
 
 | ブランチ | 役割 | マージ元 | 保護 |
 |---------|------|---------|------|
-| `main` | 安定版（本番相当） | `develop` のみ | 直接プッシュ禁止 |
+| `main` | 安定版（本番相当） | `develop`, `hotfix/*` | 直接プッシュ禁止 |
 | `develop` | 開発統合 | `feature/*`, `bugfix/*` | 直接プッシュ禁止 |
 
 ### 作業ブランチ

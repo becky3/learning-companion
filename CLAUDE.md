@@ -106,7 +106,11 @@
 9. **PR作成**: `gh pr create` コマンドで実際にPRを作成（手動リンクではなく実際に作成）
 
    ```bash
+   # 通常開発（feature/bugfix → develop）
    gh pr create --title "タイトル" --body "説明\n\nCloses #Issue番号" --base develop
+
+   # hotfix（hotfix → main）
+   gh pr create --title "タイトル" --body "説明\n\nCloses #Issue番号" --base main
    ```
 
 10. **作成確認**: `gh pr view` でPRが正しく作成されたことを確認し、URLをユーザーに提示

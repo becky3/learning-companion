@@ -128,5 +128,5 @@ git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](git-f
   - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` → `develop`）
   - `hotfix/{修正内容}-#{Issue番号}` — 緊急修正（`main` → `main` + `develop`）
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
-- PR作成時に `Closes #{Issue番号}` で紐付け（base: `develop`）
+- PR作成時に `Closes #{Issue番号}` でIssueを紐付け（feature/bugfix: base `develop`, hotfix: base `main`）
 - マイルストーンでStep単位の進捗管理
