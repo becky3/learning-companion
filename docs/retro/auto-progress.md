@@ -157,7 +157,71 @@ GitHub Actions 環境（claude-code-action）でサブエージェント（Task 
 
 3. **`.gitignore` 除外ディレクトリへの新規ファイル追加は要注意**: タスク定義時に `git add -f` の手順を明記する
 
+---
+
+## Phase 1 実装（Issue #257）
+
+### 何を実装したか
+
+PR作成後のレビュー → 指摘対応 → 再レビュー → マージ判定の全サイクルを自動化する3ファイルの変更・新規作成を行った。
+
+**1. `.github/workflows/auto-fix.yml`（新規作成）**
+
+- `workflow_run[completed]`（PR Review 完了時）トリガー
+- PR番号特定: `workflow_run.pull_requests` 配列を優先、なければブランチ名から `gh pr list` でフォールバック
+- `auto:failed` ラベルチェック → ループ回数チェック（最大3回） → レビュー結果判定（`<!-- auto-fix:no-issues -->` フラグ） → 禁止パターンチェック
+- 指摘あり + 上限未到達: `claude-code-action` で `/check-pr` 実行 → `resolveReviewThread` → `BECKY3_PAT` で `/review` 再リクエスト
+- 指摘なし: 4条件マージ判定（レビュー指摘ゼロ / CI全通過 / コンフリクトなし / auto:failedなし）
+- 段階的マージ解禁 Step 1（ドライラン）: 判定結果をPRコメントに通知、実際のマージはコメントアウト
+- エラー時の `auto:failed` 付与 + PRコメント + Actions ログリンク
+- Slack通知（失敗時のみ）
+- concurrency: ブランチ名ベース、cancel-in-progress: false
+
+**2. `.github/workflows/pr-review.yml`（改修）**
+
+- レビュー結果サマリーに機械可読フラグ（`<!-- auto-fix:no-issues -->` / `<!-- auto-fix:has-issues -->`）を埋め込むプロンプトを追加
+- auto-fix.yml がレビュー結果を機械的に判定するために必要
+- actor 条件の修正: BECKY3_PAT によるワークフロー連鎖を可能にするため、`github.actor` 条件を調整
+
+**3. `.claude/skills/check-pr/SKILL.md`（改修）**
+
+- ステップ12（コミット & push 後）に `resolveReviewThread` mutation による対応済みレビュースレッドの自動 resolve を追加
+- GraphQL で未解決スレッドを取得 → 個別に resolve → 失敗は `::warning::` でログして次に継続
+- ステップ番号を繰り下げ（12→14）
+
+### うまくいったこと
+
+#### 1. エージェントチームによる並行作業
+
+進撃の巨人テーマのチーム（リヴァイ: auto-fix.yml、ハンジ: pr-review.yml + check-pr SKILL.md、ミカサ: 品質チェック）で3ファイルを並行作成・改修できた。依存関係のない作業を分散させることで効率的に進行した。
+
+#### 2. 仕様書の設計が十分に詳細だった
+
+`docs/specs/auto-progress.md` の「auto-fix.yml 設計」セクションに処理フロー・分岐条件・使用シークレットが明記されていたため、実装時の判断に迷いがなかった。Phase 0 のレトロで「仕様書にテンプレートを用意しておくと実装がブレない」と記録した教訓が活きた。
+
+#### 3. 既存ワークフローのパターン踏襲
+
+pr-review.yml の構造（`set -euo pipefail`、PR番号バリデーション、`|| { ... }` エラーパターン）を auto-fix.yml でも踏襲し、一貫性を保てた。
+
+### ハマったこと・改善点
+
+#### 1. workflow_run イベントでのPR番号取得の制約
+
+`workflow_run` イベントでは PR番号が事前に確定しないため、`concurrency` キーに直接使えない。`workflow_run.pull_requests` 配列が空になるケース（fork PRなど）もあり、ブランチ名からの `gh pr list` フォールバックが必要だった。仕様書ではPR番号ごとの concurrency を想定していたが、ブランチ名ベースで代替した。
+
+#### 2. マージ方式の仕様書 vs ユーザー指示の不一致
+
+仕様書では `gh pr merge --squash` と記載されていたが、ユーザー（管理者）から `--merge`（通常マージ）の指定があった。ユーザー指示を優先して `--merge` で実装した。仕様書の更新が必要。
+
+### 次に活かすこと
+
+1. **`workflow_run` イベントのPR番号取得は2段階で**: `pull_requests` 配列 → ブランチ名検索のフォールバック。fork PRでは `pull_requests` が空になることを想定する
+
+2. **仕様書とユーザー指示が矛盾する場合はユーザー指示を優先**: ただし、仕様書の更新を忘れずに行う
+
+3. **concurrency 制御は利用可能な情報で**: workflow_run ではPR番号が不明なため、ブランチ名など確定情報で制御する
+
 ## 参考
 
 - 仕様書: [docs/specs/auto-progress.md](../specs/auto-progress.md)
-- 関連Issue: #253（仕様策定）, #256（Phase 0 実装）, #266（品質チェックスキル）
+- 関連Issue: #253（仕様策定）, #256（Phase 0 実装）, #257（Phase 1 実装）, #266（品質チェックスキル）

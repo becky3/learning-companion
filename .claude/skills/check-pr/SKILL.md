@@ -136,11 +136,53 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
       別Issueとして対応する理由
       ```
 
-12. 修正をコミット & push:
+12. 対応済みレビュースレッドの resolve:
+    - owner/repo は `gh repo view --json owner,name` で取得
+    - 以下の GraphQL で対応済みの未解決スレッドを取得:
+
+      ```bash
+      gh api graphql -f query='
+      {
+        repository(owner: "{owner}", name: "{repo}") {
+          pullRequest(number: $PR_NUMBER) {
+            reviewThreads(first: 100) {
+              nodes {
+                id
+                isResolved
+                comments(first: 10) {
+                  nodes {
+                    author { login }
+                    body
+                    path
+                    line
+                  }
+                }
+              }
+            }
+          }
+        }
+      }'
+      ```
+
+    - ステップ7で「対応済み」と判断したスレッドを `resolveReviewThread` mutation で resolve:
+
+      ```bash
+      gh api graphql -f query='
+      mutation($threadId: ID!) {
+        resolveReviewThread(input: { threadId: $threadId }) {
+          thread { isResolved }
+        }
+      }' -f threadId="$THREAD_ID"
+      ```
+
+    - 個別スレッドの resolve 失敗はログして次のスレッドに継続（1件の失敗で全体を止めない）
+    - 全スレッドの resolve 失敗時もエラーとはしない（再レビューで再検出されるため）
+
+13. 修正をコミット & push:
     - コミットメッセージ:
       - 指摘対応のみ: `fix: レビュー指摘対応 (PR #番号)`
       - 実装継続: `feat: 実装内容の説明 (PR #番号)`
     - 変更内容を箇条書きでコミットメッセージに含める
     - ドキュメント更新がある場合はコミットメッセージにその旨も含める
 
-13. 対応結果のサマリーを表示
+14. 対応結果のサマリーを表示

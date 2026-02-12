@@ -16,9 +16,11 @@ jobs:
   pr-review:
     # PR作成時 OR PRへの /review コメント時に実行
     if: |
-      github.actor == 'becky3' && (
-        github.event_name == 'pull_request' ||
+      (
+        (github.event_name == 'pull_request' &&
+         (github.actor == 'becky3' || github.actor == 'github-actions[bot]')) ||
         (github.event_name == 'issue_comment' &&
+         github.actor == 'becky3' &&
          github.event.issue.pull_request &&
          startsWith(github.event.comment.body, '/review'))
       )
@@ -172,7 +174,12 @@ jobs:
                *問題の詳細は各コード行のコメントを参照してください*
                ```
 
-            5. 問題がない場合は「レビューの結果、重大な問題は検出されませんでした」と報告
+            5. 問題がない場合は以下の形式で報告してください:
+               ```
+               <!-- auto-fix:no-issues -->
+               レビューの結果、重大な問題は検出されませんでした。
+               ```
+               `<!-- auto-fix:no-issues -->` は auto-fix.yml が指摘有無を機械的に判定するためのフラグです。問題がない場合は必ず含めてください。
 
       # Slack通知（成功時は冗長なため失敗時のみ）
       - name: Slack notification
