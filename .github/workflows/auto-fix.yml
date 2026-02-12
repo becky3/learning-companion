@@ -76,8 +76,8 @@ jobs:
           # auto-implement 経由のPR（claude/issue-* ブランチ）のみ対象
           BRANCH="${{ github.event.workflow_run.head_branch }}"
           if [ -z "$BRANCH" ]; then
-            echo "in_scope=false" >> $GITHUB_OUTPUT
-            echo "::warning::workflow_run.head_branch is empty. Skipping."
+            echo "::error::workflow_run.head_branch is empty"
+            exit 1
           elif [[ "$BRANCH" == claude/issue-* ]]; then
             echo "in_scope=true" >> $GITHUB_OUTPUT
             echo "Branch '$BRANCH' matches auto-implement pattern"
@@ -204,7 +204,7 @@ jobs:
           if [ -z "$LATEST_REVIEW" ] || [ "$LATEST_REVIEW" = "null" ]; then
             echo "::error::No review comment found after 5 attempts. PR Review workflow may have failed to post results."
             exit 1
-          elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -q '<!-- auto-fix:no-issues'; then
+          elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -qF '<!-- auto-fix:no-issues'; then
             echo "has_issues=false" >> $GITHUB_OUTPUT
             echo "Review result: No issues found"
           else
