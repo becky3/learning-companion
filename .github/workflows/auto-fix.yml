@@ -873,6 +873,7 @@ jobs:
       - name: Handle errors
         if: failure() && steps.pr-info.outputs.number != '' && steps.scope-check.outputs.in_scope == 'true'
         run: |
+          set -euo pipefail
           # エラーハンドラ: checkout 失敗の可能性があるため source は best-effort
           COMMON_SCRIPT="$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
           SOURCED=false
