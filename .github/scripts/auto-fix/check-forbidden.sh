@@ -56,8 +56,8 @@ while IFS= read -r file; do
       FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (diff取得失敗のため要手動確認)\n"
       continue
     fi
-    # 追加行・削除行の両方を対象にする
-    if echo "$DIFF" | grep -qE '^[+-].*dependencies'; then
+    # 追加行・削除行の両方を対象にする（セクションヘッダと代入のみ検出、コメント等の誤検知を防止）
+    if echo "$DIFF" | grep -qE '^[+-]\s*(dependencies\s*=|\[project\.dependencies\]|\[dependency-groups\])'; then
       FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (dependencies変更)\n"
     fi
     continue

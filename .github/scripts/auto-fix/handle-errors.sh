@@ -30,8 +30,14 @@ if [ -n "$COMMON_SCRIPT" ] && [ -f "$COMMON_SCRIPT" ]; then
   fi
 fi
 
-: "${PR_NUMBER:?PR_NUMBER is required}"
-: "${ACTIONS_URL:?ACTIONS_URL is required}"
+if [ -z "${PR_NUMBER:-}" ]; then
+  echo "::warning::PR_NUMBER is not set; skipping error handling"
+  exit 0
+fi
+if [ -z "${ACTIONS_URL:-}" ]; then
+  echo "::warning::ACTIONS_URL is not set; skipping error handling"
+  exit 0
+fi
 
 ERROR_COMMENT="## auto-fix: エラー発生
 
@@ -41,8 +47,8 @@ ERROR_COMMENT="## auto-fix: エラー発生
 対応完了後、\`auto:failed\` を除去して \`/review\` コメントを投稿すると再開できます。"
 
 if [ "$SOURCED" = true ]; then
-  gh_best_effort gh issue edit "$PR_NUMBER" --add-label "auto:failed"
-  gh_comment "$PR_NUMBER" "$ERROR_COMMENT"
+  gh_best_effort gh issue edit "$PR_NUMBER" --add-label "auto:failed" || true
+  gh_comment "$PR_NUMBER" "$ERROR_COMMENT" || true
 else
   # フォールバック: 共通関数なしでベストエフォート
   if ! LABEL_ERR=$(gh issue edit "$PR_NUMBER" --add-label "auto:failed" 2>&1); then

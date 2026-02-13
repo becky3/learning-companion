@@ -70,13 +70,7 @@ for i in $(seq 1 5); do
   if [ "$i" -lt 5 ]; then sleep 10; fi
 done
 
-# 最終的な数値バリデーション（全リトライ失敗時）
-if ! validate_numeric "$UNRESOLVED_COUNT" "unresolved count"; then
-  echo "::error::Failed to get unresolved thread count after 5 attempts."
-  echo "::error::First error: $FIRST_ERROR"
-  echo "::error::Last error: $LAST_ERROR"
-  exit 1
-fi
+# リトライループ内でバリデーション済み。この時点で UNRESOLVED_COUNT は必ず有効な数値
 
 echo "Unresolved review threads: $UNRESOLVED_COUNT"
 

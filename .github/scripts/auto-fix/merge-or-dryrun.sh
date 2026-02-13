@@ -36,7 +36,7 @@ if [ "$AUTO_MERGE_LOWER" = "true" ]; then
   if ! MERGE_ERR=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
     echo "::error::Merge failed: $MERGE_ERR"
     # マージ失敗時: auto:failed ラベル付与 + PRコメント（事後処理はベストエフォート）
-    gh_best_effort gh issue edit "$PR_NUMBER" --add-label "auto:failed"
+    gh_best_effort gh issue edit "$PR_NUMBER" --add-label "auto:failed" || true
     gh_comment "$PR_NUMBER" "## auto-fix: 自動マージ失敗
 
 マージ条件は全て満たしていましたが、マージコマンドの実行に失敗しました:
@@ -47,7 +47,7 @@ $MERGE_ERR
 
 **次のアクション**: エラー内容を確認し、手動でマージしてください。
 
-[Actions ログ]($ACTIONS_URL)"
+[Actions ログ]($ACTIONS_URL)" || true
     exit 1
   fi
 
@@ -60,7 +60,7 @@ $MERGE_ERR
 - ✅ コンフリクトなし
 - ✅ auto:failed ラベルなし
 
-[Actions ログ]($ACTIONS_URL)"
+[Actions ログ]($ACTIONS_URL)" || true
 else
   echo "AUTO_MERGE_ENABLED=${AUTO_MERGE_RAW:-<unset>}: Dry-run mode"
   # ドライラン時のコメント投稿（非クリティカル）
@@ -78,5 +78,5 @@ else
 gh pr merge $PR_NUMBER --merge
 \`\`\`
 
-[Actions ログ]($ACTIONS_URL)"
+[Actions ログ]($ACTIONS_URL)" || true
 fi
