@@ -338,7 +338,7 @@ stateDiagram-v2
 
 1. **対象PR特定**: workflow_run イベントのペイロードから、トリガー元の pr-review.yml が処理したPR番号を取得
 2. **ループ回数チェック**: PR内の `github-actions[bot]` による「レビュー指摘への自動対応」コメント数をカウント。3回以上なら上限到達
-3. **レビュー結果判定（機械可読フラグ方式）**: pr-review.yml が投稿したレビューコメント本文に `<!-- auto-fix:no-issues -->` HTML コメントがあれば指摘なしと判定
+3. **レビュー結果判定（GraphQL unresolvedスレッド方式）**: GraphQL API で PR の reviewThreads を取得し、isResolved == false のスレッド数で指摘の有無を判定
 4. **禁止パターンチェック**: PRの変更ファイルを走査し、禁止パターン（`CLAUDE.md`, `.claude/settings.json`, `.env*`, `pyproject.toml` の dependencies 変更）に該当するか判定。`.github/workflows/*` は develop 向き緩和により対象外
 5. **分岐処理**:
    - ループ上限到達 + 指摘あり → `auto:failed` 付与 + PRコメントで通知
