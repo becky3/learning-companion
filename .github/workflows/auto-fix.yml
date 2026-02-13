@@ -96,7 +96,16 @@ jobs:
           PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body // ""')
 
           # 複数のCloses/Fixes/Resolves パターンに対応（大文字小文字不問）
-          ISSUE_NUMBERS=$(echo "$PR_BODY" | grep -ioP '(?:closes|fixes|resolves)\s+#\K[0-9]+' || true)
+          # grep -P（PCRE）は ubuntu-latest で未対応の場合があるため -E（ERE）を使用
+          ISSUE_NUMBERS=$(echo "$PR_BODY" | grep -ioE '(closes|fixes|resolves)\s+#[0-9]+' | grep -oE '[0-9]+') || GREP_EXIT=$?
+          GREP_EXIT=${GREP_EXIT:-0}
+          if [ "$GREP_EXIT" -eq 1 ]; then
+            # grep終了コード1 = マッチなし（正常）
+            ISSUE_NUMBERS=""
+          elif [ "$GREP_EXIT" -ge 2 ]; then
+            echo "::warning::grep failed with exit code $GREP_EXIT while parsing PR body"
+            ISSUE_NUMBERS=""
+          fi
 
           if [ -z "$ISSUE_NUMBERS" ]; then
             echo "::notice::No linked issue found in PR body. Skipping label removal."
@@ -104,9 +113,13 @@ jobs:
             while IFS= read -r ISSUE_NUMBER; do
               [ -z "$ISSUE_NUMBER" ] && continue
               echo "Removing auto-implement label from Issue #$ISSUE_NUMBER"
-              # ラベルが存在しない場合もエラーにしない（冪等性）
-              if ! gh issue edit "$ISSUE_NUMBER" --remove-label "auto-implement" 2>/dev/null; then
-                echo "::notice::Label 'auto-implement' not found on Issue #$ISSUE_NUMBER or already removed. Skipping."
+              # ラベル除去を試行し、エラー種別を区別（冪等性）
+              if ! LABEL_ERR=$(gh issue edit "$ISSUE_NUMBER" --remove-label "auto-implement" 2>&1); then
+                if echo "$LABEL_ERR" | grep -qi "not found\|does not have"; then
+                  echo "::notice::Label 'auto-implement' not found on Issue #$ISSUE_NUMBER or already removed. Skipping."
+                else
+                  echo "::warning::Failed to remove label from Issue #$ISSUE_NUMBER: $LABEL_ERR"
+                fi
               fi
             done <<< "$ISSUE_NUMBERS"
           fi
@@ -411,7 +424,7 @@ jobs:
             PR #${{ steps.pr-info.outputs.number }} のレビュー指摘に対応してください。
             以下の手順を順番に全て実行すること。途中で停止しないこと。
 
-            ## ステップ 1/7: PR情報の確認
+            ## ステップ 1/8: PR情報の確認
 
             ```bash
             gh pr view ${{ steps.pr-info.outputs.number }} --json title,body,headRefName,baseRefName
@@ -419,14 +432,22 @@ jobs:
             gh pr diff ${{ steps.pr-info.outputs.number }}
             ```
 
-            ## ステップ 2/7: 未解決レビューコメントの取得
+            ## ステップ 2/8: 未解決レビューコメントの取得
 
-            owner/repo は `gh repo view --json owner,name` で取得し、以下の GraphQL で未解決スレッドを抽出:
+            まず owner/repo を取得する:
 
             ```bash
-            gh api graphql -f query='
+            OWNER=$(gh repo view --json owner --jq '.owner.login')
+            REPO=$(gh repo view --json name --jq '.name')
+            echo "Owner: $OWNER, Repo: $REPO"
+            ```
+
+            取得した OWNER, REPO を使って GraphQL で未解決スレッドを抽出:
+
+            ```bash
+            gh api graphql -f query="
             {
-              repository(owner: "{owner}", name: "{repo}") {
+              repository(owner: \"$OWNER\", name: \"$REPO\") {
                 pullRequest(number: ${{ steps.pr-info.outputs.number }}) {
                   reviewThreads(first: 100) {
                     nodes {
@@ -443,12 +464,12 @@ jobs:
                   }
                 }
               }
-            }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .comments.nodes[0] | {author: .author.login, path, line, body}'
+            " --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .comments.nodes[0] | {author: .author.login, path, line, body}'
             ```
 
             未解決の指摘がない場合は「未解決の指摘はありません」と表示して終了。
 
-            ## ステップ 3/7: 関連仕様書の確認と修正実施
+            ## ステップ 3/8: 関連仕様書の確認と修正実施
 
             - PRの目的に対応する `docs/specs/` の仕様書を特定して読む
             - 各指摘について:
@@ -457,7 +478,9 @@ jobs:
               - 妥当な指摘に対して修正を実施する
               - 妥当でない場合はスキップ理由を記録する
 
-            ## ステップ 4/7: テスト実行
+            ## ステップ 4/8: テスト実行
+
+            注: GA環境ではサブエージェント（test-runner等）が利用できないため、直接実行する。
 
             ```bash
             uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/
@@ -467,29 +490,48 @@ jobs:
             Markdown のみの変更の場合、pytest / ruff / mypy はスキップ可（markdownlint のみ実行）。
             失敗があれば修正して再実行。全て通過してから次へ進む。
 
-            ## ステップ 5/7: ドキュメント整合性チェック
+            ## ステップ 5/8: ドキュメント整合性チェック
 
             修正内容が以下のドキュメントの記述と矛盾しないか確認し、必要なら更新する:
             - `docs/specs/` — 仕様・受け入れ条件に影響する変更の場合
             - `CLAUDE.md` — 開発ルール・プロジェクト構造に影響する場合
 
-            ## ステップ 6/7: PRに対応コメント投稿 + スレッド resolve
+            注: GA環境ではサブエージェント（doc-reviewer等）が利用できないため、`docs/` や `CLAUDE.md` に変更がある場合は自分で仕様書との整合性を確認すること。
+
+            ## ステップ 6/8: PRに対応コメント投稿
 
             `gh pr comment ${{ steps.pr-info.outputs.number }}` で対応状況を投稿:
             - 各指摘に対して「対応済み ✅」「別Issue化 ⏸️」「対応不要（理由）❌」を明記
 
-            対応済みと判断したスレッドのみ resolveReviewThread mutation で resolve する:
+            ## ステップ 7/8: 対応済みスレッドの resolve
+
+            対応済みと判断したスレッドのみ resolveReviewThread mutation で resolve する。
+            以下のエラーハンドリング方針に従うこと:
+            - owner/repo 取得失敗 → エラーログを出力して resolve をスキップ
+            - 認証エラー（401/403） → エラーログを出力して即停止
+            - 一時的API障害（個別resolve失敗） → warning でログし次のスレッドに継続
+            - 全件resolve失敗 → 認証/権限エラーの可能性があるためエラーログを出力
 
             ```bash
-            # owner/repo の取得
-            OWNER=$(gh repo view --json owner --jq '.owner.login')
-            REPO=$(gh repo view --json name --jq '.name')
+            PR_NUMBER=${{ steps.pr-info.outputs.number }}
+
+            # owner/repo の取得と検証
+            if ! OWNER=$(gh repo view --json owner --jq '.owner.login' 2>&1); then
+              echo "::error::Failed to get repository owner: $OWNER"
+              exit 1
+            fi
+            if ! REPO=$(gh repo view --json name --jq '.name' 2>&1); then
+              echo "::error::Failed to get repository name: $REPO"
+              exit 1
+            fi
 
             # 未解決スレッドIDの取得
-            THREADS=$(gh api graphql -f query="
+            THREADS=""
+            QUERY_SUCCESS=true
+            if ! THREADS=$(gh api graphql -f query="
             {
               repository(owner: \"$OWNER\", name: \"$REPO\") {
-                pullRequest(number: ${{ steps.pr-info.outputs.number }}) {
+                pullRequest(number: $PR_NUMBER) {
                   reviewThreads(first: 100) {
                     nodes {
                       id
@@ -498,29 +540,61 @@ jobs:
                   }
                 }
               }
-            }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id')
+            }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' 2>&1); then
+              QUERY_SUCCESS=false
+              if echo "$THREADS" | grep -qE '401|403|authentication|forbidden'; then
+                echo "::error::Authentication/permission error: $THREADS"
+                exit 1
+              fi
+              echo "::warning::Failed to query review threads: $THREADS"
+              THREADS=""
+            fi
 
-            # 各スレッドを resolve
-            for THREAD_ID in $THREADS; do
-              gh api graphql -f query='
-              mutation($threadId: ID!) {
-                resolveReviewThread(input: { threadId: $threadId }) {
-                  thread { isResolved }
-                }
-              }' -f threadId="$THREAD_ID" || echo "::warning::Failed to resolve thread $THREAD_ID"
-            done
+            # スレッドの resolve（失敗カウンター付き）
+            if [ -z "$THREADS" ]; then
+              if [ "$QUERY_SUCCESS" = true ]; then
+                echo "No unresolved threads to resolve. Skipping."
+              else
+                echo "::warning::Skipping resolve due to query failure."
+              fi
+            else
+              RESOLVED=0
+              FAILED=0
+              while IFS= read -r THREAD_ID; do
+                [ -z "$THREAD_ID" ] && continue
+                if ! ERROR=$(gh api graphql -f query='
+                mutation($threadId: ID!) {
+                  resolveReviewThread(input: { threadId: $threadId }) {
+                    thread { isResolved }
+                  }
+                }' -f threadId="$THREAD_ID" 2>&1); then
+                  FAILED=$((FAILED + 1))
+                  echo "::warning::Failed to resolve thread $THREAD_ID: $ERROR"
+                else
+                  RESOLVED=$((RESOLVED + 1))
+                fi
+              done <<< "$THREADS"
+
+              echo "Resolved: $RESOLVED, Failed: $FAILED"
+              if [ "$RESOLVED" -eq 0 ] && [ "$FAILED" -gt 0 ]; then
+                echo "::error::All thread resolutions failed. Possible auth/permission issue."
+                exit 1
+              fi
+            fi
             ```
 
-            ## ステップ 7/7: コミット & push
+            ## ステップ 8/8: コミット & push
 
             ```bash
             git add -A
-            git diff --cached --stat
-            git commit -m "fix: レビュー指摘対応 (PR #${{ steps.pr-info.outputs.number }})"
-            git push origin HEAD
+            if [ -n "$(git status --porcelain)" ]; then
+              git diff --cached --stat
+              git commit -m "fix: レビュー指摘対応 (PR #${{ steps.pr-info.outputs.number }})"
+              git push origin HEAD
+            else
+              echo "No changes to commit. Skipping."
+            fi
             ```
-
-            変更がない場合はコミットをスキップする。
 
       # NOTE: スレッドの resolve は check-pr スキル内で「対応済みと判断したスレッドのみ」を対象に実行される。
       # auto-fix.yml 側で無条件に全スレッドを resolve すると、未対応の指摘までクローズされるため、
@@ -659,11 +733,34 @@ jobs:
             exit 1
           fi
 
-          AUTO_MERGE_ENABLED="${{ vars.AUTO_MERGE_ENABLED }}"
+          AUTO_MERGE_RAW="${{ vars.AUTO_MERGE_ENABLED }}"
+          AUTO_MERGE_ENABLED=$(echo "$AUTO_MERGE_RAW" | tr '[:upper:]' '[:lower:]')
+
+          # 想定される値: "true", "false", "" (未設定)
+          if [ -n "$AUTO_MERGE_ENABLED" ] && [ "$AUTO_MERGE_ENABLED" != "true" ] && [ "$AUTO_MERGE_ENABLED" != "false" ]; then
+            echo "::warning::Unexpected AUTO_MERGE_ENABLED value: '$AUTO_MERGE_RAW'. Falling back to dry-run mode."
+            AUTO_MERGE_ENABLED="false"
+          fi
 
           if [ "$AUTO_MERGE_ENABLED" = "true" ]; then
             echo "AUTO_MERGE_ENABLED=true: Executing merge"
-            gh pr merge "$PR_NUMBER" --merge
+            if ! MERGE_ERR=$(gh pr merge "$PR_NUMBER" --merge 2>&1); then
+              echo "::error::Merge failed: $MERGE_ERR"
+              # マージ失敗時: auto:failed ラベル付与 + PRコメント
+              gh issue edit "$PR_NUMBER" --add-label "auto:failed" || echo "::warning::Failed to add auto:failed label"
+              gh pr comment "$PR_NUMBER" --body "## auto-fix: 自動マージ失敗
+
+          マージ条件は全て満たしていましたが、マージコマンドの実行に失敗しました:
+
+          \`\`\`
+          $MERGE_ERR
+          \`\`\`
+
+          **次のアクション**: エラー内容を確認し、手動でマージしてください。
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" || echo "::warning::Failed to post merge failure comment"
+              exit 1
+            fi
 
             gh pr comment "$PR_NUMBER" --body "## auto-fix: 自動マージ完了
 
@@ -675,7 +772,7 @@ jobs:
 
           [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           else
-            echo "AUTO_MERGE_ENABLED=${AUTO_MERGE_ENABLED:-<unset>}: Dry-run mode"
+            echo "AUTO_MERGE_ENABLED=${AUTO_MERGE_RAW:-<unset>}: Dry-run mode"
             gh pr comment "$PR_NUMBER" --body "## auto-fix: マージ判定結果（ドライラン）
 
           全てのマージ条件を満たしています:
