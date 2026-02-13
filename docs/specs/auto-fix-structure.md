@@ -230,9 +230,9 @@ fi
 
 ```text
 YAML (auto-fix.yml)
-  └─ direct_prompt: | (YAMLリテラルブロック)
-       └─ ```bash ... ``` (Markdownコードブロック)
-            └─ シェルスクリプト（変数展開あり）
+  └─ with: direct_prompt: | (YAML リテラルブロック、${{ }} はここで展開)
+       └─ プロンプト本文（Markdown形式、$VAR はシェル変数として残る）
+            └─ ```bash ... ``` (コードブロック内のシェルスクリプト例)
 ```
 
 - シンタックスハイライトが効かない
@@ -241,9 +241,9 @@ YAML (auto-fix.yml)
 
 ### 注記: `direct_prompt` と `prompt` の関係
 
-- `direct_prompt` は `claude-code-action` の `action.yml` の `inputs` に**未定義**のパラメータである
+- `direct_prompt` は `claude-code-action` の `action.yml` の `inputs` に定義されていないが、現在のバージョン（v1.0.46）では動作している
 - 公式に定義されている入力パラメータは `prompt`
-- 現在の `auto-fix.yml` では `direct_prompt` を使用しているが、実装時に `prompt` への移行を検討する必要がある
+- 将来のバージョンアップ時に `prompt` への移行を検討する
 
 ### 設計
 
@@ -289,7 +289,7 @@ YAML (auto-fix.yml)
 
 ### テンプレート内の変数展開
 
-`${{ }}` 式はGitHub Actionsのコンテキストでのみ展開されるため、外部ファイルでは使用できない。代わりにプレースホルダー `{{VAR_NAME}}` を使用し、読み込み時にシェルで置換する。
+`${{ }}` 式はワークフローYAML内でのみ展開される（GitHub Actions ランタイムがYAML解析時に処理するため）。外部ファイルではプレースホルダー `{{VAR_NAME}}` を使用し、YAML内のステップで動的に置換する。
 
 | テンプレート内 | 置換元 |
 |--------------|--------|
@@ -355,6 +355,14 @@ gh pr view {{PR_NUMBER}} --json title,body,headRefName,baseRefName
 - 各スクリプトの単体テスト（BATS等のシェルテストフレームワーク）は実装フェーズで検討する
 - 等価性テストの自動化（リファクタリング前後の出力比較等）は将来的な改善として検討する
 
+### 既知のリスク（既存動作、スコープ外）
+
+以下は現在の `auto-fix.yml` に存在する既知のリスクである。本リファクタリングは動作を変えない方針のため、これらはスコープ外とする。動作改善が必要な場合は別Issueで対応する。
+
+- **check-loop-count**: API失敗時にデフォルト0で続行するため、理論上は無限ループのリスクがある（ただし3回で停止するため実質的な影響は限定的）
+- **handle-errors**: エラーハンドラ自体のフォールバック処理が失敗した場合、ラベル付与やコメント投稿が行われない可能性がある
+- **remove-label**: ラベル除去失敗時に warning で続行するため、次回ワークフロー実行時に重複処理が発生する可能性がある
+
 ## shellcheck 適用方針
 
 ### 対象
@@ -371,8 +379,8 @@ gh pr view {{PR_NUMBER}} --json title,body,headRefName,baseRefName
 shell=bash
 # 外部ソースのファイルを追従
 external-sources=true
-# 未使用変数の警告を抑制（GITHUB_OUTPUT への書き出しパターン）
-# 必要に応じて個別に disable
+# GitHub Actions 環境変数（GITHUB_OUTPUT, GH_TOKEN 等）はスクリプト外で定義されるため抑制
+disable=SC2154
 ```
 
 ### CI への組み込み
@@ -387,11 +395,11 @@ shellcheck .github/scripts/auto-fix/*.sh
 
 ### 抑制が必要な既知パターン
 
-グローバル抑制（`.shellcheckrc`）は使用せず、各スクリプトで個別に `# shellcheck disable=SCXXXX` を適用する。抑制範囲を最小化し、意図しない警告の見落としを防ぐ。
+全スクリプト共通の抑制は `.shellcheckrc` で管理し、局所的な抑制は各スクリプト内で個別に適用する。
 
 | コード | 理由 | 対応 |
 |--------|------|------|
-| SC2154 | `$GITHUB_OUTPUT` 等の環境変数がスクリプト外で定義 | 該当スクリプトの冒頭で `# shellcheck disable=SC2154` を個別に記述 |
+| SC2154 | `$GITHUB_OUTPUT`, `$GH_TOKEN` 等の GitHub Actions 環境変数が全スクリプトで共通して使用される | `.shellcheckrc` でグローバル抑制（全スクリプト共通のため個別記述は冗長） |
 | SC2086 | 意図的な word splitting（該当箇所がある場合） | 該当行の直前に `# shellcheck disable=SC2086` を個別に記述 |
 
 ## `_common.sh` の拡張
@@ -422,12 +430,14 @@ shellcheck .github/scripts/auto-fix/*.sh
 require_env() {
   local missing=()
   for var in "$@"; do
-    if [ -z "${!var:-}" ]; then
+    if ! declare -p "$var" >/dev/null 2>&1; then
       missing+=("$var")
+    elif [ -z "${!var}" ]; then
+      missing+=("$var (defined but empty)")
     fi
   done
   if [ ${#missing[@]} -gt 0 ]; then
-    echo "::error::Missing required environment variables: ${missing[*]}" >&2
+    echo "::error::Missing or empty required environment variables: ${missing[*]}" >&2
     exit 1
   fi
 }
