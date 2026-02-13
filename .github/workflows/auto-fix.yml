@@ -86,6 +86,34 @@ jobs:
             echo "::notice::Branch '$BRANCH' is not an auto-implement branch. Skipping."
           fi
 
+      - name: Remove auto-implement label from linked Issue
+        if: steps.pr-info.outputs.skip != 'true' && steps.scope-check.outputs.in_scope == 'true'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          # PRのbodyから "Closes #N" パターンでIssue番号を抽出
+          PR_BODY=$(gh pr view "$PR_NUMBER" --json body --jq '.body // ""')
+
+          # 複数のCloses/Fixes/Resolves パターンに対応（大文字小文字不問）
+          ISSUE_NUMBERS=$(echo "$PR_BODY" | grep -ioP '(?:closes|fixes|resolves)\s+#\K[0-9]+' || true)
+
+          if [ -z "$ISSUE_NUMBERS" ]; then
+            echo "::notice::No linked issue found in PR body. Skipping label removal."
+          else
+            while IFS= read -r ISSUE_NUMBER; do
+              [ -z "$ISSUE_NUMBER" ] && continue
+              echo "Removing auto-implement label from Issue #$ISSUE_NUMBER"
+              # ラベルが存在しない場合もエラーにしない（冪等性）
+              if ! gh issue edit "$ISSUE_NUMBER" --remove-label "auto-implement" 2>/dev/null; then
+                echo "::notice::Label 'auto-implement' not found on Issue #$ISSUE_NUMBER or already removed. Skipping."
+              fi
+            done <<< "$ISSUE_NUMBERS"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
       - name: Check auto:failed label
         if: steps.pr-info.outputs.skip != 'true' && steps.scope-check.outputs.in_scope == 'true'
         id: check-failed
@@ -381,8 +409,118 @@ jobs:
           show_full_output: true
           direct_prompt: |
             PR #${{ steps.pr-info.outputs.number }} のレビュー指摘に対応してください。
+            以下の手順を順番に全て実行すること。途中で停止しないこと。
 
-            `/check-pr ${{ steps.pr-info.outputs.number }}` スキルを実行して、未解決のレビュー指摘に対応してください。
+            ## ステップ 1/7: PR情報の確認
+
+            ```bash
+            gh pr view ${{ steps.pr-info.outputs.number }} --json title,body,headRefName,baseRefName
+            gh pr view ${{ steps.pr-info.outputs.number }} --json files --jq '.files[].path'
+            gh pr diff ${{ steps.pr-info.outputs.number }}
+            ```
+
+            ## ステップ 2/7: 未解決レビューコメントの取得
+
+            owner/repo は `gh repo view --json owner,name` で取得し、以下の GraphQL で未解決スレッドを抽出:
+
+            ```bash
+            gh api graphql -f query='
+            {
+              repository(owner: "{owner}", name: "{repo}") {
+                pullRequest(number: ${{ steps.pr-info.outputs.number }}) {
+                  reviewThreads(first: 100) {
+                    nodes {
+                      isResolved
+                      comments(first: 10) {
+                        nodes {
+                          author { login }
+                          body
+                          path
+                          line
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .comments.nodes[0] | {author: .author.login, path, line, body}'
+            ```
+
+            未解決の指摘がない場合は「未解決の指摘はありません」と表示して終了。
+
+            ## ステップ 3/7: 関連仕様書の確認と修正実施
+
+            - PRの目的に対応する `docs/specs/` の仕様書を特定して読む
+            - 各指摘について:
+              - 指摘対象のファイル・行を読み、コンテキストを理解する
+              - 妥当な指摘かどうかを判断する
+              - 妥当な指摘に対して修正を実施する
+              - 妥当でない場合はスキップ理由を記録する
+
+            ## ステップ 4/7: テスト実行
+
+            ```bash
+            uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/
+            npx markdownlint-cli2@0.20.0 "CLAUDE.md" "docs/**/*.md" "*.md" ".claude/**/*.md"
+            ```
+
+            Markdown のみの変更の場合、pytest / ruff / mypy はスキップ可（markdownlint のみ実行）。
+            失敗があれば修正して再実行。全て通過してから次へ進む。
+
+            ## ステップ 5/7: ドキュメント整合性チェック
+
+            修正内容が以下のドキュメントの記述と矛盾しないか確認し、必要なら更新する:
+            - `docs/specs/` — 仕様・受け入れ条件に影響する変更の場合
+            - `CLAUDE.md` — 開発ルール・プロジェクト構造に影響する場合
+
+            ## ステップ 6/7: PRに対応コメント投稿 + スレッド resolve
+
+            `gh pr comment ${{ steps.pr-info.outputs.number }}` で対応状況を投稿:
+            - 各指摘に対して「対応済み ✅」「別Issue化 ⏸️」「対応不要（理由）❌」を明記
+
+            対応済みと判断したスレッドのみ resolveReviewThread mutation で resolve する:
+
+            ```bash
+            # owner/repo の取得
+            OWNER=$(gh repo view --json owner --jq '.owner.login')
+            REPO=$(gh repo view --json name --jq '.name')
+
+            # 未解決スレッドIDの取得
+            THREADS=$(gh api graphql -f query="
+            {
+              repository(owner: \"$OWNER\", name: \"$REPO\") {
+                pullRequest(number: ${{ steps.pr-info.outputs.number }}) {
+                  reviewThreads(first: 100) {
+                    nodes {
+                      id
+                      isResolved
+                    }
+                  }
+                }
+              }
+            }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id')
+
+            # 各スレッドを resolve
+            for THREAD_ID in $THREADS; do
+              gh api graphql -f query='
+              mutation($threadId: ID!) {
+                resolveReviewThread(input: { threadId: $threadId }) {
+                  thread { isResolved }
+                }
+              }' -f threadId="$THREAD_ID" || echo "::warning::Failed to resolve thread $THREAD_ID"
+            done
+            ```
+
+            ## ステップ 7/7: コミット & push
+
+            ```bash
+            git add -A
+            git diff --cached --stat
+            git commit -m "fix: レビュー指摘対応 (PR #${{ steps.pr-info.outputs.number }})"
+            git push origin HEAD
+            ```
+
+            変更がない場合はコミットをスキップする。
 
       # NOTE: スレッドの resolve は check-pr スキル内で「対応済みと判断したスレッドのみ」を対象に実行される。
       # auto-fix.yml 側で無条件に全スレッドを resolve すると、未対応の指摘までクローズされるため、
@@ -502,8 +640,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
-      # 段階的マージ解禁 Step 1: ドライラン（判定結果の通知のみ）
-      - name: Merge (dry-run)
+      # 段階的マージ解禁: AUTO_MERGE_ENABLED で分岐
+      # vars.AUTO_MERGE_ENABLED == 'true' → 実マージ、それ以外（未設定/'false'等） → ドライラン
+      - name: Merge or dry-run
         if: |
           steps.pr-info.outputs.skip != 'true' &&
           steps.scope-check.outputs.in_scope == 'true' &&
@@ -520,7 +659,24 @@ jobs:
             exit 1
           fi
 
-          gh pr comment "$PR_NUMBER" --body "## auto-fix: マージ判定結果（ドライラン）
+          AUTO_MERGE_ENABLED="${{ vars.AUTO_MERGE_ENABLED }}"
+
+          if [ "$AUTO_MERGE_ENABLED" = "true" ]; then
+            echo "AUTO_MERGE_ENABLED=true: Executing merge"
+            gh pr merge "$PR_NUMBER" --merge
+
+            gh pr comment "$PR_NUMBER" --body "## auto-fix: 自動マージ完了
+
+          全てのマージ条件を満たしたため、自動マージを実行しました:
+          - ✅ レビュー指摘ゼロ
+          - ✅ CI全チェック通過
+          - ✅ コンフリクトなし
+          - ✅ auto:failed ラベルなし
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          else
+            echo "AUTO_MERGE_ENABLED=${AUTO_MERGE_ENABLED:-<unset>}: Dry-run mode"
+            gh pr comment "$PR_NUMBER" --body "## auto-fix: マージ判定結果（ドライラン）
 
           全てのマージ条件を満たしています:
           - ✅ レビュー指摘ゼロ
@@ -528,16 +684,14 @@ jobs:
           - ✅ コンフリクトなし
           - ✅ auto:failed ラベルなし
 
-          **ドライランモード**: 現在は判定結果の通知のみです。実際のマージは管理者が手動で行ってください。
+          **ドライランモード**: \`AUTO_MERGE_ENABLED\` が有効でないため、判定結果の通知のみです。実際のマージは管理者が手動で行ってください。
 
           \`\`\`bash
           gh pr merge $PR_NUMBER --merge
           \`\`\`
 
           [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-
-          # --- 段階的マージ解禁 Step 2 以降でコメントアウトを解除 ---
-          # gh pr merge "$PR_NUMBER" --merge
+          fi
         env:
           GH_TOKEN: ${{ secrets.REPO_OWNER_PAT }}
           GH_REPO: ${{ github.repository }}
