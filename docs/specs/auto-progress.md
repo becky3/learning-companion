@@ -48,7 +48,7 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 | Require a pull request before merging | YES | 直 push 禁止 |
 | Require status checks to pass | YES | CI 必須（pytest, mypy, ruff, markdownlint） |
 | Require approvals | NO | 自動マージを許可するため |
-| Require linear history | YES | squash merge で履歴を綺麗に |
+| Require linear history | NO | 通常マージで開発履歴を保持（マージ方式は `git-flow.md` 参照） |
 | Include administrators | NO | 管理者は緊急時にバイパス可能 |
 | Allow auto-merge | YES | 自動マージを許可 |
 
@@ -59,7 +59,7 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 | Require a pull request before merging | YES | 直 push 禁止 |
 | Require status checks to pass | YES | CI 必須 |
 | Require approvals | YES (1名) | 管理者の承認必須 |
-| Require linear history | YES | squash merge で履歴を綺麗に |
+| Require linear history | NO | squash マージはリリース時に使用（マージ方式は `git-flow.md` 参照） |
 | Include administrators | YES | 管理者も保護対象 |
 | Allow auto-merge | NO | 手動マージのみ |
 
@@ -596,7 +596,7 @@ flowchart TD
 | コンフリクトなし | `gh pr view --json mergeable` が `MERGEABLE` |
 | `auto:failed` なし | PRのラベルに `auto:failed` が含まれない |
 
-マージ方式: `gh pr merge --merge`（通常マージ）
+マージ方式: `gh pr merge --merge`（通常マージ。マージ方式の詳細は `git-flow.md` の「マージ方式」セクション参照）
 マージ先: `develop` ブランチ（main への直接マージは禁止）
 
 ## 失敗時の振る舞い
