@@ -192,8 +192,9 @@ GitHub Actions 環境（claude-code-action）ではサブエージェント（Ta
 1. `/test-run` — pytest / ruff / mypy / markdownlint を実行
 2. `/code-review` — 変更差分のセルフコードレビュー
 3. `/doc-review` — ドキュメント変更がある場合の品質レビュー
+4. `/auto-finalize <Issue番号>` — commit / push / PR作成 / Issue完了コメント投稿
 
-**重要**: 品質チェックは中間ステップであり、ここで停止しないこと。通過後は「Claudeによる実装完了時の必須手順」のステップ6以降（ステージング → コミット → プッシュ → PR作成）まで必ず実行する。
+**重要**: ステップ1-3の品質チェックは中間ステップであり、必ずステップ4まで実行してタスクを完了すること。
 
 ## Bot プロセスガード
 
@@ -234,6 +235,7 @@ GitHub Actions 環境（claude-code-action）ではサブエージェント（Ta
 | `/test-run` | テスト実行（pytest/ruff/mypy/markdownlint） | `/test-run`, `/test-run diff` |
 | `/code-review` | コードレビュー（code-reviewer相当） | `/code-review` |
 | `/doc-review` | ドキュメントレビュー（doc-reviewer相当） | `/doc-review docs/specs/f1-chat.md` |
+| `/auto-finalize` | 品質チェック後のcommit/push/PR作成/Issue完了コメント | `/auto-finalize 272` |
 
 **定義ファイル**: `.claude/skills/` 配下
 **仕様書**: `docs/specs/doc-gen-skill.md`（`/doc-gen`, `/doc-edit` 用）、`docs/specs/topic-skill.md`（`/topic` 用）
