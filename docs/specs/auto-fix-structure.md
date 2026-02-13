@@ -41,6 +41,18 @@ on:
 
 labeled トリガー時は起動直後に `auto-implement` ラベルをPRから除去する。これにより、ラベルが付いたままの状態で後続のレビューや手動操作によって同じラベルが再度付与された場合に、意図せずワークフローが繰り返し実行されることを防ぐ。また、既存の remove-label.sh ステップにより、リンクIssueからも `auto-implement` ラベルが除去される。
 
+### pr-review.yml からのラベル付与（#311 で追加）
+
+pr-review.yml は `/review` コメント（`issue_comment`）で起動した場合、レビュー完了後に `auto-implement` ラベルをPRに付与する。これにより auto-fix が labeled トリガーで起動し、レビュー→修正ループが継続する。
+
+**背景**: `/review`（issue_comment）起源の `workflow_run` では `pull_requests: []` になり、auto-fix が PR 番号を特定できない（GitHub Actions 既知制限: actions/runner#3438）。labeled トリガーはこの問題を回避する。
+
+**条件**:
+
+- `issue_comment` イベント時のみ付与（`pull_request` イベント時は `workflow_run` 経路が正常動作するため不要）
+- `auto:failed` ラベルがある場合はスキップ
+- `REPO_OWNER_PAT` を使用（`GITHUB_TOKEN` では `labeled` イベントがトリガーされない）
+
 ### get-pr-number.sh の拡張
 
 `PR_NUMBER_FROM_EVENT` 環境変数が設定されている場合（= labeled トリガー）、`workflow_run.pull_requests` の解析をスキップして即座にPR番号を返す。
