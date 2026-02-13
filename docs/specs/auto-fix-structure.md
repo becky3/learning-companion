@@ -2,7 +2,7 @@
 
 ## 概要
 
-`auto-fix.yml`（937行、16個の `run: |` ブロック）のシェルスクリプトを外部ファイルに切り出し、`direct_prompt` を外部Markdownファイルに分離する。動作を変えず、保守性・テスト可能性・レビュー品質を向上させる。
+`auto-fix.yml`（937行、16個の `run: |` ブロック + 1個の `uses:` アクション）のシェルスクリプトを外部ファイルに切り出し、`direct_prompt` を外部Markdownファイルに分離する。動作を変えず、保守性・テスト可能性・レビュー品質を向上させる。
 
 **コンセプト**: 「YAMLはオーケストレーションのみ、ロジックはスクリプトに」
 
@@ -221,9 +221,15 @@ YAML (auto-fix.yml)
 - `${{ }}` と `$VAR` の変数展開スコープが混在
 - 編集時にネストの把握が困難
 
+### 注記: `direct_prompt` と `prompt` の関係
+
+- `direct_prompt` は `claude-code-action` の `action.yml` の `inputs` に**未定義**のパラメータである
+- 公式に定義されている入力パラメータは `prompt`
+- 現在の `auto-fix.yml` では `direct_prompt` を使用しているが、実装時に `prompt` への移行を検討する必要がある
+
 ### 設計
 
-`direct_prompt` の内容を `.github/prompts/auto-fix-check-pr.md` に外部化する。
+`direct_prompt`（実装時に `prompt` への移行を検討）の内容を `.github/prompts/auto-fix-check-pr.md` に外部化する。
 
 **YAMLでの読み込み:**
 
