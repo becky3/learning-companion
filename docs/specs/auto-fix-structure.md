@@ -11,6 +11,40 @@
 - アーキテクト分析（[#257 コメント](https://github.com/becky3/ai-assistant/issues/257#issuecomment-3894836004)）で特定された構造的問題への対応
 - 前提の Issue #293（エラーハンドリング統一 + ガード集約）は PR #294 で完了済み
 
+## labeled トリガー（#303 で追加）
+
+PRに `auto-implement` ラベルを付与すると auto-fix が起動する仕組み。既存の `workflow_run` トリガー（PR Review 完了後に自動起動）に加えて、手動でレビュー→修正ループを開始できる。
+
+### トリガー設計
+
+```yaml
+on:
+  workflow_run:
+    workflows: ["PR Review"]
+    types: [completed]
+  pull_request:
+    types: [labeled]
+```
+
+### 動作の違い
+
+| 項目 | workflow_run | pull_request(labeled) |
+|------|------------|----------------------|
+| 起動条件 | PR Review 成功完了 | `auto-implement` ラベル付与 |
+| scope-check | `claude/issue-*` ブランチのみ | スキップ（ラベル付与自体がスコープ制御） |
+| PR番号取得 | `workflow_run.pull_requests` or ブランチ名検索 | `github.event.pull_request.number` を直接使用 |
+| checkout ref | `workflow_run.head_branch` | `pull_request.head.ref` |
+| concurrency group | `auto-fix-{branch_name}` | `auto-fix-pr-{pr_number}` |
+| ラベル除去 | リンクIssueから除去（既存ステップ） | PR自体から即座に除去（ループ防止） |
+
+### ラベル除去（ループ防止）
+
+labeled トリガー時は起動直後に `auto-implement` ラベルをPRから除去する。これにより、ワークフロー内の処理（コミット等）が再度 `labeled` イベントを発火させることを防ぐ。
+
+### get-pr-number.sh の拡張
+
+`PR_NUMBER_FROM_EVENT` 環境変数が設定されている場合（= labeled トリガー）、`workflow_run.pull_requests` の解析をスキップして即座にPR番号を返す。
+
 ### 現在の問題
 
 | 問題 | 影響 |

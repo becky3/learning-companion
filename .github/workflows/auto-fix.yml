@@ -24,11 +24,16 @@ on:
   workflow_run:
     workflows: ["PR Review"]
     types: [completed]
+  pull_request:
+    types: [labeled]
 
 jobs:
   auto-fix:
-    # PR Review が success で完了した場合のみ実行（スキップ/失敗は除外）
-    if: github.event.workflow_run.conclusion == 'success'
+    # workflow_run: PR Review が success で完了した場合のみ実行（スキップ/失敗は除外）
+    # pull_request(labeled): auto-implement ラベルが付与された場合のみ実行
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'pull_request' && github.event.label.name == 'auto-implement')
     runs-on: ubuntu-latest
     steps:
       # --- スクリプト・promptテンプレートの取得（全ステップで利用するため最初にcheckout） ---
@@ -41,7 +46,20 @@ jobs:
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
-      - name: Get PR number from workflow_run
+      # labeled トリガー時: ループ防止のためラベルを即座に除去
+      - name: Remove auto-implement label (labeled trigger)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          if ! gh pr edit "$PR_NUMBER" --remove-label "auto-implement" 2>/dev/null; then
+            echo "::notice::auto-implement label already removed or not found"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      - name: Get PR number
         id: pr-info
         run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/get-pr-number.sh"
         env:
@@ -49,6 +67,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PULL_REQUESTS_JSON: ${{ toJson(github.event.workflow_run.pull_requests) }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          PR_NUMBER_FROM_EVENT: ${{ github.event.pull_request.number }}
 
       - name: Check auto-implement scope
         if: steps.pr-info.outputs.skip != 'true'
@@ -56,7 +75,14 @@ jobs:
         run: |
           set -euo pipefail
 
-          # auto-implement 経由のPR（claude/issue-* ブランチ）のみ対象
+          # labeled トリガー時: ラベル付与自体がスコープ制御のためスキップ
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "in_scope=true" >> $GITHUB_OUTPUT
+            echo "Labeled trigger: scope check skipped (label itself is the scope control)"
+            exit 0
+          fi
+
+          # workflow_run トリガー時: auto-implement 経由のPR（claude/issue-* ブランチ）のみ対象
           BRANCH="${{ github.event.workflow_run.head_branch }}"
           if [ -z "$BRANCH" ]; then
             echo "::error::workflow_run.head_branch is empty"
@@ -68,6 +94,8 @@ jobs:
             echo "in_scope=false" >> $GITHUB_OUTPUT
             echo "::notice::Branch '$BRANCH' is not an auto-implement branch. Skipping."
           fi
+        env:
+          EVENT_NAME: ${{ github.event_name }}
 
       - name: Remove auto-implement label from linked Issue
         if: steps.pr-info.outputs.skip != 'true' && steps.scope-check.outputs.in_scope == 'true'
@@ -231,7 +259,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.event.workflow_run.head_branch }}
 
       - name: Load prompt template
         if: steps.guards.outputs.proceed == 'true' && steps.guards.outputs.path == 'auto_fix'
@@ -381,9 +409,14 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-# concurrency 制御（ブランチ名ベース）
-# NOTE: workflow_run イベントではPR番号が事前に不明なため、
-# ブランチ名で制御する。同一ブランチのPRは1つのため実質PR単位の制御。
+# concurrency 制御
+# workflow_run: ブランチ名ベース（PR番号が事前に不明なため）
+# pull_request: PR番号ベース（直接取得可能）
 concurrency:
-  group: auto-fix-${{ github.event.workflow_run.head_branch }}
+  group: >-
+    auto-fix-${{
+      github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || github.event.workflow_run.head_branch
+    }}
   cancel-in-progress: false
