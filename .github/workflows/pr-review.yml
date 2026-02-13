@@ -201,16 +201,28 @@ jobs:
           set -euo pipefail
           PR_NUMBER="${{ steps.pr-number.outputs.number }}"
 
-          # auto:failed ラベルがある場合はスキップ（自動処理停止中）
-          if gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' | grep -q "^auto:failed$"; then
-            echo "::notice::PR #$PR_NUMBER has auto:failed label. Skipping auto-implement label."
-            exit 0
-          fi
-
-          # REPO_OWNER_PAT で付与（GITHUB_TOKEN では labeled イベントがトリガーされない）
+          # REPO_OWNER_PAT チェック（未設定だと後続の gh コマンドも全て失敗するため先にチェック）
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "::warning::REPO_OWNER_PAT is not set. Cannot add auto-implement label."
             exit 0
+          fi
+
+          # auto:failed ラベルがある場合はスキップ（自動処理停止中）
+          if LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
+            if echo "$LABELS" | grep -q "^auto:failed$"; then
+              echo "::notice::PR #$PR_NUMBER has auto:failed label. Skipping auto-implement label."
+              exit 0
+            fi
+          else
+            echo "::warning::Failed to fetch labels for PR #$PR_NUMBER: $LABELS. Skipping."
+            exit 0
+          fi
+
+          # ラベルが既に付与済みの場合、--add-label では labeled イベントが発火しない
+          # 除去→再付与で確実にイベントを発火させる
+          if echo "$LABELS" | grep -q "^auto-implement$"; then
+            echo "PR #$PR_NUMBER already has auto-implement label. Removing to retrigger."
+            gh pr edit "$PR_NUMBER" --remove-label "auto-implement" 2>&1 || true
           fi
 
           if ! ERROR_OUTPUT=$(gh pr edit "$PR_NUMBER" --add-label "auto-implement" 2>&1); then
