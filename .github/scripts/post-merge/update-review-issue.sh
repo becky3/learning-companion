@@ -40,34 +40,29 @@ generate_checklist() {
   done <<< "$files"
 
   if [ "$has_src" = true ]; then
-    checklist="${checklist}- [ ] Bot起動確認（\`uv run python -m src.main\`）
-- [ ] エラーログに異常がないこと
-"
+    checklist+=$'- [ ] Bot起動確認（`uv run python -m src.main`）\n- [ ] エラーログに異常がないこと\n'
   fi
 
   if [ "$has_config" = true ]; then
-    checklist="${checklist}- [ ] 設定変更の動作確認
-"
+    checklist+=$'- [ ] 設定変更の動作確認\n'
   fi
 
   if [ "$has_mcp" = true ]; then
-    checklist="${checklist}- [ ] MCPサーバー起動確認
-"
+    checklist+=$'- [ ] MCPサーバー起動確認\n'
   fi
 
   if [ "$has_pyproject" = true ]; then
-    checklist="${checklist}- [ ] 依存パッケージの動作確認（\`uv sync\`）
-"
+    checklist+=$'- [ ] 依存パッケージの動作確認（`uv sync`）\n'
   fi
 
   echo "$checklist"
 }
 
-# 今日の日付
-DATE=$(date -u +"%Y-%m-%d")
+# 今日の日付（失敗時はフォールバック）
+DATE=$(date -u +"%Y-%m-%d") || DATE="unknown-date"
 
-# チェックリスト生成
-CHECKLIST=$(generate_checklist "$RUNTIME_FILES")
+# チェックリスト生成（コマンド置換内のエラーは伝播しないためフォールバック）
+CHECKLIST=$(generate_checklist "$RUNTIME_FILES") || CHECKLIST=""
 
 # ファイル一覧を整形
 FILE_LIST=""
@@ -107,7 +102,7 @@ if [ -n "$EXISTING_ISSUE" ]; then
     echo "::warning::Failed to get issue body: $CURRENT_BODY. Trying comment fallback."
     # フォールバック: Issue body を取得できない場合はコメントで追記
     if ! gh_safe_warning gh issue comment "$EXISTING_ISSUE" --body "$NEW_SECTION"; then
-      echo "::warning::Comment fallback also failed. Skipping review issue update."
+      echo "::warning::Comment fallback also failed. Please manually update review-batch issue #$EXISTING_ISSUE with PR #$PR_NUMBER changes."
     fi
     exit 0
   fi
@@ -120,10 +115,14 @@ ${NEW_SECTION}"
 
   if ! gh_safe_warning gh issue edit "$EXISTING_ISSUE" --body "$UPDATED_BODY"; then
     echo "::warning::Failed to update issue body. Trying comment fallback."
-    gh_safe_warning gh issue comment "$EXISTING_ISSUE" --body "$NEW_SECTION" || true
+    if gh_safe_warning gh issue comment "$EXISTING_ISSUE" --body "$NEW_SECTION"; then
+      echo "Added comment to review-batch issue #$EXISTING_ISSUE (body update failed, used comment fallback)"
+    else
+      echo "::warning::Comment fallback also failed. Please manually update review-batch issue #$EXISTING_ISSUE with PR #$PR_NUMBER changes."
+    fi
+  else
+    echo "Updated review-batch issue #$EXISTING_ISSUE"
   fi
-
-  echo "Updated review-batch issue #$EXISTING_ISSUE"
 else
   # --- 新規Issue作成 + ピン留め ---
   echo "No existing review-batch issue found. Creating new one."
@@ -146,6 +145,12 @@ ${NEW_SECTION}"
     exit 0
   fi
 
+  # URL形式バリデーション（stderr混入やエラーメッセージの防御）
+  if [[ "$NEW_ISSUE_URL" != https://github.com/* ]]; then
+    echo "::warning::Unexpected issue URL format: $NEW_ISSUE_URL"
+    exit 0
+  fi
+
   # Issue番号を抽出（URLの末尾の数字）
   NEW_ISSUE_NUM="${NEW_ISSUE_URL##*/}"
 
@@ -160,7 +165,7 @@ ${NEW_SECTION}"
   # ピン留め（ベストエフォート）
   if ! gh_safe_warning gh issue pin "$NEW_ISSUE_NUM"; then
     echo "::warning::Failed to pin issue #$NEW_ISSUE_NUM (non-critical)"
+  else
+    echo "Pinned review-batch issue #$NEW_ISSUE_NUM"
   fi
-
-  echo "Pinned review-batch issue #$NEW_ISSUE_NUM"
 fi
