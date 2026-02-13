@@ -66,6 +66,7 @@
     # Bad: ディレクティブ行にインラインコメント（パースエラー）
     # shellcheck disable=SC2016 -- reason here
     ```
+
 - ドキュメント内の図表（フローチャート、シーケンス図、ER図等）はmermaid形式を使用する
   - ASCII図表は使用しない
   - 参考: <https://mermaid.js.org/>
