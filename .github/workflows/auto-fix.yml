@@ -150,66 +150,47 @@ jobs:
         run: |
           set -euo pipefail
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
-          TRIGGER_RUN_ID="${{ github.event.workflow_run.id }}"
+          REPO_OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
 
           # 方針: 一時的API障害 → リトライで対応
-          # トリガー元 run の created_at、PR HEAD SHA、レビューコメント検索を
-          # 一連のリトライループで処理（最大5回、10秒間隔）
-          LATEST_REVIEW=""
+          # GraphQL で unresolved レビュースレッドを検索（最大5回、10秒間隔）
+          UNRESOLVED_COUNT=""
           for i in $(seq 1 5); do
-            # トリガー元の workflow_run の created_at を取得
-            if ! RUN_CREATED_AT=$(gh api "repos/${{ github.repository }}/actions/runs/${TRIGGER_RUN_ID}" --jq '.created_at' 2>&1); then
-              echo "::warning::Failed to get workflow run created_at (attempt $i/5): $RUN_CREATED_AT"
-              if [ "$i" -lt 5 ]; then sleep 10; fi
-              continue
-            fi
-            if [ -z "$RUN_CREATED_AT" ]; then
-              echo "::warning::Workflow run created_at is empty (attempt $i/5)"
-              if [ "$i" -lt 5 ]; then sleep 10; fi
-              continue
-            fi
-
-            # PR の HEAD SHA を取得（commit SHA 検証に使用）
-            if ! PR_HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid' 2>&1); then
-              echo "::warning::Failed to get PR HEAD SHA (attempt $i/5): $PR_HEAD_SHA"
-              if [ "$i" -lt 5 ]; then sleep 10; fi
-              continue
-            fi
-
-            # レビューコメントを検索（created_at + commit SHA でフィルタ）
-            if ! LATEST_REVIEW=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
-              --paginate --jq "[.[] | select(
-                .user.login == \"claude[bot]\" and
-                .created_at >= \"${RUN_CREATED_AT}\" and
-                ((.body | contains(\"<!-- auto-fix:no-issues commit=${PR_HEAD_SHA}\")) or (.body | contains(\"<!-- auto-fix:has-issues commit=${PR_HEAD_SHA}\")))
-              )] | last" 2>&1); then
-              echo "::warning::Failed to fetch PR comments (attempt $i/5): $LATEST_REVIEW"
-              if [ "$i" -lt 5 ]; then sleep 10; fi
-              continue
-            fi
-
-            if [ -n "$LATEST_REVIEW" ] && [ "$LATEST_REVIEW" != "null" ]; then
+            if UNRESOLVED_COUNT=$(gh api graphql -f query='
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $number) {
+                    reviewThreads(first: 100) {
+                      nodes {
+                        isResolved
+                      }
+                    }
+                  }
+                }
+              }
+            ' -f owner="${REPO_OWNER}" -f name="${REPO_NAME}" -F number="$PR_NUMBER" \
+              --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' 2>&1); then
               break
             fi
-
-            if [ "$i" -lt 5 ]; then
-              echo "No review comment found yet (attempt $i/5). Retrying in 10s..."
-              sleep 10
-            fi
+            echo "::warning::Failed to query review threads (attempt $i/5): $UNRESOLVED_COUNT"
+            if [ "$i" -lt 5 ]; then sleep 10; fi
           done
 
-          echo "Trigger run created at: ${RUN_CREATED_AT:-unknown}"
-          echo "PR HEAD SHA: ${PR_HEAD_SHA:-unknown}"
-
-          if [ -z "$LATEST_REVIEW" ] || [ "$LATEST_REVIEW" = "null" ]; then
-            echo "::error::No review comment found after 5 attempts. PR Review workflow may have failed to post results."
+          # 数値バリデーション
+          if ! [[ "$UNRESOLVED_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "::error::Failed to get unresolved thread count after 5 attempts: $UNRESOLVED_COUNT"
             exit 1
-          elif echo "$LATEST_REVIEW" | jq -r '.body' | grep -qF '<!-- auto-fix:no-issues'; then
-            echo "has_issues=false" >> $GITHUB_OUTPUT
-            echo "Review result: No issues found"
-          else
+          fi
+
+          echo "Unresolved review threads: $UNRESOLVED_COUNT"
+
+          if [ "$UNRESOLVED_COUNT" -gt 0 ]; then
             echo "has_issues=true" >> $GITHUB_OUTPUT
-            echo "Review result: Issues found"
+            echo "Review result: $UNRESOLVED_COUNT unresolved thread(s) found"
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "Review result: No unresolved threads"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
