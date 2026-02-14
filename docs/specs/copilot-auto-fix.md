@@ -219,7 +219,7 @@ if: >-
 - [ ] AC10: 修正コミットの push 後、CI 完了をポーリング待機してからマージ判定に進む
 - [ ] AC11: 修正後に自動マージされる（再レビューは行わない）
 - [ ] AC12: 禁止パターン検出時に `auto:failed` が付与される
-- [ ] AC13: 既存 `pr-review.yml` / `auto-fix.yml` が無効化されている（トリガーが `workflow_dispatch` のみに変更）— 本ワークフローの前提条件。auto-progress.md AC19 と対応
+- [ ] AC13: `auto-fix.yml` が無効化されている（トリガーが `workflow_dispatch` のみに変更）。`pr-review.yml` は通常PR向けに稼働継続し、`auto:pipeline` ラベル付きPRのみスキップする — auto-progress.md AC19 と対応
 - [ ] AC14: `handle-errors.sh` のエラーメッセージが Copilot 方式の再開手順に更新されている
 
 ## テスト方針
@@ -239,7 +239,7 @@ copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト
 | ファイル | 役割 |
 |---------|------|
 | `.github/workflows/copilot-auto-fix.yml` | 本ワークフロー（新規作成） |
-| `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（**無効化対象**） |
+| `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（通常PR向けに稼働、`auto:pipeline` 時スキップ） |
 | `.github/workflows/auto-fix.yml` | PRKit ベースの自動修正（**無効化対象**） |
 | `.github/scripts/auto-fix/` | 共通スクリプト群（流用、一部変更あり） |
 | `.github/prompts/auto-fix-check-pr.md` | auto-fix 用プロンプトテンプレート（流用） |

@@ -6,10 +6,12 @@ permissions:
   issues: write
   id-token: write
 
-# 休止中: Copilot ネイティブレビューベースの copilot-auto-fix.yml に移行。
-# PRKit 方式の精度改善時に再有効化の可能性があるため、削除せず workflow_dispatch で無効化。
+# 通常PRは PRKit でレビュー。auto:pipeline ラベル付きPRは copilot-auto-fix.yml に委譲。
 on:
-  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
 
 jobs:
   pr-review:
@@ -52,6 +54,22 @@ jobs:
             exit 1
           fi
           echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
+
+      # auto:pipeline ラベル付きPRは copilot-auto-fix.yml がレビューするためスキップ
+      - name: Skip if auto:pipeline
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-number.outputs.number }}"
+          if LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
+            if echo "$LABELS" | grep -q "^auto:pipeline$"; then
+              echo "::notice::PR #$PR_NUMBER has auto:pipeline label. Skipping PRKit review (handled by copilot-auto-fix.yml)."
+              exit 1
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
 
       - name: Get base branch
         id: base

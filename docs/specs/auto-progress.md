@@ -84,7 +84,7 @@ main 向き PR が作成 → Copilot ネイティブレビュー（または管�
 | ファイル | 変更 | 内容 |
 |---------|------|------|
 | `claude.yml` | YAML 変更なし | CLAUDE.md で `gh pr create --base develop` を指示 |
-| `pr-review.yml` | **無効化** | PRKit ベース。Copilot ネイティブレビューに移行のため無効化 |
+| `pr-review.yml` | 稼働中 | PRKit ベースの自動レビュー。`auto:pipeline` ラベル付きPRはスキップ（Copilot に委譲） |
 | `auto-fix.yml` | **無効化** | copilot-auto-fix.yml に置き換え |
 | `copilot-auto-fix.yml` | **新規** | Copilot レビュー結果に基づく自動修正 + マージ |
 | GitHub 設定 | Default branch を develop に変更 | `Settings > General > Default branch` |
@@ -139,13 +139,13 @@ PRコメントで使用するコマンド:
 
 | コマンド | 動作 | 状態 |
 |----------|------|------|
-| `/review` | PRKit によるレビュー実行（pr-review.yml） | **無効化**（pr-review.yml 無効化に伴い使用不可） |
-| `/fix` | レビュー実行後に auto-fix を起動（pr-review.yml 経由） | **無効化**（同上） |
+| `/review` | PRKit によるレビュー実行（pr-review.yml） | 有効（通常PR向け。`auto:pipeline` PR はスキップ） |
+| `/fix` | レビュー実行後に auto-fix を起動（pr-review.yml 経由） | **無効化**（auto-fix.yml 無効化に伴い使用不可） |
 | `/review-pr` | PRKit による手動レビュー（Claude Code スキル） | 有効（手動実行用として維持） |
 
 **自動パイプラインでのレビュー**: Copilot のネイティブレビューが PR 作成時に自動実行される。コマンドによるトリガーは不要。
 
-**手動レビュー**: PRKit を使いたい場合は `/review-pr` スキルを使用する（GitHub Actions ではなく Claude Code 上で実行）。
+**手動レビュー**: Claude Code 上で `/review-pr` スキルを使用するか、PRコメントで `/review` を投稿する。
 
 ## 自動設計フェーズ
 
@@ -296,14 +296,16 @@ stateDiagram-v2
 | ファイル | 状態 | トリガー | 役割 |
 |----------|------|---------|------|
 | `claude.yml` | 既存改修 | `issues[labeled]` 追加 | `auto-implement` ラベルで自動実装開始 |
-| `pr-review.yml` | **無効化** | — | PRKit ベースの自動レビュー（Copilot に移行） |
+| `pr-review.yml` | 稼働中 | `pull_request` / `issue_comment` | PRKit ベースの自動レビュー（`auto:pipeline` PR はスキップ） |
 | `auto-fix.yml` | **無効化** | — | PRKit ベースの自動修正ループ（copilot-auto-fix.yml に移行） |
 | `copilot-auto-fix.yml` | **新規** | `pull_request_review[submitted]` | Copilot レビュー結果に基づく自動修正 + マージ |
 | `post-merge.yml` | 据え置き | `pull_request[closed]` | マージ後の次Issue自動ピックアップ + 実行テスト通知 |
 
 ### 無効化方針
 
-`pr-review.yml` と `auto-fix.yml` は削除せず、トリガーを `workflow_dispatch` のみに変更して無効化する。切り戻しが容易で、PRKit の精度改善時に再有効化も可能。
+`auto-fix.yml` は削除せず、トリガーを `workflow_dispatch` のみに変更して無効化する。切り戻しが容易で、PRKit の精度改善時に再有効化も可能。
+
+`pr-review.yml` は通常PR向けに稼働継続する。`auto:pipeline` ラベル付きPRのみスキップし、Copilot レビュー（copilot-auto-fix.yml）に委譲する。
 
 ### claude.yml 改修内容
 
@@ -318,25 +320,28 @@ stateDiagram-v2
 
 ### レビュー方式の移行（Issue #351）
 
-PRKit（prt-\*）ベースの自動レビュー（pr-review.yml → auto-fix.yml ループ）はレビュー収束問題（Issue #351）のため**休止中**。代替として Copilot ネイティブレビューベースの copilot-auto-fix.yml を使用する。
+PRKit ベースのレビュー→修正ループ（pr-review.yml → auto-fix.yml）はレビュー収束問題（Issue #351）のため**自動パイプライン（auto:pipeline）では休止**。代替として Copilot ネイティブレビューベースの copilot-auto-fix.yml を使用する。
 
-| 方式 | ワークフロー | 状態 | 設計書 |
-|------|-------------|------|--------|
-| PRKit ベース | `pr-review.yml` + `auto-fix.yml` | **休止中** | `auto-fix-structure.md` |
-| Copilot ベース | `copilot-auto-fix.yml` | **稼働中** | `copilot-auto-fix.md` |
+通常PR（auto:pipeline なし）では pr-review.yml による PRKit レビューが引き続き稼働する。
 
-**休止の経緯:**
+| 方式 | ワークフロー | 対象 | 状態 | 設計書 |
+|------|-------------|------|------|--------|
+| PRKit レビュー | `pr-review.yml` | 通常PR | **稼働中** | — |
+| PRKit 自動修正ループ | `pr-review.yml` + `auto-fix.yml` | auto:pipeline PR | **休止中** | `auto-fix-structure.md` |
+| Copilot ベース | `copilot-auto-fix.yml` | auto:pipeline PR | **稼働中** | `copilot-auto-fix.md` |
+
+**自動修正ループ休止の経緯:**
 
 - PRKit の prt-silent-failure-hunter の正答率が17%（CRITICAL 判定の正答率20%）
 - レビュー→修正→再レビューのループで、修正済みコードが「初見」として再レビューされ新規指摘が出続ける
 - PR #350 で4ラウンド回しても収束しなかった実績データに基づく判断
 - 詳細分析: Issue #351 コメント1（データ付き）
 
-**復帰条件:**
+**自動修正ループ復帰条件:**
 
 - Issue #265 で PRKit の精度データを蓄積継続
 - 正答率が実用レベル（目安: 80%以上）に達した時点で自動パイプラインへの再投入を検討
-- 手動レビュー（`/review-pr` スキル）では引き続き PRKit を使用可能
+- 単発レビュー（pr-review.yml、`/review-pr` スキル）では引き続き PRKit を使用可能
 
 ### copilot-auto-fix.yml 設計
 
@@ -823,7 +828,7 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 - [ ] AC16: 自動マージが develop ブランチに対して実行される（main には直接マージしない）
 - [ ] AC17: develop ブランチに保護ルールが設定されている（CI必須、PR必須）
 - [ ] AC18: main ブランチに保護ルールが設定されている（承認必須、手動マージのみ）
-- [ ] AC19: `pr-review.yml` と `auto-fix.yml` が無効化されている
+- [ ] AC19: `auto-fix.yml` が無効化されており、`pr-review.yml` が `auto:pipeline` ラベル付きPRをスキップする
 
 ### Phase 1（PRKit ベース — 休止中）
 
@@ -864,7 +869,7 @@ PRKit 復帰時に再度有効化する。
 |---------|------|
 | `.github/workflows/claude.yml` | 自動実装ワークフロー（既存改修） |
 | `.github/workflows/copilot-auto-fix.yml` | Copilot レビュー結果に基づく自動修正 + マージ（**新規**） |
-| `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（**休止中**） |
+| `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（通常PR向けに稼働、`auto:pipeline` 時スキップ） |
 | `.github/workflows/auto-fix.yml` | PRKit ベースの自動修正ループ（**休止中**） |
 | `.github/workflows/post-merge.yml` | マージ後処理 |
 | `docs/specs/copilot-auto-fix.md` | copilot-auto-fix.yml の詳細設計書（**新規**） |
