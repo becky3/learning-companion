@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.services.ogp_extractor import OgpExtractor
 
@@ -123,3 +126,38 @@ async def test_ac10_returns_none_on_non_200() -> None:
         result = await extractor.extract_image_url("https://example.com/article")
 
     assert result is None
+
+
+async def test_ac10_returns_none_on_redirect_ssrf_protection(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """AC10: リダイレクト応答時はSSRF対策としてNoneを返しwarningログを出す."""
+    extractor = OgpExtractor()
+
+    for status in (301, 302, 303, 307, 308):
+        mock_resp = AsyncMock()
+        mock_resp.status = status
+        mock_resp.headers = {"Location": "http://internal.local/secret"}
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = AsyncMock()
+        mock_session.get = MagicMock(return_value=mock_resp)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch(
+                "src.services.ogp_extractor.aiohttp.ClientSession",
+                return_value=mock_session,
+            ),
+            caplog.at_level(logging.WARNING),
+        ):
+            caplog.clear()
+            result = await extractor.extract_image_url(
+                "https://example.com/article"
+            )
+
+        assert result is None, f"Expected None for redirect status {status}"
+        assert "Redirect detected (SSRF protection)" in caplog.text
+        assert "http://internal.local/secret" in caplog.text
