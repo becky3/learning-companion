@@ -20,29 +20,36 @@ jobs:
       - name: Log review event
         run: |
           echo "=== Review Event Info ==="
-          echo "Reviewer: ${{ github.event.review.user.login }}"
+          echo "Reviewer login: $REVIEWER_LOGIN"
           echo "Review state: ${{ github.event.review.state }}"
           echo "Review ID: ${{ github.event.review.id }}"
           echo "PR number: ${{ github.event.pull_request.number }}"
           echo "Event action: ${{ github.event.action }}"
           echo ""
           echo "=== Review Body (first 500 chars) ==="
-          echo "${{ github.event.review.body }}" | head -c 500
+          # body にバッククォート等が含まれるためファイル経由で出力
+          cat <<'BODY_EOF' | head -c 500
+          ${{ github.event.review.body }}
+          BODY_EOF
           echo ""
+        env:
+          REVIEWER_LOGIN: ${{ github.event.review.user.login }}
 
       - name: Check if Copilot review
         id: check-copilot
         run: |
-          REVIEWER="${{ github.event.review.user.login }}"
-          echo "Reviewer login: $REVIEWER"
+          echo "Reviewer login: $REVIEWER_LOGIN"
 
-          if [ "$REVIEWER" = "copilot-pull-request-reviewer[bot]" ]; then
+          # イベントペイロードでは "Copilot" で来る（REST API の "copilot-pull-request-reviewer[bot]" とは異なる）
+          if [ "$REVIEWER_LOGIN" = "Copilot" ] || [ "$REVIEWER_LOGIN" = "copilot-pull-request-reviewer[bot]" ]; then
             echo "is_copilot=true" >> "$GITHUB_OUTPUT"
             echo "✅ This is a Copilot review"
           else
             echo "is_copilot=false" >> "$GITHUB_OUTPUT"
-            echo "ℹ️ This is NOT a Copilot review (reviewer: $REVIEWER)"
+            echo "ℹ️ This is NOT a Copilot review (reviewer: $REVIEWER_LOGIN)"
           fi
+        env:
+          REVIEWER_LOGIN: ${{ github.event.review.user.login }}
 
       - name: Count unresolved threads
         if: steps.check-copilot.outputs.is_copilot == 'true'
@@ -69,7 +76,7 @@ jobs:
               }
             }
           ' -f owner="$REPO_OWNER" -f name="$REPO_NAME" -F number="$PR_NUMBER" \
-            --jq '[$.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
+            --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')
 
           echo "Unresolved threads: $UNRESOLVED_COUNT"
 
@@ -88,7 +95,7 @@ jobs:
           echo "=== Copilot inline comments ==="
 
           COPILOT_COMMENTS=$(gh api "repos/${{ github.repository }}/pulls/$PR_NUMBER/comments" \
-            --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]")] | length')
+            --jq '[.[] | select(.user.login == "copilot-pull-request-reviewer[bot]" or .user.login == "Copilot")] | length')
 
           echo "Copilot inline comments: $COPILOT_COMMENTS"
 
@@ -96,6 +103,6 @@ jobs:
           echo ""
           echo "=== Copilot review body ==="
           gh api "repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" \
-            --jq '.[] | select(.user.login == "copilot-pull-request-reviewer[bot]") | .body' | tail -1
+            --jq '.[] | select(.user.login == "copilot-pull-request-reviewer[bot]" or .user.login == "Copilot") | .body' | tail -1
         env:
           GH_TOKEN: ${{ github.token }}
