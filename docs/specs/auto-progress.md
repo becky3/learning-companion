@@ -148,6 +148,8 @@ PRコメントで使用する auto-fix 関連コマンド:
 - レビュー→自動修正ループを開始したい場合 → `/fix`
 - 自動パイプライン（claude.yml → PR作成 → レビュー）では `/fix` 相当の動作が自動で行われる
 
+**ガード条件**: `auto:failed` ラベルが付いたPRでは `/fix` を実行しても `auto:fix-requested` は付与されない（安全弁として機能）
+
 ## 自動設計フェーズ
 
 仕様書がないIssueや、ざっくりとしたIssueに対して、実装前に自動で仕様書を作成するフェーズ。
@@ -253,7 +255,7 @@ flowchart TD
 |--------|-----|------|--------------|
 | `auto-implement` | `#0E8A16` (緑) | 自動実装トリガー（Issue用） | 管理者が手動 |
 | `auto:pipeline` | `#0E8A16` (緑) | 自動パイプラインで作成されたPRのマーカー | claude.yml が PR 作成時に付与 |
-| `auto:fix-requested` | `#FBCA04` (黄) | auto-fix の起動トリガー | pr-review.yml が `/fix` or `auto:pipeline` 検出時に付与 |
+| `auto:fix-requested` | `#FBCA04` (黄) | auto-fix の起動トリガー | pr-review.yml が `/fix` or `auto:pipeline` 検出時に付与（`auto:failed` がない場合のみ） |
 | `auto:merged` | `#1D76DB` (青) | 自動マージ済みマーカー（post-merge.yml の発火条件） | auto-fix.yml がマージ直前に付与 |
 | `auto:failed` | `#d73a4a` (赤) | 自動処理の失敗・停止（緊急停止にも使用） | 各ワークフロー失敗時 or 管理者が手動 |
 | `auto:review-batch` | `#C2E0C6` (薄緑) | 自動マージレビューバッチIssue | post-merge.yml |
@@ -797,18 +799,27 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 - [ ] AC16: develop ブランチに保護ルールが設定されている（CI必須、PR必須）
 - [ ] AC17: main ブランチに保護ルールが設定されている（承認必須、手動マージのみ）
 
+### Phase 1（コマンド体系・ラベル連携）
+
+- [ ] AC18: `/review` コマンド実行時、レビューは実行されるが `auto:fix-requested` ラベルは付与されない
+- [ ] AC19: `/fix` コマンド実行時、レビュー実行後に `auto:fix-requested` ラベルがPRに付与される
+- [ ] AC20: `auto:failed` ラベルが付いたPRで `/fix` を実行した場合、`auto:fix-requested` ラベルは付与されない（ガード動作）
+- [ ] AC21: `auto:pipeline` ラベル付きPRが `pull_request[opened]` でレビューされた場合、レビュー完了後に `auto:fix-requested` ラベルが付与される
+- [ ] AC22: `auto:pipeline` ラベルなしPRが `pull_request[opened]` でレビューされた場合、`auto:fix-requested` ラベルは付与されない
+- [ ] AC23: `auto:pipeline` + `auto:failed` の両方が付いたPRでは、`auto:fix-requested` ラベルが付与されない
+
 ### Phase 1（自動設計フェーズ）
 
-- [ ] AC18: 仕様書がないIssueに `auto-implement` が付与された場合、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進む
-- [ ] AC19: Issue内容が曖昧な場合、`auto:failed` ラベルが付与され、不明点がIssueにコメントされる
-- [ ] AC20: 自動生成された仕様書がPRに含まれてコミットされる
+- [ ] AC24: 仕様書がないIssueに `auto-implement` が付与された場合、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進む
+- [ ] AC25: Issue内容が曖昧な場合、`auto:failed` ラベルが付与され、不明点がIssueにコメントされる
+- [ ] AC26: 自動生成された仕様書がPRに含まれてコミットされる
 
 ### Phase 2（post-merge.yml）
 
-- [ ] AC21: `src/` 配下の変更を含むPRがマージされた場合、`auto:review-batch` レビューIssueにチェックリストが追記される
-- [ ] AC22: `docs/` 配下のみの変更PRではレビューIssueへの追記が行われない
-- [ ] AC23: チェックリストが変更ファイルパターンからテンプレート生成される（`src/*` → Bot起動確認、`config/*` → 設定変更確認、`mcp-servers/*` → MCPサーバー起動確認、`pyproject.toml` → 依存パッケージ確認）
-- [ ] AC24: PRマージ後に post-merge.yml が次の `auto-implement` 候補Issueをピックアップし、PRコメントに投稿する（ラベルは付与しない）
+- [ ] AC27: `src/` 配下の変更を含むPRがマージされた場合、`auto:review-batch` レビューIssueにチェックリストが追記される
+- [ ] AC28: `docs/` 配下のみの変更PRではレビューIssueへの追記が行われない
+- [ ] AC29: チェックリストが変更ファイルパターンからテンプレート生成される（`src/*` → Bot起動確認、`config/*` → 設定変更確認、`mcp-servers/*` → MCPサーバー起動確認、`pyproject.toml` → 依存パッケージ確認）
+- [ ] AC30: PRマージ後に post-merge.yml が次の `auto-implement` 候補Issueをピックアップし、PRコメントに投稿する（ラベルは付与しない）
 
 ## テスト方針
 
