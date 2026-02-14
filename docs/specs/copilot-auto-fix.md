@@ -49,7 +49,7 @@ flowchart TD
     C --> D[copilot-auto-fix.yml 起動]
     D --> E{reviewer == Copilot?}
     E -->|No| Z[スキップ]
-    E -->|Yes| F{auto:pipeline<br/>ラベルあり?}
+    E -->|Yes| F{auto/ ブランチ<br/>プレフィックス?}
     F -->|No| Z
     F -->|Yes| G{auto:failed<br/>ラベルなし?}
     G -->|No| Z
@@ -82,6 +82,7 @@ flowchart TD
 - **発火条件（if）**:
   1. reviewer が `"Copilot"` または `"copilot-pull-request-reviewer[bot]"`
   2. PR の head リポジトリが同一リポジトリ（フォーク PR を除外）
+  3. ブランチ名が `auto/` プレフィックスで始まる（自動パイプライン由来の PR のみ対象。Actions 分数節約）
 - **同時実行制御**: PR番号ごとの concurrency グループ（cancel-in-progress: false — 進行中の修正ジョブをキャンセルするとコミットが不完全な状態になるリスクがあるため）
 
 ### Copilot レビューが来ない場合
@@ -104,14 +105,15 @@ if: >-
   (github.event.review.user.login == 'Copilot'
    || github.event.review.user.login == 'copilot-pull-request-reviewer[bot]')
   && github.event.pull_request.head.repo.full_name == github.repository
+  && startsWith(github.event.pull_request.head.ref, 'auto/')
 ```
 
 ## 処理フロー
 
 ### 1. 前提条件チェック
 
+- `auto/` ブランチプレフィックスの判定はジョブレベル `if` で実施済み（Actions 分数節約）
 - PR が OPEN 状態であること（マージ済み・クローズ済みの PR はスキップ。Copilot が複数回レビューを投稿した場合のガード）
-- `auto:pipeline` ラベルの有無を確認（自動パイプライン PR のみ対象）
 - `auto:failed` ラベルの有無を確認（停止中の PR はスキップ）
 - いずれの条件も満たさない場合はスキップ
 
@@ -209,7 +211,7 @@ if: >-
 
 - [ ] AC1: Copilot のレビュー完了（`pull_request_review[submitted]`）で copilot-auto-fix.yml が起動する
 - [ ] AC2: Copilot 以外の reviewer のレビューではスキップされる
-- [ ] AC3: `auto:pipeline` ラベルのない PR ではスキップされる
+- [ ] AC3: `auto/` ブランチプレフィックスのない PR ではスキップされる（ジョブレベル `if` で判定）
 - [ ] AC4: `auto:failed` ラベルのある PR ではスキップされる
 - [ ] AC5: マージ済み・クローズ済みの PR ではスキップされる
 - [ ] AC6: unresolved threads == 0 のときマージ判定（5条件チェック）に進み、全条件クリアで自動マージされる
@@ -219,7 +221,7 @@ if: >-
 - [ ] AC10: 修正コミットの push 後、CI 完了をポーリング待機してからマージ判定に進む
 - [ ] AC11: 修正後に自動マージされる（再レビューは行わない）
 - [ ] AC12: 禁止パターン検出時に `auto:failed` が付与される
-- [ ] AC13: `auto-fix.yml` が無効化されている（トリガーが `workflow_dispatch` のみに変更）。`pr-review.yml` は通常PR向けに稼働継続し、`auto:pipeline` ラベル付きPRのみスキップする — auto-progress.md AC19 と対応
+- [ ] AC13: `auto-fix.yml` が無効化されている（トリガーが `workflow_dispatch` のみに変更）。`pr-review.yml` は通常PR向けに稼働継続し、`auto/` ブランチプレフィックス付きPRのみスキップする — auto-progress.md AC19 と対応
 - [ ] AC14: `handle-errors.sh` のエラーメッセージが Copilot 方式の再開手順に更新されている
 
 ## テスト方針
@@ -227,7 +229,7 @@ if: >-
 copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト方針を補完）:
 
 - Copilot 以外の reviewer（人間、他の Bot）の review では起動しないことを確認
-- `auto:pipeline` ラベルなし PR で起動しないことを確認
+- `auto/` ブランチプレフィックスなし PR で起動しないことを確認
 - マージ済み PR に対する Copilot レビューでスキップされることを確認
 - unresolved == 0 のとき、CI 完了待機をスキップしてマージ判定に進むことを確認
 - 修正後の unresolved 再カウントで残存指摘がある場合に `auto:failed` が付与されることを確認
@@ -239,7 +241,7 @@ copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト
 | ファイル | 役割 |
 |---------|------|
 | `.github/workflows/copilot-auto-fix.yml` | 本ワークフロー（新規作成） |
-| `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（通常PR向けに稼働、`auto:pipeline` 時スキップ） |
+| `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（通常PR向けに稼働、`auto/` ブランチプレフィックス付き PR はスキップ） |
 | `.github/workflows/auto-fix.yml` | PRKit ベースの自動修正（**無効化対象**） |
 | `.github/scripts/auto-fix/` | 共通スクリプト群（流用、一部変更あり） |
 | `.github/prompts/auto-fix-check-pr.md` | auto-fix 用プロンプトテンプレート（流用） |

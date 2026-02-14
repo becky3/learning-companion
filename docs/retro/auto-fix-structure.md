@@ -188,7 +188,9 @@ PRKit ベースの自動レビュー（pr-review.yml → auto-fix.yml ループ�
 
 #### 1. 既存スクリプトの高い再利用率
 
-Phase 1-2 で外部化した 8 スクリプトのうち 5 つ（`_common.sh`, `check-review-result.sh`, `check-forbidden.sh`, `merge-check.sh`, `merge-or-dryrun.sh`）をそのまま copilot-auto-fix.yml から流用できた。構造リファクタリングの投資が回収された形。修正が必要だったのは `merge-check.sh`（条件追加）と `handle-errors.sh`（メッセージ変更）のみ。
+Phase 1-2 で外部化した 8 スクリプトのうち 5 つ（`_common.sh`, `check-review-result.sh`, `check-forbidden.sh`, `merge-check.sh`, `merge-or-dryrun.sh`）を
+そのまま copilot-auto-fix.yml から流用できた。構造リファクタリングの投資が回収された形。
+修正が必要だったのは `merge-check.sh`（条件追加）と `handle-errors.sh`（メッセージ変更）のみ。
 
 #### 2. PR #352 の事前検証データが判断根拠として有効だった
 
