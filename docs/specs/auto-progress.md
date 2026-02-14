@@ -83,7 +83,7 @@ main 向き PR が作成 → Copilot ネイティブレビュー（または管�
 
 | ファイル | 変更 | 内容 |
 |---------|------|------|
-| `claude.yml` | YAML 変更なし | CLAUDE.md で `gh pr create --base develop` を指示 |
+| `claude.yml` | 変更あり | `branch_prefix: "auto/"` 追加、`REPO_OWNER_PAT` 使用、`auto:pipeline` ラベル付与ステップ維持 |
 | `pr-review.yml` | 稼働中 | PRKit ベースの自動レビュー。`auto/` ブランチプレフィックス付きPRはスキップ（Copilot に委譲） |
 | `auto-fix.yml` | **無効化** | copilot-auto-fix.yml に置き換え |
 | `copilot-auto-fix.yml` | **新規** | Copilot レビュー結果に基づく自動修正 + マージ |

@@ -96,8 +96,15 @@ jobs:
             fi
 
             # createdAt でソートし最新のPRを選択（同一Issue番号の複数PR対策）
-            PR_NUMBER=$(echo "$PR_LIST_OUTPUT" | jq -r \
-              "[.[] | select(.headRefName | startswith(\"auto/issue-${ISSUE_NUMBER}-\"))] | sort_by(.createdAt) | .[-1].number // empty")
+            # jq 失敗時は stderr をキャプチャしてエラーと「該当なし」を区別する
+            if ! JQ_OUTPUT=$(echo "$PR_LIST_OUTPUT" | jq -r \
+              "[.[] | select(.headRefName | startswith(\"auto/issue-${ISSUE_NUMBER}-\"))] | sort_by(.createdAt) | .[-1].number // empty" 2>&1); then
+              echo "::warning::jq filtering failed (attempt $attempt/3): $JQ_OUTPUT"
+              if [ "$attempt" -lt 3 ]; then sleep 5; continue; fi
+              echo "::warning::jq filtering failed after 3 attempts. auto:pipeline label not added."
+              exit 0
+            fi
+            PR_NUMBER="$JQ_OUTPUT"
 
             if [ -n "$PR_NUMBER" ]; then
               echo "Found PR #${PR_NUMBER} (attempt $attempt/3)"
