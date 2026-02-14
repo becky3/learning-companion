@@ -9,7 +9,7 @@ permissions:
 # 通常PRは PRKit でレビュー。auto:pipeline ラベル付きPRは copilot-auto-fix.yml に委譲。
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened]
   issue_comment:
     types: [created]
 
