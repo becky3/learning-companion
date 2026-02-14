@@ -6,11 +6,10 @@ permissions:
   issues: write
   id-token: write
 
+# 休止中: Copilot ネイティブレビューベースの copilot-auto-fix.yml に移行。
+# PRKit 方式の精度改善時に再有効化の可能性があるため、削除せず workflow_dispatch で無効化。
 on:
-  pull_request:
-    types: [opened]
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
 
 jobs:
   pr-review:
