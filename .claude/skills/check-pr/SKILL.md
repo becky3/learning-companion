@@ -136,7 +136,15 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
       別Issueとして対応する理由
       ```
 
-12. 対応済みレビュースレッドの resolve:
+12. レビュースレッドの resolve:
+
+    **前提条件**: ステップ4で取得した全ての未解決スレッドに対し、ステップ7・11で判断が完了していること。
+    未検討のスレッドがある場合はステップ7に戻ること。
+
+    全スレッドの判断完了後、以下の全ステータスのスレッドを resolve する:
+    - ✅ 対応済み: 修正を実施した指摘
+    - ❌ 対応不要: 判断理由付きで対応しないと決定した指摘
+    - ⏸️ 別Issue化: 別Issueを作成して追跡可能にした指摘
 
     エラーハンドリング方針（auto-fix.yml と統一）:
 
@@ -199,7 +207,6 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
       fi
       ```
 
-    - ステップ7で「対応済み」と判断したスレッドのみを resolve する。未対応の指摘は resolve しない
     - 失敗カウンターで全件失敗を検知（全件失敗は認証エラーの可能性 → exit 1）:
 
       ```bash
@@ -214,13 +221,21 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
         FAILED=0
         while IFS= read -r THREAD_ID; do
           [ -z "$THREAD_ID" ] && continue
+          # THREAD_ID のフォーマット検証（GitHub thread IDは英数字・_・-のみ）
+          if ! [[ "$THREAD_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "::warning::Invalid thread ID format: $THREAD_ID"
+            FAILED=$((FAILED + 1))
+            continue
+          fi
           # 個別失敗は一時的障害の可能性 → warning で続行
-          if ! ERROR=$(gh api graphql -f query='
-          mutation($threadId: ID!) {
-            resolveReviewThread(input: { threadId: $threadId }) {
+          # Windows Git Bash では GraphQL変数($threadId)が正しく渡らないため、
+          # IDをmutationクエリに直接埋め込む
+          if ! ERROR=$(gh api graphql -f query="
+          mutation {
+            resolveReviewThread(input: { threadId: \"$THREAD_ID\" }) {
               thread { isResolved }
             }
-          }' -f threadId="$THREAD_ID" 2>&1); then
+          }" 2>&1); then
             FAILED=$((FAILED + 1))
             echo "::warning::Failed to resolve thread $THREAD_ID: $ERROR"
           else

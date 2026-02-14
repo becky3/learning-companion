@@ -157,12 +157,19 @@ else
   FAILED=0
   while IFS= read -r THREAD_ID; do
     [ -z "$THREAD_ID" ] && continue
-    if ! ERROR=$(gh api graphql -f query='
-    mutation($threadId: ID!) {
-      resolveReviewThread(input: { threadId: $threadId }) {
+    # THREAD_ID のフォーマット検証（GitHub thread IDは英数字・_・-のみ）
+    if ! [[ "$THREAD_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+      echo "::warning::Invalid thread ID format: $THREAD_ID"
+      FAILED=$((FAILED + 1))
+      continue
+    fi
+    # IDを直接埋め込む（GraphQL変数は環境依存の問題があるため）
+    if ! ERROR=$(gh api graphql -f query="
+    mutation {
+      resolveReviewThread(input: { threadId: \"$THREAD_ID\" }) {
         thread { isResolved }
       }
-    }' -f threadId="$THREAD_ID" 2>&1); then
+    }" 2>&1); then
       FAILED=$((FAILED + 1))
       # エラー種別の推定と分類
       if echo "$ERROR" | jq -e '.errors' > /dev/null 2>&1; then

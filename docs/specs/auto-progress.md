@@ -401,12 +401,13 @@ gh api graphql -f query='
 **スレッドの resolve:**
 
 ```bash
-gh api graphql -f query='
-mutation($threadId: ID!) {
-  resolveReviewThread(input: { threadId: $threadId }) {
+# Windows Git Bash では GraphQL変数が正しく渡らないため、IDを直接埋め込む
+gh api graphql -f query="
+mutation {
+  resolveReviewThread(input: { threadId: \"$THREAD_ID\" }) {
     thread { isResolved }
   }
-}' -f threadId="$THREAD_ID"
+}"
 ```
 
 ### エラー時の挙動
