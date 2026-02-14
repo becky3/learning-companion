@@ -6,7 +6,7 @@ permissions:
   issues: write
   id-token: write
 
-# 通常PRは PRKit でレビュー。auto:pipeline ラベル付きPRは copilot-auto-fix.yml に委譲。
+# 通常PRは PRKit でレビュー。auto/ ブランチプレフィックス付きPRは copilot-auto-fix.yml に委譲。
 on:
   pull_request:
     types: [opened]
@@ -55,21 +55,21 @@ jobs:
           fi
           echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
 
-      # auto:pipeline ラベル付きPRは copilot-auto-fix.yml がレビューするためスキップ
-      - name: Skip if auto:pipeline
+      # auto/ ブランチプレフィックス付きPRは copilot-auto-fix.yml がレビューするためスキップ
+      # ステップレベルで判定: ::notice:: でスキップ理由をログに残すため
+      # issue_comment イベント（/review, /fix コマンド）では適用しない:
+      #   github.event.pull_request.head.ref が利用不可のため。
+      #   /review は手動操作なので auto/ ブランチでも PRKit レビューを許可する設計判断。
+      - name: Skip if auto/ branch prefix
         if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           PR_NUMBER="${{ steps.pr-number.outputs.number }}"
-          if ! LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
-            echo "::warning::Failed to check labels for PR #$PR_NUMBER: $LABELS. Continuing with review."
-          elif echo "$LABELS" | grep -q "^auto:pipeline$"; then
-            echo "::notice::PR #$PR_NUMBER has auto:pipeline label. Skipping PRKit review (handled by copilot-auto-fix.yml)."
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          if [[ "$BRANCH" == auto/* ]]; then
+            echo "::notice::PR #$PR_NUMBER has auto/ branch prefix. Skipping PRKit review (handled by copilot-auto-fix.yml)."
             exit 1
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
 
       - name: Get base branch
         id: base
@@ -215,10 +215,12 @@ jobs:
 
                **重要**: `commit=` にはレビュー対象のコミットSHAを含めてください。auto-fix.yml は最新コミットに対応するフラグのみを判定対象とします。
 
-      # auto:fix-requested ラベルを付与して auto-fix を起動
+      # auto:fix-requested ラベルを付与して auto-fix を起動（PRKit 方式、現在休止中）
       # 条件:
       #   - /fix コマンド時: ユーザーが手動で auto-fix を起動したい場合
       #   - pull_request[opened] + auto:pipeline ラベルあり: 自動パイプラインで作成されたPRの初回レビュー後
+      # 注記: auto:pipeline ラベル判定は休止中の PRKit 方式固有。Copilot 方式では
+      #       auto/ ブランチプレフィックスで判定するが、本ステップは休止中のため変更しない。
       # /review のみ: ラベル付与なし（レビューのみ実行）
       - name: Add auto:fix-requested label for auto-fix
         if: |

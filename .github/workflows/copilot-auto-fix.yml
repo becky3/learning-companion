@@ -29,10 +29,12 @@ jobs:
   copilot-auto-fix:
     # Copilot のレビュー完了時のみ実行（フォーク PR は除外）
     # reviewer 名は取得元で異なる（イベント: "Copilot", REST API: "copilot-pull-request-reviewer[bot]"）
+    # auto/ ブランチプレフィックスで自動パイプライン由来のPRに限定（Actions分数節約）
     if: >-
       (github.event.review.user.login == 'Copilot'
        || github.event.review.user.login == 'copilot-pull-request-reviewer[bot]')
       && github.event.pull_request.head.repo.full_name == github.repository
+      && startsWith(github.event.pull_request.head.ref, 'auto/')
     runs-on: ubuntu-latest
     steps:
       # --- スクリプト・promptテンプレートの取得 ---
@@ -57,7 +59,8 @@ jobs:
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "PR number: $PR_NUMBER"
 
-      # --- 前提条件チェック: PR OPEN, auto:pipeline, no auto:failed ---
+      # --- 前提条件チェック: PR OPEN, no auto:failed ---
+      # auto/ ブランチプレフィックスの判定はジョブレベル if で実施済み
       - name: Check preconditions
         id: preconditions
         run: |
@@ -79,12 +82,6 @@ jobs:
           if ! LABELS=$(gh pr view "$PR_NUMBER" --json labels --jq '.labels[].name' 2>&1); then
             echo "::error::Failed to get PR labels: $LABELS"
             exit 1
-          fi
-
-          if ! echo "$LABELS" | grep -q "^auto:pipeline$"; then
-            echo "::notice::PR #$PR_NUMBER does not have auto:pipeline label. Skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
           fi
 
           if echo "$LABELS" | grep -q "^auto:failed$"; then

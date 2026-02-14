@@ -43,6 +43,8 @@ on:
 
 ### pr-review.yml からの `auto:fix-requested` 付与
 
+> **注記**: pr-review.yml のスキップ判定は `auto:pipeline` ラベルから `auto/` ブランチプレフィックスに変更された（Issue #360）。`auto:pipeline` ラベルはワークフロー制御には使用せず、検索・フィルタ用として維持される。本設計書は休止中の PRKit 方式のため、記載内容は変更当時のまま残す。
+
 pr-review.yml は以下の条件で `auto:fix-requested` ラベルをPRに付与し、auto-fix を起動する:
 
 | 条件 | 説明 |
