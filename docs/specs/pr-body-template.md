@@ -214,13 +214,14 @@ prt 自動レビューが PR body の Change type を参照して判断精度を
 - markdownlint でテンプレートファイルのエラーがないこと
 - Web UI での PR 作成時にテンプレートが表示されること（マージ後に確認）
 - CLAUDE.md 内の**全ての** `gh pr create --body` 記述がテンプレート形式に更新されていること（通常開発・hotfix・auto-progress ステップ4/4）
+- auto-finalize スキルの body 生成がテンプレート形式に更新されていること
 - pr-review.yml の prompt に Change type 参照の指示が含まれていること
 
 ## 関連ファイル
 
 | ファイル | 役割 |
 |---------|------|
-| `.github/pull_request_template.md` | テンプレート本体（新規作成） |
+| `.github/pull_request_template.md` | テンプレート本体 |
 | `CLAUDE.md` | PR body ルール・`gh pr create` の例 |
 | `.claude/skills/auto-finalize/SKILL.md` | auto-finalize スキルの PR 作成手順 |
 | `docs/specs/git-flow.md` | git-flow 運用仕様（PR テンプレートの参照あり） |

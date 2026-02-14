@@ -113,6 +113,14 @@ jobs:
           prompt: |
             このPRに対して包括的なコードレビューを実施してください。
 
+            ## PR body の Change type 確認
+
+            レビュー開始前に、PR body の「Change type」セクションを確認してください。
+            `gh pr view ${{ steps.pr-number.outputs.number }} --json body -q .body` で取得できます。
+
+            - `docs(pre-impl)` がチェックされている場合: **設計書の先行更新PRです。コードとの不整合は意図的であるため、「設計書とコードの不整合」を問題として報告しないでください。**
+            - それ以外の場合: 通常通りレビューを実施してください。
+
             ## レビュー手順
 
             1. **変更内容の把握**: `git diff origin/${{ steps.base.outputs.ref }}...HEAD` で変更差分を確認
