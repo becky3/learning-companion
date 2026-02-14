@@ -76,9 +76,25 @@ git push origin "$BRANCH"
 
 ### 6. PR作成
 
+PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/pr-body-template.md`）。
+
+Change type は手順4の種別判定結果を使用する。
+
 ```bash
 gh pr create --base develop --title "コミットメッセージと同じタイトル" --body "$(cat <<'EOF'
-説明
+## Change type
+
+- [x] 判定された種別
+
+## Summary
+
+- 変更内容の箇条書き
+
+## Test plan
+
+- [x] 品質チェック通過済み
+
+## Related issues
 
 Closes #Issue番号
 EOF

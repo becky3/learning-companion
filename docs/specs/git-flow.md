@@ -140,7 +140,7 @@ sequenceDiagram
 
 ### feature/bugfix → develop
 
-- PRテンプレートは現行を維持
+- PR body は `.github/pull_request_template.md` のテンプレートに従う（仕様: `docs/specs/pr-body-template.md`）
 - `Closes #{Issue番号}` で紐付け
 - CIチェック（pytest / mypy / ruff / markdownlint）必須
 - **base ブランチ**: `develop`

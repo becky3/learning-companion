@@ -117,15 +117,51 @@
 8. **プッシュ**: `git push origin <ブランチ名>` でリモートにプッシュ
 9. **PR作成**: `gh pr create` コマンドで実際にPRを作成（手動リンクではなく実際に作成）
 
+   PR body は `.github/pull_request_template.md` の形式に従うこと（仕様: `docs/specs/pr-body-template.md`）。
+
    ```bash
    # 通常開発（feature/bugfix → develop）
-   gh pr create --title "タイトル" --body "説明\n\nCloses #Issue番号" --base develop
+   gh pr create --title "タイトル" --body "$(cat <<'EOF'
+   ## Change type
+
+   - [x] feat: 新機能実装
+
+   ## Summary
+
+   - 変更内容
+
+   ## Test plan
+
+   - [ ] テスト項目
+
+   ## Related issues
+
+   Closes #Issue番号
+   EOF
+   )" --base develop
 
    # hotfix（hotfix → main）
-   gh pr create --title "タイトル" --body "説明\n\nCloses #Issue番号" --base main
+   gh pr create --title "タイトル" --body "$(cat <<'EOF'
+   ## Change type
+
+   - [x] fix: バグ修正
+
+   ## Summary
+
+   - 修正内容
+
+   ## Test plan
+
+   - [ ] テスト項目
+
+   ## Related issues
+
+   Closes #Issue番号
+   EOF
+   )" --base main
    ```
 
-   **PR bodyの注意事項**: 設計書の先行更新（実装は後続フェーズ）のPRでは、bodyに「本PRは設計書の先行更新です。現在のコードとの不整合は意図的であり、実装は後続フェーズで行います。」と明記すること。これがないと prt 自動レビューツールが「設計書とコードの不整合」として誤検知する。
+   **PR bodyの注意事項**: 設計書の先行更新（実装は後続フェーズ）のPRでは、Change type で `docs(pre-impl)` を選択すること（prt 自動レビューの誤検知防止）。
 
 10. **作成確認**: `gh pr view` でPRが正しく作成されたことを確認し、URLをユーザーに提示
 
@@ -241,7 +277,29 @@ Critical/Warning レベルの問題があれば修正する。
 4. 変更内容からコミットメッセージ自動生成（優先順位: fix > feat > docs > ci）
 5. `git commit -m "生成したメッセージ"`
 6. `BRANCH=$(git branch --show-current) && git push origin "$BRANCH"`
-7. `gh pr create --base develop --title "タイトル" --body $'説明\n\nCloses #Issue番号'`
+7. PR body は `.github/pull_request_template.md` の形式に従い、PR を作成する:
+
+   ```bash
+   gh pr create --base develop --title "タイトル" --body "$(cat <<'EOF'
+   ## Change type
+
+   - [x] feat: 新機能実装
+
+   ## Summary
+
+   - 変更内容
+
+   ## Test plan
+
+   - [ ] テスト項目
+
+   ## Related issues
+
+   Closes #Issue番号
+   EOF
+   )"
+   ```
+
 8. `gh issue comment <Issue番号> --body "対応が完了しました。PR #<PR番号> をご確認ください。"`
 
 エラー時: ステップ1-7は失敗で停止。ステップ8は警告して続行（PRは作成済み）。
