@@ -357,88 +357,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
-      # --- CI 完了待機（全パスで実行）---
-      # PR 作成直後にワークフローが起動するため、CI がまだ実行中の可能性がある
-
-      - name: Wait for CI
-        if: |
-          steps.preconditions.outputs.skip != 'true'
-          && steps.copilot-wait.outputs.copilot_reviewed == 'true'
-          && steps.forbidden-check.outputs.forbidden != 'true'
-          && (
-            steps.review-result.outputs.has_issues != 'true'
-            || (steps.review-result.outputs.has_issues == 'true' && steps.recount.outputs.has_issues != 'true')
-          )
-        id: ci-wait
-        run: |
-          set -euo pipefail
-          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
-          TIMEOUT=600  # 10 minutes
-          INTERVAL=30
-          ELAPSED=0
-
-          echo "Waiting for CI checks to complete (timeout: ${TIMEOUT}s)..."
-
-          # CI が新しい push を認識するまでの初期待機（タイムアウトには含めない）
-          sleep 15
-
-          while [ "$ELAPSED" -lt "$TIMEOUT" ]; do
-            # 自分自身（copilot-auto-fix）以外の pending チェックをカウント
-            if PENDING=$(gh pr checks "$PR_NUMBER" --json name,bucket --jq '
-              [.[] |
-               select((.name | contains("copilot-auto-fix")) | not) |
-               select(.bucket == "pending")
-              ] | length
-            ' 2>&1); then
-              if [ "$PENDING" -eq 0 ]; then
-                echo "All CI checks completed."
-                echo "timeout=false" >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
-              echo "CI checks still running ($PENDING pending). Waiting ${INTERVAL}s... (${ELAPSED}s/${TIMEOUT}s)"
-            else
-              echo "::warning::Failed to get PR checks: $PENDING. Retrying..."
-            fi
-
-            sleep "$INTERVAL"
-            ELAPSED=$((ELAPSED + INTERVAL))
-          done
-
-          echo "::warning::CI wait timed out after ${TIMEOUT}s"
-          echo "timeout=true" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-
-      - name: Handle CI timeout
-        if: steps.ci-wait.outputs.timeout == 'true'
-        run: |
-          source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
-          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
-
-          gh_safe gh issue edit "$PR_NUMBER" --add-label "auto:failed"
-          gh_comment "$PR_NUMBER" "## copilot-auto-fix: CI タイムアウト
-
-          CI チェックが10分以内に完了しませんでした。
-          \`auto:failed\` ラベルを付与して自動処理を停止します。
-
-          **次のアクション**: CI の状態を確認し、問題を解消してください。
-          対応完了後、\`auto:failed\` を除去し、Actions タブから「Copilot Auto Fix」の Run workflow で PR 番号を指定して再実行してください。
-
-          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-
       # --- マージ判定 ---
-      # 条件: (Copilot検知済み) AND (禁止パターンなし) AND (CI通過) AND (指摘なし OR 修正完了)
+      # 条件: (Copilot検知済み) AND (禁止パターンなし) AND (指摘なし OR 修正完了)
+      # 品質チェック（pytest/ruff/mypy/markdownlint）はエージェント内テストで担保済み（外部CIワークフロー不使用）
 
       - name: Merge check
         if: |
           steps.preconditions.outputs.skip != 'true'
           && steps.copilot-wait.outputs.copilot_reviewed == 'true'
           && steps.forbidden-check.outputs.forbidden != 'true'
-          && steps.ci-wait.outputs.timeout != 'true'
           && (
             steps.review-result.outputs.has_issues != 'true'
             || steps.recount.outputs.has_issues != 'true'

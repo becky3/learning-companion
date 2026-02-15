@@ -79,13 +79,14 @@ flowchart TD
     H -->|検出| I[auto:failed 付与]
     H -->|なし| J[unresolved threads カウント<br/>GraphQL API]
     J --> K{unresolved == 0?}
-    K -->|Yes| N3[CI 完了待機<br/>ポーリング]
+    K -->|Yes| L{マージ判定<br/>5条件チェック}
     K -->|No| M[claude-code-action<br/>で自動修正]
-    M --> N[判断済みスレッド resolve]
+    M --> M2[テスト実行<br/>失敗時は再修正]
+    M2 --> M3[commit & push]
+    M3 --> N[判断済みスレッド resolve]
     N --> N2{unresolved<br/>再カウント}
     N2 -->|残存あり| P[auto:failed 付与]
-    N2 -->|0| N3
-    N3 --> L{マージ判定<br/>5条件チェック}
+    N2 -->|0| L
     L -->|条件クリア| L2[auto:merged ラベル付与]
     L2 --> O[自動マージ → develop]
     L -->|条件未達| P
@@ -241,32 +242,20 @@ Copilot のレビューは guaranteed delivery ではない。サービス障害
 | 条件 | アクション |
 |------|----------|
 | 禁止パターン検出 | `auto:failed` 付与 + PRコメントで通知 |
-| unresolved == 0 | CI 完了待機 → マージ判定へ |
-| unresolved > 0 | `claude-code-action` で `/check-pr` を実行し自動修正 → 判断済みスレッド（✅❌⏸️）を resolve → unresolved threads を再カウント（残存指摘の確認） → CI 完了待機 → マージ判定へ |
+| unresolved == 0 | マージ判定へ |
+| unresolved > 0 | `claude-code-action` で `/check-pr` を実行し自動修正（テスト → 失敗時は再修正のループ） → commit & push → 判断済みスレッド（✅❌⏸️）を resolve → unresolved threads を再カウント（残存指摘の確認） → マージ判定へ |
 
-### 6. CI 完了待機
-
-CI（pytest, mypy, ruff, markdownlint）が完了するまでポーリング待機する。**全パスで実行する**（修正あり・なし問わず）。
-
-- `gh pr checks` で全チェックの完了を確認（ポーリング間隔: 30秒、タイムアウト: 10分）
-- 初期待機: push 直後は `gh pr checks` が古いチェック結果を返すため、CI ジョブのキックを待つ 15 秒の初期待機を入れる（タイムアウトには含めない）
-- 自ワークフロー（`copilot-auto-fix`）のチェックは除外（自己参照による誤判定防止）
-- タイムアウト時は `auto:failed` 付与で停止
-- `/check-pr` スキル内でもテスト実行するが、GitHub Actions CI の通過を最終的なゲートとする
-
-**旧設計との差異**: 旧設計では unresolved == 0（修正不要）の場合、schedule ポーリングの遅延（5分+）により PR 作成時の CI が既に完了している前提で CI 待機をスキップしていた。新設計では PR 作成直後にワークフローが起動するため、CI がまだ実行中の可能性がある。このため全パスで CI 完了待機を行う。
-
-### 7. マージ判定
+### 6. マージ判定
 
 既存 `merge-check.sh` を流用。5条件を全て確認:
 
 1. PR が OPEN 状態であること（既にマージ済みの場合はスキップ）
 2. レビュー指摘ゼロ（unresolved threads == 0）
-3. CI 全チェック通過（`EXCLUDE_CHECK` で自ワークフローのチェックを除外。自己参照による誤判定を防止）
+3. ステータスチェック通過（`statusCheckRollup` で確認。外部 CI 未設定時は自動 PASS。`EXCLUDE_CHECK` で自ワークフローを除外）
 4. コンフリクトなし
 5. `auto:failed` ラベルなし
 
-### 8. 自動マージ
+### 7. 自動マージ
 
 既存 `merge-or-dryrun.sh` を流用。条件クリアで `auto:merged` ラベルを付与した後、`gh pr merge --merge` を `REPO_OWNER_PAT` で実行。
 
@@ -393,23 +382,21 @@ CI（pytest, mypy, ruff, markdownlint）が完了するまでポーリング待�
 
 ### 修正・マージ
 
-- [ ] AC11: unresolved threads == 0 のとき CI 完了待機 → マージ判定に進む
-- [ ] AC12: unresolved threads > 0 のとき claude-code-action で修正が実行される
+- [ ] AC11: unresolved threads == 0 のとき直接マージ判定に進む
+- [ ] AC12: unresolved threads > 0 のとき claude-code-action で修正が実行される（テスト → 失敗時は再修正のループ → commit & push）
 - [ ] AC13: 修正後に対応済みスレッドが `resolveReviewThread` で resolve される
 - [ ] AC14: 修正後に unresolved threads が再カウントされ、残存指摘がないことが確認される
-- [ ] AC15: CI 完了をポーリング待機してからマージ判定に進む（修正あり・なし問わず全パスで実施）
-- [ ] AC16: 修正後に自動マージされる（再レビューは行わない）
+- [ ] AC15: 修正後に自動マージされる（再レビューは行わない）
 
 ### 安全ガード
 
-- [ ] AC17: 禁止パターン検出時に `auto:failed` が付与される
-- [ ] AC18: CI 完了待機のタイムアウト（10分）時に `auto:failed` が付与される
+- [ ] AC16: 禁止パターン検出時に `auto:failed` が付与される
 
 ### 廃止
 
-- [ ] AC19: `copilot-review-poll.yml` が削除されている
-- [ ] AC20: `auto-fix.yml` が無効化されている（トリガーが `workflow_dispatch` のみに変更）— auto-progress.md AC19 と対応
-- [ ] AC21: `handle-errors.sh` のエラーメッセージが `workflow_dispatch` による再実行手順に更新されている
+- [ ] AC17: `copilot-review-poll.yml` が削除されている
+- [ ] AC18: `auto-fix.yml` が無効化されている（トリガーが `workflow_dispatch` のみに変更）— auto-progress.md AC19 と対応
+- [ ] AC19: `handle-errors.sh` のエラーメッセージが `workflow_dispatch` による再実行手順に更新されている
 
 ## テスト方針
 
@@ -423,9 +410,8 @@ copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト
 - Copilot レビュー完了後に `auto:copilot-reviewed` ラベルが付与されることを確認
 - Copilot レビュータイムアウト（10分）時に `auto:failed` が付与されることを確認
 - マージ済み PR に対する起動でスキップされることを確認
-- unresolved == 0 のとき、CI 完了待機を経てマージ判定に進むことを確認
+- unresolved == 0 のとき、直接マージ判定に進むことを確認
 - 修正後の unresolved 再カウントで残存指摘がある場合に `auto:failed` が付与されることを確認
-- CI 完了待機のタイムアウト（10分）時に `auto:failed` が付与されることを確認
 - `handle-errors.sh` のエラーメッセージに `workflow_dispatch` による再実行手順が含まれることを確認
 
 ## 関連ファイル
