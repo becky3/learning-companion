@@ -200,6 +200,14 @@ PRに対するレビュー指摘（自動レビューツール、人間問わず
 6. **スレッドの resolve**: 判断済みスレッド（✅ 対応済み、❌ 対応不要、⏸️ 別Issue化）を `gh api graphql` の `resolveReviewThread` mutation で resolve する。未検討のスレッドは resolve しない
 7. **コミット**: `fix: レビュー指摘対応 (PR #番号)` の形式でコミット
 
+### PR・Issue コメントでのメンション回避
+
+PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメンションを使用しないこと。
+
+- **理由**: `@copilot` のようなメンションは Copilot SWE Agent 等の自動化ツールがトリガーとして検知し、意図しないPR作成やActions minutesの浪費を引き起こす。人間ユーザーへの不要な通知も発生する
+- **対処法**: レビュアー名を記載する場合は `@` プレフィックスを外し、ユーザー名のみを記載する（例: `(copilot)` / `(becky3)`）
+- **適用範囲**: `gh pr comment`、`gh issue comment`、PR body 等、GitHub 上に投稿する全てのテキスト
+
 ### レトロスペクティブ
 
 - **機能の実装完了時（PRマージ後）に必ず** `/doc-gen retro <feature-name>` でレトロを生成する
