@@ -4,17 +4,20 @@
 
 本プロジェクトのブランチ戦略を GitHub Flow（現行）から git-flow ベースの運用に移行する。
 `develop` ブランチを開発の統合先として導入し、`main` は安定版のみを保持する。
+`release/*` ブランチを導入し、リリース単位の履歴管理を行う。
 
 ## 背景
 
 - 現行は全 feature ブランチが `main` に直接マージされる運用
 - リリーススケジュールは特に設けないが、`main` には安定版のみを反映したい
 - 開発中の機能が `main` に混在するリスクを低減する
+- どの期間にどの機能が導入されたかをリリース単位で追跡したい
 
 ## ユーザーストーリー
 
 - 開発者として、`main` ブランチを安定版として維持し、開発中の機能が混在するリスクを低減したい
 - 開発者として、`develop` ブランチで機能統合を行い、まとまったタイミングで `main` に反映したい
+- 開発者として、リリースブランチを通じてリリース単位の変更履歴を管理したい
 
 ## ブランチ構成
 
@@ -32,9 +35,12 @@ gitGraph
     commit id: "feat-2"
     checkout develop
     merge feature/f2-feed-#2
+    branch release/v1.0.0
+    commit id: "release-prep"
     checkout main
-    merge develop id: "release-v1"
+    merge release/v1.0.0 id: "v1.0.0"
     checkout develop
+    merge main id: "sync-main"
     branch bugfix/fix-typo-#10
     commit id: "fix-1"
     checkout develop
@@ -45,8 +51,8 @@ gitGraph
 
 | ブランチ | 役割 | マージ元 | 保護 |
 |---------|------|---------|------|
-| `main` | 安定版（本番相当） | `develop`, `hotfix/*` | 直接プッシュ禁止 |
-| `develop` | 開発統合 | `feature/*`, `bugfix/*` | 直接プッシュ禁止 |
+| `main` | 安定版（本番相当） | `release/*`, `hotfix/*` | 直接プッシュ禁止 |
+| `develop` | 開発統合 | `feature/*`, `bugfix/*`, `main`（リリース後同期） | 直接プッシュ禁止 |
 
 ### 作業ブランチ
 
@@ -54,15 +60,11 @@ gitGraph
 |--------------|------|--------|---------|---------|
 | `feature/` | 新機能開発 | `develop` | `develop` | `feature/f{N}-{機能名}-#{Issue番号}` |
 | `bugfix/` | バグ修正 | `develop` | `develop` | `bugfix/{修正内容}-#{Issue番号}` |
+| `release/` | リリース準備 | `develop` | `main`（squash） | `release/v{X.Y.Z}` |
 | `hotfix/` | 本番緊急修正 | `main` | `main` + `develop` | `hotfix/{修正内容}-#{Issue番号}` |
 | `claude/` | Claude Code自動生成 | `develop`(*) | `develop` | `claude/issue-{N}-{date}-{id}`（自動命名） |
 
 (*) `claude/` ブランチは claude-code-action が自動生成するため、命名規則はシステム依存。
-
-### release ブランチについて
-
-本プロジェクトはリリーススケジュールを設けないため、`release/*` ブランチは導入しない。
-`develop` → `main` への直接マージで運用する（後述「mainへの反映」参照）。
 
 ## ワークフロー
 
@@ -87,23 +89,49 @@ sequenceDiagram
 3. `develop` に向けてPR作成
 4. CI通過 + レビュー後にマージ
 
-### main への反映
+### main への反映（リリース）
 
 ```mermaid
 sequenceDiagram
     participant Dev as 開発者
     participant Develop as develop
+    participant Release as release/vX.Y.Z
     participant Main as main
 
     Dev->>Develop: 機能がまとまった状態を確認
-    Dev->>Main: PR作成（develop → main）
+    Dev->>Release: develop から release/vX.Y.Z を作成
+    Note over Release: リリース準備（必要に応じて修正）
+    Dev->>Main: PR作成（release/vX.Y.Z → main）
     Note over Main: CI実行
-    Main->>Main: マージ
+    Main->>Main: Squash and merge
+    Dev->>Develop: main → develop に差分反映
 ```
 
-- リリース日は設けず、ある程度機能がまとまったタイミングで `develop` → `main` にPR作成
-- マージ方法: **Squash and merge**（リリース単位で1コミットにまとめる。詳細は「マージ方式」セクション参照）
-- マージ判断は開発者が行う
+1. ある程度機能がまとまったタイミングで `develop` から `release/v{X.Y.Z}` ブランチを作成
+2. リリース準備（必要に応じてバージョン番号の更新、軽微な修正等）
+3. `release/v{X.Y.Z}` → `main` に向けてPR作成
+4. マージ方法: **Squash and merge**（リリース単位で1コミットにまとめる。詳細は「マージ方式」セクション参照）
+5. マージ判断は開発者が行う
+6. **main マージ後、`main` → `develop` に差分を反映する**（履歴の整合性を保つため）
+
+#### main → develop の差分反映
+
+リリース後、`main` と `develop` の差分が出ないように以下の手順で反映を行う:
+
+```bash
+git checkout develop
+git merge main
+git push origin develop
+```
+
+または PR を作成する場合:
+
+```bash
+gh pr create --base develop --head main --title "sync: main → develop (release/vX.Y.Z)" --body "リリース後の差分反映"
+```
+
+> **目的**: squash マージにより `main` に新しいコミットが作成されるため、`develop` と `main` の間に差分が生じる。
+> これを解消し、`develop` が常に `main` の最新状態を含むようにする。
 
 ### hotfix（緊急修正）
 
@@ -131,7 +159,8 @@ sequenceDiagram
 | マージ先 | 方式 | コマンド | 理由 |
 |---------|------|---------|------|
 | feature/bugfix → develop | 通常マージ | `gh pr merge --merge` | 開発履歴を保持 |
-| develop → main（リリース） | squash マージ | `gh pr merge --squash` | リリース単位で1コミットにまとめ、main の履歴をきれいに保つ |
+| release → main（リリース） | squash マージ | `gh pr merge --squash` | リリース単位で1コミットにまとめ、main の履歴をきれいに保つ |
+| main → develop（リリース後同期） | 通常マージ | `git merge main` or `gh pr merge --merge` | main の squash コミットを develop に取り込み、差分を解消する |
 | hotfix → main | 通常マージ | `gh pr merge --merge` | 緊急修正の履歴を保持 |
 
 **注意**: GitHub リポジトリ設定で squash merge を有効化する必要がある（Settings > General > Pull Requests > Allow squash merging）。
@@ -155,11 +184,12 @@ sequenceDiagram
 - CIチェック（pytest / mypy / ruff / markdownlint）必須
 - **base ブランチ**: `develop`
 
-### develop → main
+### release → main
 
-- PRタイトル例: `Release: develop → main（機能概要）`
+- PRタイトル例: `Release: v1.0.0`
 - 含まれる変更の一覧をPR本文に記載
 - CIチェック必須
+- マージ後に `main` → `develop` への差分反映を忘れないこと
 
 ### hotfix → main
 
@@ -220,14 +250,17 @@ sequenceDiagram
 
 ## 受け入れ条件
 
-- [ ] AC1: `develop` ブランチが作成されている
-- [ ] AC2: GitHubのデフォルトブランチが `develop` に設定されている
-- [ ] AC3: `CLAUDE.md` のGit運用セクションが git-flow に対応している
-- [ ] AC4: `docs/specs/overview.md` のGit運用セクションが更新されている
-- [ ] AC5: `README.md` の開発フロー概要が更新されている
-- [ ] AC6: feature/bugfix ブランチは `develop` からの分岐・マージで運用される
-- [ ] AC7: `main` への反映は `develop` からのPRで行われる
-- [ ] AC8: GitHub Actions（claude.yml, pr-review.yml）が `develop` ベースで正しく動作する
+- [x] AC1: `develop` ブランチが作成されている
+- [x] AC2: GitHubのデフォルトブランチが `develop` に設定されている
+- [x] AC3: `CLAUDE.md` のGit運用セクションが git-flow に対応している
+- [x] AC4: `docs/specs/overview.md` のGit運用セクションが更新されている
+- [x] AC5: `README.md` の開発フロー概要が更新されている
+- [x] AC6: feature/bugfix ブランチは `develop` からの分岐・マージで運用される
+- [x] AC7: GitHub Actions（claude.yml, pr-review.yml）が `develop` ベースで正しく動作する
+- [ ] AC8: `main` への反映は `release/v{X.Y.Z}` ブランチを経由して行われる
+- [ ] AC9: `release/v{X.Y.Z}` → `main` は squash マージで行われる
+- [ ] AC10: リリース後に `main` → `develop` の差分反映が行われる
+- [ ] AC11: 仕様書・CLAUDE.md・overview.md にリリースブランチの運用が記載されている
 
 ## テスト方針
 
