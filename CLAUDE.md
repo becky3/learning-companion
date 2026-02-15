@@ -473,6 +473,13 @@ Anthropic 公式の PR レビュー専門エージェント群です。既存の
 
 デフォルトパターンは `.claude/team-themes/config.json` で設定。
 
+**delegate モード（リーダー制約）**:
+
+- チーム起動後に **Shift+Tab** で `delegate` モードに切り替え、リーダーを管理ツールのみに制限する
+- fixed-theme パターンでは**推奨**（リーダー管理専任ルール）、mixed-genius パターンでは任意
+- `leader-guard.sh`（PreToolUse フック）はフォールバックとして残すが、`permissions.allow` との競合により機能しない場合がある（[#258](https://github.com/becky3/ai-assistant/issues/258)）
+- 詳細: `docs/specs/agent-teams/common.md`（delegate モードセクション）
+
 **共通ルール**:
 
 - **リーダーもキャラクターとして振る舞う**: 無個性な応答（「待ちます」「確認します」等）は禁止。メンバーへの指示・ユーザーへの報告ともにキャラクター口調を維持する

@@ -107,6 +107,39 @@ SendMessage:
 2. 自分の担当領域で未割り当てタスクがあれば、リーダーに着手意思を報告してから着手する
 3. 該当タスクがなければ、リーダーに完了報告と待機を伝える
 
+## delegate モード（リーダー制約）
+
+Claude Code 公式の `delegate` モードを使用して、リーダーの実装ツール使用を制限する。
+
+### 概要
+
+`delegate` モードはエージェントチーム専用のパーミッションモードで、リーダーをチーム管理ツール（メンバーのスポーン・メッセージング・シャットダウン・タスク管理）のみに制限する。Edit / Write / Bash 等の実装ツールは使用不可となる。
+
+### 有効化手順
+
+1. チームを起動する
+2. **Shift+Tab** を押して `delegate` モードに切り替える
+
+### 適用パターン
+
+| パターン | delegate モード | 備考 |
+|---------|----------------|------|
+| fixed-theme | **推奨**（リーダー管理専任ルール） | リーダーは原則作業禁止 |
+| mixed-genius | 任意（リーダーが作業も行うため） | 必要に応じて使用 |
+
+### leader-guard.sh との関係
+
+`leader-guard.sh`（PreToolUse フック）はフォールバックとして残す。
+
+- **主たる制約手段**: `delegate` モード（モードレベルで制約、`permissions.allow` との競合なし）
+- **フォールバック**: `leader-guard.sh`（delegate モード未使用時の警告）
+
+> **既知の制限**: `permissions.allow` に `"Edit"` / `"Write"` が含まれている場合、`leader-guard.sh` の
+> PreToolUse フックによる deny が `permissions.allow` の自動許可に上書きされる可能性がある（[#258](https://github.com/becky3/ai-assistant/issues/258)）。
+> Claude Code の公式ドキュメントでは「PreToolUse フックは権限システムより先に実行される」と記載されているが、
+> 実際の動作では `permissions.allow` が優先されるケースが確認されている。
+> `delegate` モードはモードレベルの制約であり、この問題の影響を受けない。
+
 ## 履歴管理
 
 ### 履歴ファイル
