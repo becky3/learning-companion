@@ -44,14 +44,15 @@ echo "✅ Condition 2: No review issues"
 # 条件3: CI全チェック通過（GitHub API の statusCheckRollup を使用）
 # EXCLUDE_CHECK が設定されている場合、そのチェック名を除外する
 # （自ワークフローの実行中チェックを除外するため。copilot-auto-fix.yml から呼ばれる場合に使用）
+# gh pr view --jq は --arg 非対応のため、env オブジェクト経由で jq に変数を渡す
 EXCLUDE_NAME="${EXCLUDE_CHECK:-}"
-# gh pr view --jq does not support jq's --arg option, so embed the value directly
+export EXCLUDE_NAME
 if ! CI_RESULT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '
   if .statusCheckRollup == null then
     "no_checks"
   else
     ([.statusCheckRollup[] |
-      select(if "'"$EXCLUDE_NAME"'" != "" then (.name | contains("'"$EXCLUDE_NAME"'")) | not else true end) |
+      select(if env.EXCLUDE_NAME != "" then (.name | contains(env.EXCLUDE_NAME)) | not else true end) |
       select(
         (has("state") and .state != "SUCCESS" and .state != "NEUTRAL") or
         (has("conclusion") and .conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")
