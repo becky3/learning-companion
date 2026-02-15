@@ -221,6 +221,7 @@ ai-assistant/
 │   ├── services/
 │   │   ├── web_crawler.py          # Webクローラー
 │   │   ├── rag_knowledge.py        # RAGナレッジサービス
+│   │   ├── robots_txt.py           # robots.txt 解析・遵守
 │   │   └── safe_browsing.py        # Google Safe Browsing API
 │   ├── config/
 │   │   └── settings.py             # RAG設定
@@ -245,6 +246,7 @@ ai-assistant/
 │   ├── test_hybrid_search.py
 │   ├── test_rag_cli.py
 │   ├── test_rag_evaluation.py
+│   ├── test_robots_txt.py
 │   ├── test_safe_browsing.py
 │   └── test_slack_rag_handlers.py
 ├── reports/
@@ -1063,7 +1065,7 @@ class Settings(BaseSettings):
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
 5. **LLMコンテキストウィンドウ**: `RAG_RETRIEVAL_COUNT` で検索件数を制限
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
-7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない（将来対応予定）
+7. **robots.txt**: `RobotsTxtChecker` による robots.txt 解析・遵守機能を実装済み（詳細: `docs/specs/f9-robots-txt.md`）
 8. **BM25は少数ドキュメントでの評価に不向き**: IDF計算の特性上、テストには十分なドキュメント数が必要
 9. **辞書サイズ**: `unidic-lite` は約50MB。本番環境でのディスク使用量に注意
 10. **ベースライン管理**: ベースラインファイルはリポジトリにコミットし、チーム全体で共有
@@ -1074,7 +1076,6 @@ class Settings(BaseSettings):
 |-------|------|
 | #157 | ドメイン許可リストをSlackから動的管理 |
 | #159 | URL安全性チェック（Google Safe Browsing API） |
-| #160 | robots.txt の解析・遵守 |
 
 ## 関連ドキュメント
 
@@ -1085,6 +1086,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-15 | robots.txt 解析・遵守機能を追加（#160）。仕様: `docs/specs/f9-robots-txt.md` |
 | 2026-02-12 | 4つの仕様書を統合・整理（旧: f9-rag-knowledge.md, f9-rag-evaluation.md, f9-rag-chunking-hybrid.md, f9-rag-auto-evaluation.md） |
 | 2026-02-11 | クロール進捗フィードバック機能を追加（#158） |
 | 2026-02-10 | PR #211 レビュー対応: 土台実装のみであることをアーキテクチャセクションに明記 |

@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.services.robots_txt import RobotsTxtChecker
 from src.services.web_crawler import CrawledPage, WebCrawler
 
 
@@ -786,3 +787,102 @@ class TestWebCrawlerEncodingDetection:
         assert len(urls) == 2
         assert "https://example.com/article/1" in urls
         assert "https://example.com/article/2" in urls
+
+
+class TestWebCrawlerRobotsTxtIntegration:
+    """WebCrawler + RobotsTxtChecker 統合テスト.
+
+    仕様: docs/specs/f9-robots-txt.md
+    """
+
+    @pytest.mark.asyncio
+    async def test_ac16_crawl_page_blocked_by_robots_txt(self) -> None:
+        """AC16: crawl_page() で Disallow されたURLがスキップされること."""
+        # robots_checker のモック: /private/ をブロック
+        mock_checker = MagicMock(spec=RobotsTxtChecker)
+        mock_checker.is_allowed = AsyncMock(return_value=False)
+
+        crawler = WebCrawler(robots_checker=mock_checker)
+
+        # robots.txt でブロックされるため、HTTPリクエストは行われない
+        page = await crawler.crawl_page("https://example.com/private/page")
+
+        assert page is None
+        mock_checker.is_allowed.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_ac16_crawl_page_allowed_by_robots_txt(self) -> None:
+        """AC16: crawl_page() で許可されたURLがクロールされること."""
+        mock_checker = MagicMock(spec=RobotsTxtChecker)
+        mock_checker.is_allowed = AsyncMock(return_value=True)
+
+        crawler = WebCrawler(robots_checker=mock_checker)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
+        ):
+            page = await crawler.crawl_page("https://example.com/public/page")
+
+        assert page is not None
+        assert "これは記事の本文です" in page.text
+
+    @pytest.mark.asyncio
+    async def test_ac17_crawl_index_page_filters_robots_blocked(self) -> None:
+        """AC17: crawl_index_page() で robots.txt 禁止URLがフィルタリングされること."""
+        # /article/2 だけブロック
+        async def is_allowed_side_effect(url: str) -> bool:
+            return "/article/2" not in url
+
+        mock_checker = MagicMock(spec=RobotsTxtChecker)
+        mock_checker.is_allowed = AsyncMock(side_effect=is_allowed_side_effect)
+
+        crawler = WebCrawler(robots_checker=mock_checker)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockClientSession(200, SAMPLE_INDEX_HTML),
+        ):
+            urls = await crawler.crawl_index_page("https://example.com/articles")
+
+        assert "https://example.com/article/2" not in urls
+        assert "https://example.com/article/1" in urls
+        assert "https://example.com/article/3" in urls
+
+    @pytest.mark.asyncio
+    async def test_ac18_no_robots_checker_normal_operation(self) -> None:
+        """AC18: robots_checker=None の場合、従来通りの動作をすること."""
+        crawler = WebCrawler(robots_checker=None)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
+        ):
+            page = await crawler.crawl_page("https://example.com/any/page")
+
+        assert page is not None
+
+    @pytest.mark.asyncio
+    async def test_ac15_crawl_delay_from_robots_txt(self) -> None:
+        """AC15: robots.txt の Crawl-delay が設定値より大きい場合に採用されること."""
+        mock_checker = MagicMock(spec=RobotsTxtChecker)
+        mock_checker.is_allowed = AsyncMock(return_value=True)
+        # robots.txt の Crawl-delay: 5秒
+        mock_checker.get_crawl_delay = MagicMock(return_value=5.0)
+
+        crawler = WebCrawler(crawl_delay=1.0, robots_checker=mock_checker)
+
+        # _get_effective_crawl_delay が大きい方を返すことを確認
+        delay = crawler._get_effective_crawl_delay("https://example.com/page")
+        assert delay == 5.0
+
+    @pytest.mark.asyncio
+    async def test_ac15_config_delay_used_when_larger(self) -> None:
+        """AC15: 設定値が Crawl-delay より大きい場合は設定値が使われること."""
+        mock_checker = MagicMock(spec=RobotsTxtChecker)
+        mock_checker.get_crawl_delay = MagicMock(return_value=0.5)
+
+        crawler = WebCrawler(crawl_delay=2.0, robots_checker=mock_checker)
+
+        delay = crawler._get_effective_crawl_delay("https://example.com/page")
+        assert delay == 2.0
