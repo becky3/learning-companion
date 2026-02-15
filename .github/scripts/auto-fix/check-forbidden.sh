@@ -51,7 +51,7 @@ while IFS= read -r file; do
     continue
   fi
 
-  # .github/workflows/* は develop 向き緩和で対象外
+  # .github/workflows/* はチェック対象外（パイプラインが develop 向け PR のみ処理するため）
 
 done <<< "$CHANGED_FILES"
 
