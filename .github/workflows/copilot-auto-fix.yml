@@ -299,6 +299,17 @@ jobs:
         env:
           PR_NUMBER: ${{ steps.pr-info.outputs.number }}
 
+      - name: Validate REPO_OWNER_PAT
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
+        run: |
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then
+            echo "::error::REPO_OWNER_PAT secret is required for auto-fix workflow chaining"
+            exit 1
+          fi
+        env:
+          TOKEN: ${{ secrets.REPO_OWNER_PAT }}
+
       - name: Auto-fix with Claude
         if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
         id: auto-fix
