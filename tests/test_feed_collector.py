@@ -415,6 +415,81 @@ async def test_ac7_13_add_feed_default_category(db_factory) -> None:  # type: ig
     assert feed.category == "一般"
 
 
+# ===== AC7.14: フィードタイトル自動取得のテスト =====
+
+
+async def test_ac7_14_fetch_feed_title_success(db_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC7.14: RSSフィードのtitleタグからフィード名を取得できる."""
+    summarizer = AsyncMock(spec=Summarizer)
+    collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed.get = lambda key, default="": {"title": "Python公式ブログ"}.get(key, default)
+
+    with patch("src.services.feed_collector.feedparser.parse", return_value=mock_parsed):
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            title = await collector.fetch_feed_title("https://example.com/rss")
+
+    assert title == "Python公式ブログ"
+
+
+async def test_ac7_14_fetch_feed_title_fallback_to_url(db_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC7.14: titleタグが空の場合はURLがフォールバックとして返される."""
+    summarizer = AsyncMock(spec=Summarizer)
+    collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed.get = lambda key, default="": {"title": ""}.get(key, default)
+
+    with patch("src.services.feed_collector.feedparser.parse", return_value=mock_parsed):
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            title = await collector.fetch_feed_title("https://example.com/rss")
+
+    assert title == "https://example.com/rss"
+
+
+async def test_ac7_14_fetch_feed_title_no_title_key(db_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC7.14: titleキーがない場合はURLがフォールバックとして返される."""
+    summarizer = AsyncMock(spec=Summarizer)
+    collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed.get = lambda key, default="": default
+
+    with patch("src.services.feed_collector.feedparser.parse", return_value=mock_parsed):
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            title = await collector.fetch_feed_title("https://example.com/rss")
+
+    assert title == "https://example.com/rss"
+
+
+async def test_ac7_14_fetch_feed_title_parse_error(db_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC7.14: フィード取得エラー時はURLがフォールバックとして返される."""
+    summarizer = AsyncMock(spec=Summarizer)
+    collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
+
+    with patch("src.services.feed_collector.feedparser.parse", side_effect=Exception("Network error")):
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            title = await collector.fetch_feed_title("https://example.com/rss")
+
+    assert title == "https://example.com/rss"
+
+
+async def test_ac7_14_fetch_feed_title_strips_whitespace(db_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC7.14: フィードタイトルの前後の空白が除去される."""
+    summarizer = AsyncMock(spec=Summarizer)
+    collector = FeedCollector(session_factory=db_factory, summarizer=summarizer)
+
+    mock_parsed = MagicMock()
+    mock_parsed.feed.get = lambda key, default="": {"title": "  Python Blog  "}.get(key, default)
+
+    with patch("src.services.feed_collector.feedparser.parse", return_value=mock_parsed):
+        with patch("src.services.feed_collector.asyncio.to_thread", side_effect=lambda fn, *a: fn(*a)):
+            title = await collector.fetch_feed_title("https://example.com/rss")
+
+    assert title == "Python Blog"
+
+
 # ===== AC16: フィード一括置換のテスト =====
 
 

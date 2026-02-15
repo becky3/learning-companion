@@ -119,13 +119,14 @@ async def _handle_feed_add(
 ) -> str:
     """フィード追加処理."""
     if not urls:
-        return "エラー: URLを指定してください。\n例: `@bot feed add https://example.com/rss Python`"
+        return "エラー: URLを指定してください。\n例: `@bot feed add https://example.com/rss [カテゴリ]`"
 
     results: list[str] = []
     for url in urls:
         try:
-            feed = await collector.add_feed(url, url, category)
-            results.append(f"✅ {feed.url} を追加しました（カテゴリ: {feed.category}）")
+            name = await collector.fetch_feed_title(url)
+            feed = await collector.add_feed(url, name, category)
+            results.append(f"✅ {feed.url} を追加しました（名前: {feed.name}、カテゴリ: {feed.category}）")
         except ValueError as e:
             results.append(f"❌ {url}: {e}")
         except Exception:
