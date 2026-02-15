@@ -111,7 +111,7 @@ diff モードでは変更された Markdown ファイルのみを対象にす�
 # CRLF → LF 自動変換（shellcheck SC1017 防止）
 for f in .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh; do
   [ -f "$f" ] || continue
-  if grep -Plq '\r\n' "$f" 2>/dev/null; then
+  if grep -q $'\r' "$f" 2>/dev/null; then
     tmp=$(mktemp) && tr -d '\r' < "$f" > "$tmp" && mv "$tmp" "$f"
     echo "[fix] CRLF→LF: $f"
   fi

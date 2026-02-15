@@ -258,7 +258,7 @@ GitHub Actions 環境では Skill ツールを使用しない。以下の4ステ
 
 ```bash
 # CRLF → LF 自動変換（Windows 環境の shellcheck SC1017 防止）
-for f in .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh; do [ -f "$f" ] || continue; if grep -Plq '\r\n' "$f" 2>/dev/null; then tmp=$(mktemp) && tr -d '\r' < "$f" > "$tmp" && mv "$tmp" "$f" && echo "[fix] CRLF→LF: $f"; fi; done
+for f in .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh; do [ -f "$f" ] || continue; if grep -q $'\r' "$f" 2>/dev/null; then tmp=$(mktemp) && tr -d '\r' < "$f" > "$tmp" && mv "$tmp" "$f" && echo "[fix] CRLF→LF: $f"; fi; done
 
 uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdownlint-cli2@0.20.0 "CLAUDE.md" "docs/**/*.md" "*.md" ".claude/**/*.md" && uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh
 ```
