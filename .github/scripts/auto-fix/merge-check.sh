@@ -15,7 +15,7 @@
 # エラー方針: API失敗 → 安全側に倒してマージ拒否
 
 set -euo pipefail
-# Dynamic path resolved at runtime
+# 動的パス解決のため静的解析不可
 # shellcheck disable=SC1091
 source "$(dirname "$0")/_common.sh"
 
