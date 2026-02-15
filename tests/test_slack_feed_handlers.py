@@ -129,24 +129,29 @@ def test_parse_feed_command_slack_url_with_label() -> None:
 
 @pytest.mark.asyncio
 async def test_handle_feed_add_success() -> None:
-    """feedハンドラ: add成功."""
+    """feedハンドラ: add成功（タイトル自動取得）."""
     collector = AsyncMock(spec=FeedCollector)
+    collector.fetch_feed_title.return_value = "Example Blog"
     mock_feed = MagicMock()
     mock_feed.url = "https://example.com/rss"
+    mock_feed.name = "Example Blog"
     mock_feed.category = "Python"
     collector.add_feed.return_value = mock_feed
 
     result = await _handle_feed_add(collector, ["https://example.com/rss"], "Python")
 
-    collector.add_feed.assert_called_once_with("https://example.com/rss", "https://example.com/rss", "Python")
+    collector.fetch_feed_title.assert_called_once_with("https://example.com/rss")
+    collector.add_feed.assert_called_once_with("https://example.com/rss", "Example Blog", "Python")
     assert "✅" in result
     assert "https://example.com/rss" in result
+    assert "Example Blog" in result
 
 
 @pytest.mark.asyncio
 async def test_handle_feed_add_duplicate_error() -> None:
     """feedハンドラ: add重複エラー."""
     collector = AsyncMock(spec=FeedCollector)
+    collector.fetch_feed_title.return_value = "Example Blog"
     collector.add_feed.side_effect = ValueError("既に登録されています")
 
     result = await _handle_feed_add(collector, ["https://example.com/rss"], "Python")
@@ -157,18 +162,38 @@ async def test_handle_feed_add_duplicate_error() -> None:
 
 @pytest.mark.asyncio
 async def test_handle_feed_add_multiple() -> None:
-    """feedハンドラ: 複数add."""
+    """feedハンドラ: 複数add（タイトル自動取得）."""
     collector = AsyncMock(spec=FeedCollector)
-    mock_feed1 = MagicMock(url="https://feed1.com/rss", category="Python")
-    mock_feed2 = MagicMock(url="https://feed2.com/rss", category="Python")
+    collector.fetch_feed_title.side_effect = ["Feed 1 Title", "Feed 2 Title"]
+    mock_feed1 = MagicMock(url="https://feed1.com/rss", name="Feed 1 Title", category="Python")
+    mock_feed2 = MagicMock(url="https://feed2.com/rss", name="Feed 2 Title", category="Python")
     collector.add_feed.side_effect = [mock_feed1, mock_feed2]
 
     result = await _handle_feed_add(
         collector, ["https://feed1.com/rss", "https://feed2.com/rss"], "Python"
     )
 
+    assert collector.fetch_feed_title.call_count == 2
     assert collector.add_feed.call_count == 2
     assert result.count("✅") == 2
+
+
+@pytest.mark.asyncio
+async def test_handle_feed_add_title_fallback_to_url() -> None:
+    """feedハンドラ: add タイトル取得失敗時はURLをフォールバック (AC7.14)."""
+    collector = AsyncMock(spec=FeedCollector)
+    collector.fetch_feed_title.return_value = "https://example.com/rss"
+    mock_feed = MagicMock()
+    mock_feed.url = "https://example.com/rss"
+    mock_feed.name = "https://example.com/rss"
+    mock_feed.category = "一般"
+    collector.add_feed.return_value = mock_feed
+
+    result = await _handle_feed_add(collector, ["https://example.com/rss"], "一般")
+
+    collector.fetch_feed_title.assert_called_once_with("https://example.com/rss")
+    collector.add_feed.assert_called_once_with("https://example.com/rss", "https://example.com/rss", "一般")
+    assert "✅" in result
 
 
 @pytest.mark.asyncio
