@@ -25,7 +25,7 @@
 - **ツール制約**: Edit / Write ツールの使用は原則禁止
   - 許可する例外: dashboard.md の更新、CLAUDE.md 等の運用ルール更新、チーム管理に直接必要なファイル操作のみ
 - **技術的実装**:
-  - **主たる制約**: チーム起動後に **Shift+Tab** で `delegate` モードに切り替える（[共通仕様: delegate モード](common.md#delegate-モードリーダー制約)）
+  - **主たる制約**: チーム起動後に **Shift+Tab** で `delegate` モードに切り替える（[共通仕様: delegate モード](common.md#delegate-モード)）
   - **フォールバック**: PreToolUse フック（`.claude/scripts/leader-guard.sh`）が delegate モード未使用時にリーダーの Edit/Write を警告する。ただし `permissions.allow` との競合により機能しない場合がある（[#258](https://github.com/becky3/ai-assistant/issues/258)）
 - **例外**: 全メンバーがブロックされている場合のみ、リーダーが一時的に作業を代行可
 
