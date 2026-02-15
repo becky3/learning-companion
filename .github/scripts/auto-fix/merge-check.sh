@@ -45,14 +45,13 @@ echo "✅ Condition 2: No review issues"
 # EXCLUDE_CHECK が設定されている場合、そのチェック名を除外する
 # （自ワークフローの実行中チェックを除外するため。copilot-auto-fix.yml から呼ばれる場合に使用）
 EXCLUDE_NAME="${EXCLUDE_CHECK:-}"
-# $exclude is a jq variable, not a bash variable
-# shellcheck disable=SC2016
-if ! CI_RESULT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq --arg exclude "$EXCLUDE_NAME" '
+# gh pr view --jq does not support jq's --arg option, so embed the value directly
+if ! CI_RESULT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '
   if .statusCheckRollup == null then
     "no_checks"
   else
     ([.statusCheckRollup[] |
-      select(if $exclude != "" then (.name | contains($exclude)) | not else true end) |
+      select(if "'"$EXCLUDE_NAME"'" != "" then (.name | contains("'"$EXCLUDE_NAME"'")) | not else true end) |
       select(
         (has("state") and .state != "SUCCESS" and .state != "NEUTRAL") or
         (has("conclusion") and .conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")
