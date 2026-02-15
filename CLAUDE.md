@@ -257,6 +257,9 @@ GitHub Actions 環境では Skill ツールを使用しない。以下の4ステ
 #### ステップ 1/4: テスト実行
 
 ```bash
+# CRLF → LF 自動変換（Windows 環境の shellcheck SC1017 防止）
+for f in .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh; do [ -f "$f" ] || continue; if grep -Plq '\r\n' "$f" 2>/dev/null; then tmp=$(mktemp) && tr -d '\r' < "$f" > "$tmp" && mv "$tmp" "$f" && echo "[fix] CRLF→LF: $f"; fi; done
+
 uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdownlint-cli2@0.20.0 "CLAUDE.md" "docs/**/*.md" "*.md" ".claude/**/*.md" && uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh
 ```
 
@@ -337,7 +340,8 @@ commitが成功していない状態でpushしないこと。
 **Windows環境での注意点**:
 
 - シェルスクリプト（`.sh`）は **LF 改行コード** で保存すること（CRLF だとエラー）
-- 改行コード変換: `cat file.sh | tr -d '\r' > file_tmp.sh && mv file_tmp.sh file.sh`
+- **test-run スキル / GA環境テスト実行時に shellcheck 前の CRLF → LF 自動変換が走る**（手動変換は不要）
+- 手動変換が必要な場合: `cat file.sh | tr -d '\r' > file_tmp.sh && mv file_tmp.sh file.sh`
 - **出力の破棄には必ず `/dev/null` を使うこと。`> nul` は禁止。**
   - Git Bash 環境では `> nul` と書くと `nul` という名前のファイルが作成されてしまう（Windows の予約デバイス名が正しく解釈されない）
   - 正: `command > /dev/null 2>&1`
