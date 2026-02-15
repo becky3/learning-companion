@@ -5,12 +5,10 @@
 # 設計書: docs/specs/auto-progress.md
 #
 # 処理内容:
-#   1. 変更ファイルの分類（実行テスト要否の判定）
-#   2. 実行テスト必要 → auto:review-batch Issue に追記
-#   3. 次Issue候補のピックアップ（PRコメントに投稿）
+#   1. 全自動マージPRを auto:review-batch Issue にコメント記録
+#   2. 次Issue候補のピックアップ（PRコメントに投稿）
 #
 # エラーハンドリング方針:
-#   classify-changes    → 失敗時は needs_runtime_test=false（安全側）
 #   update-review-issue → 失敗時は warning で続行
 #   pick-next-issue     → 全処理ベストエフォート
 
@@ -43,23 +41,13 @@ jobs:
           sparse-checkout-cone-mode: false
           fetch-depth: 1
 
-      - name: Classify changes
-        id: classify
-        run: bash "$GITHUB_WORKSPACE/.github/scripts/post-merge/classify-changes.sh"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-
       - name: Update review issue
-        if: steps.classify.outputs.needs_runtime_test == 'true'
         run: bash "$GITHUB_WORKSPACE/.github/scripts/post-merge/update-review-issue.sh"
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
-          RUNTIME_FILES: ${{ steps.classify.outputs.runtime_files }}
 
       - name: Pick next issue
         run: bash "$GITHUB_WORKSPACE/.github/scripts/post-merge/pick-next-issue.sh"

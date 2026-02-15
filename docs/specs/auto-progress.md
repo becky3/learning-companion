@@ -118,9 +118,7 @@ flowchart TD
     N -->|全条件クリア| O[自動マージ → develop]
     N -->|条件未達| P[auto:failed ラベル付与]
 
-    O --> R{実行テスト必要?}
-    R -->|必要| S[レビューIssueに追記]
-    R -->|不要| Q
+    O --> S[レビューIssueにコメント記録]
     S --> Q[post-merge.yml: 次Issue選定]
     Q --> B
 
@@ -279,8 +277,7 @@ stateDiagram-v2
     copilot_auto_fix --> マージ済み: 修正完了 or 指摘なし（auto:merged 付与 → develop へマージ）
     copilot_auto_fix --> auto_failed: 禁止パターン or マージ条件未達
 
-    マージ済み --> review_issue: src/変更あり
-    マージ済み --> [*]: docs/のみの変更
+    マージ済み --> review_issue: 全PRを記録
     review_issue --> [*]: テスト完了
 
     auto_implement --> auto_failed: 管理者が緊急停止
@@ -305,7 +302,7 @@ stateDiagram-v2
 | `auto-fix.yml` | **無効化** | — | PRKit ベースの自動修正ループ（copilot-auto-fix.yml に移行） |
 | `copilot-auto-fix.yml` | **変更** | `pull_request[labeled]`（`auto:copilot-reviewed`） | Copilot レビュー結果に基づく自動修正 + マージ |
 | `copilot-review-poll.yml` | **新規** | `schedule`（5分おき）+ `workflow_dispatch` | Copilot レビュー完了検知 → `auto:copilot-reviewed` ラベル付与 |
-| `post-merge.yml` | 据え置き | `pull_request[closed]` | マージ後の次Issue自動ピックアップ + 実行テスト通知 |
+| `post-merge.yml` | **変更** | `pull_request[closed]` | マージ後の全PRレビュー記録 + 次Issue自動ピックアップ |
 
 ### 無効化方針
 
@@ -537,68 +534,40 @@ GitHub Actions（ubuntu-latest）環境では以下が利用不可:
 - ruff（リンター）
 - markdownlint（ドキュメントチェック）
 
-### 実行テスト要否の判定
+### マージ後のレビュー通知（自動マージレビューIssue方式）
 
-マージ後にローカルでの実行テストが必要かどうかを、変更内容から自動判定する。
-
-**実行テスト不要（静的チェックのみで品質保証可能）:**
-
-| 変更パターン | 理由 |
-|-------------|------|
-| `docs/` 配下のみの変更 | ドキュメント変更は実行に影響しない |
-| `.github/workflows/*` の変更 | CI 設定はデプロイ時に検証される |
-| `.claude/` 配下のみの変更 | Claude Code 設定はローカル実行に影響しない |
-| `CLAUDE.md`, `README.md` のみ | ドキュメント |
-| テストファイルのみの変更 | テスト自体は CI で実行済み |
-
-**実行テスト必要（ローカル環境での動作確認が必要）:**
-
-| 変更パターン | 理由 |
-|-------------|------|
-| `src/` 配下のコード変更 | Bot の動作に直接影響 |
-| `pyproject.toml` の依存追加・変更 | 依存パッケージの動作確認が必要 |
-| `config/` 配下の変更 | 設定変更が動作に影響する可能性 |
-| `mcp-servers/` 配下の変更 | MCP サーバーの動作確認が必要 |
-
-### マージ後の実行テスト通知（自動マージレビューIssue方式）
-
-`auto:review-batch` ラベル付きの集約Issueで管理する。自動マージが発生するたびにIssueに追記され、管理者がまとめてレビューする。GitHub 通知で管理者に自動的に届くため、カスタム通知は不要。
+`auto:review-batch` ラベル付きの集約Issueで管理する。全ての自動マージPRをコメントとして記録し、管理者がまとめてレビューする。GitHub 通知で管理者に自動的に届くため、カスタム通知は不要。
 
 **フロー:**
 
 ```
 PRマージ完了
   ↓
-[post-merge.yml] 変更ファイル分析
-  ↓
-実行テスト必要と判定
+[post-merge.yml] PR の変更ファイル一覧を取得
   ↓
 auto:review-batch ラベルの Open Issue を検索
   ↓
-既存あり → 追記 / なし → 新規作成（ピン留め）
+なし → 新規作成（概要 body + ピン留め）
+  ↓
+コメントで PR 情報を追記
 （GitHub 通知で管理者に自動的に届く）
 ```
 
-**レビューIssueのフォーマット:**
+**Issue body（新規作成時のみ）:**
 
 ```markdown
 # 自動マージレビュー
 
-自動マージされたPRのうち、実行テストが必要なものの一覧です。
-確認完了後、このIssueをクローズしてください。
+自動マージされたPRの一覧です。
+各PRの変更内容を確認し、問題がなければこのIssueをクローズしてください。
+```
 
----
+**コメントフォーマット（各PR記録）:**
 
+```markdown
 ## PR #123: フィード追加機能の改善 (2026-02-12)
 
 - 変更: `src/services/feed.py`, `src/utils/parser.py`
-- [ ] Bot起動確認（`uv run python -m src.main`）
-- [ ] エラーログに異常がないこと
-
-## PR #125: MCP サーバー設定変更 (2026-02-13)
-
-- 変更: `mcp-servers/weather/main.py`, `config/mcp_servers.json`
-- [ ] MCPサーバー起動確認
 ```
 
 **Issueの管理ルール:**
@@ -608,21 +577,21 @@ auto:review-batch ラベルの Open Issue を検索
 - ピン留め（`gh issue pin`）して常に目につくようにする
 - 管理者がまとめてチェック → 問題なければIssueクローズ
 - 次の自動マージで新しいIssueが自動作成される
-- チェックリストは変更ファイルパターンから自動テンプレート生成（`src/*` → Bot起動確認、`config/*` → 設定変更確認 等）
+- 各PRの情報はコメントで追記（Issue body は概要のみ固定）
 
 **管理者のアクション:**
 
 - レビューIssueを定期的にチェック（推奨: 毎朝）
-- 問題なし: チェックボックスを埋めてIssueクローズ
+- 問題なし: Issueクローズ
 - 問題あり: 対象PRに `@claude` で修正依頼コメント（既存の操作フロー）
 
-### 実行テストで問題が見つかった場合のフロー
+### レビューで問題が見つかった場合のフロー
 
 ```mermaid
 flowchart TD
-    A[管理者がレビューIssueを確認] --> B[ローカルで実行テスト]
+    A[管理者がレビューIssueを確認] --> B[ローカルで動作確認]
     B --> C{問題あり?}
-    C -->|なし| D[チェック済み → Issueクローズ]
+    C -->|なし| D[確認完了 → Issueクローズ]
     C -->|あり| E{修正方法}
     E -->|自動修正| F["PRに @claude コメント<br/>→ 新PR作成 → 自動ループ"]
     E -->|手動修正| G[管理者がローカルで修正・push]
@@ -775,7 +744,7 @@ GitHub Actions は `GITHUB_TOKEN` で作成したイベントでは同一リポ�
 
 **実装済み:**
 
-- post-merge.yml の新規作成（マージ後の次Issue自動ピックアップ + 実行テスト通知）
+- post-merge.yml の作成（マージ後の全PRレビュー記録 + 次Issue自動ピックアップ）
 
 **検討（運用状況を見て判断）:**
 
@@ -859,9 +828,9 @@ PRKit 復帰時に再度有効化する。
 
 ### Phase 2（post-merge.yml）
 
-- [ ] AC27: `src/` 配下の変更を含むPRがマージされた場合、`auto:review-batch` レビューIssueにチェックリストが追記される
-- [ ] AC28: `docs/` 配下のみの変更PRではレビューIssueへの追記が行われない
-- [ ] AC29: チェックリストが変更ファイルパターンからテンプレート生成される（`src/*` → Bot起動確認、`config/*` → 設定変更確認、`mcp-servers/*` → MCPサーバー起動確認、`pyproject.toml` → 依存パッケージ確認）
+- [ ] AC27: 自動マージされた全PRが `auto:review-batch` レビューIssueにコメントとして記録される（フィルタなし）
+- [ ] AC28: レビューIssueが存在しない場合、概要bodyで新規作成されピン留めされる
+- [ ] AC29: 各PRの記録にはPR番号・タイトル・変更ファイル一覧が含まれる
 - [ ] AC30: PRマージ後に post-merge.yml が次の `auto-implement` 候補Issueをピックアップし、PRコメントに投稿する（ラベルは付与しない）
 
 ## テスト方針
@@ -869,11 +838,11 @@ PRKit 復帰時に再度有効化する。
 - Phase 0: テスト用Issueに `auto-implement` ラベルを付与し、claude.yml が起動することを確認
 - Phase 1（Copilot）: テスト用PRを作成し、Copilot レビュー → 自動修正 → マージの全サイクルが自動実行されることを確認
 - 自動設計テスト: 仕様書がないIssueに `auto-implement` を付与し、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進むことを確認
-- 実行テスト通知: `src/` 変更を含むPRの自動マージ後に `auto:review-batch` レビューIssueにチェックリストが追記されることを確認
+- レビュー記録: 自動マージ後に `auto:review-batch` レビューIssueにPR情報がコメントとして記録されることを確認
 - 安全弁テスト: `auto:failed` ラベルで処理が停止すること、禁止パターンで `auto:failed` が付くことを各々確認
 - ブランチ戦略テスト: 自動実装PRのベースブランチが develop であること、main への直接自動マージが行われないことを確認
 - **注意**: GitHub Actions 環境ではローカル LLM・Slack Bot の統合テストは実行不可。pytest はモック使用のユニットテストのみ実行される
-- **Phase 2**: post-merge.yml がマージ後に正しくトリガーされ、変更ファイルの分類・review-batch Issue更新・次Issue候補の投稿が行われることを確認する
+- **Phase 2**: post-merge.yml がマージ後に正しくトリガーされ、review-batch Issue へのコメント記録・次Issue候補の投稿が行われることを確認する
 
 ## 関連ファイル
 
@@ -887,8 +856,7 @@ PRKit 復帰時に再度有効化する。
 | `.github/workflows/post-merge.yml` | マージ後処理 |
 | `docs/specs/copilot-auto-fix.md` | copilot-auto-fix.yml の詳細設計書（**新規**） |
 | `docs/specs/auto-fix-structure.md` | auto-fix.yml の詳細設計書（PRKit ベース、**休止中**） |
-| `.github/scripts/post-merge/classify-changes.sh` | 変更ファイル分類スクリプト |
-| `.github/scripts/post-merge/update-review-issue.sh` | レビューIssue更新スクリプト |
+| `.github/scripts/post-merge/update-review-issue.sh` | レビューIssue更新スクリプト（全PRをコメント記録） |
 | `.github/scripts/post-merge/pick-next-issue.sh` | 次Issue候補ピックアップスクリプト |
 | `.claude/skills/check-pr/SKILL.md` | check-prスキル（resolve追加） |
 | `CLAUDE.md` | 自動進行ルールセクション追加 |
