@@ -467,17 +467,12 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 
 以下のファイルが変更に含まれるPRは `auto:failed` ラベルを付与し、自動マージしない:
 
-| パターン | 理由 | develop 向き緩和 |
-|---------|------|-----------------|
-| `CLAUDE.md` | Claude自身の動作ルール変更 | 不可（常に禁止） |
-| `.github/workflows/*` | CI/CD設定の変更 | 可（develop へのマージは許可） |
-| `.claude/settings.json` | Claude Code設定の変更 | 不可（常に禁止） |
-| `.env*` | 環境変数・シークレット | 不可（常に禁止） |
-| `pyproject.toml` の dependencies | 依存パッケージ変更 | 不可（常に禁止） |
+| パターン | 理由 |
+|---------|------|
+| `.env*` | 環境変数・シークレット |
+| `pyproject.toml` の dependencies | 依存パッケージ変更 |
 
-**develop 向き緩和の理由**: `.github/workflows/*` の変更は develop にマージしても即座にプロダクションに影響しない。リリースPR（develop → main）時に管理者が確認できるため、develop への自動マージは許可する。ただし main への直接自動マージは引き続き禁止。
-
-**注記**: リリースPR（develop → main）は管理者が手動で作成・マージするため、copilot-auto-fix.yml / auto-fix.yml の処理対象外。ワークフロー変更を含む場合でも、リリースPRでの人間レビューが安全弁として機能する。
+**注記**: `.github/workflows/*` は禁止パターンに含まない。自動マージパイプライン（`copilot-auto-fix.yml`）は `auto/` ブランチの develop 向け PR のみを処理するため、ワークフロー変更が main に直接自動マージされることはない。main への反映はリリースPR（develop → main）で管理者が手動レビュー・マージする。
 
 **第3層: `auto:failed` ラベル（緊急停止ボタン兼用）**
 
