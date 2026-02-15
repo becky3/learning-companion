@@ -13,7 +13,7 @@ name: Copilot Review Poll
 
 on:
   schedule:
-    - cron: '*/3 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -35,8 +35,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          # REPO_OWNER_PAT 未設定チェック（未設定時は gh が認証失敗する前に検知）
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::REPO_OWNER_PAT is not set. This secret is required for label addition and workflow chaining."
+            exit 1
+          fi
+
           echo "Fetching open PRs..."
-          PRS=$(gh pr list --state open --json number,headRefName,labels 2>&1) || {
+          PRS=$(gh pr list --state open --limit 200 --json number,headRefName,labels 2>&1) || {
             echo "::warning::Failed to fetch PR list: $PRS"
             exit 0
           }

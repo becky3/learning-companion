@@ -45,7 +45,7 @@ PRKit（prt-silent-failure-hunter）の正答率が17%（CRITICAL 判定の正�
 ```mermaid
 flowchart TD
     A[PR作成] --> B[Copilot 自動レビュー<br/>GitHub ネイティブ]
-    B --> B2[copilot-review-poll.yml<br/>schedule 3分おき]
+    B --> B2[copilot-review-poll.yml<br/>schedule 5分おき]
     B2 --> B3{Copilot レビュー<br/>完了検知?}
     B3 -->|No| B2
     B3 -->|Yes| C[auto:copilot-reviewed<br/>ラベル付与]
@@ -92,7 +92,7 @@ flowchart TD
 
 **解決策**: schedule ポーリング + ラベルトリガー方式に変更。
 
-1. `copilot-review-poll.yml`（schedule: 3分おき）が `auto/` ブランチの open PR を監視
+1. `copilot-review-poll.yml`（schedule: 5分おき）が `auto/` ブランチの open PR を監視
 2. Copilot レビュー完了を REST API で検知したら `auto:copilot-reviewed` ラベルを `REPO_OWNER_PAT` で付与
 3. ラベル付与により `copilot-auto-fix.yml`（`pull_request[labeled]`）がトリガーされる
 
@@ -102,7 +102,7 @@ flowchart TD
 
 Copilot のレビューは guaranteed delivery ではない。サービス障害やリポジトリ設定の変更でレビューが実行されない場合、`copilot-review-poll.yml` がレビューを検知できず PR が「レビュー待ち」のまま滞留する。
 
-**運用方針**: `copilot-review-poll.yml` は 3 分おきに実行されるため、Copilot レビュー完了後は最大約 3 分（+ GitHub schedule の遅延）で検知される。Copilot レビュー自体が長時間来ない場合は、管理者が手動で `/review-pr` を実行するか、`auto:failed` を付与して手動対応に切り替える。
+**運用方針**: `copilot-review-poll.yml` は 5 分おきに実行されるため、Copilot レビュー完了後は最大約 5 分（+ GitHub schedule の遅延）で検知される。Copilot レビュー自体が長時間来ない場合は、管理者が手動で `/review-pr` を実行するか、`auto:failed` を付与して手動対応に切り替える。
 
 ### reviewer 名の注意点（PR #352 検証結果）
 
@@ -236,7 +236,7 @@ if: >-
 - [ ] AC12: 禁止パターン検出時に `auto:failed` が付与される
 - [ ] AC13: `auto-fix.yml` が無効化されている（トリガーが `workflow_dispatch` のみに変更）。`pr-review.yml` は通常PR向けに稼働継続し、`auto/` ブランチプレフィックス付きPRのみスキップする — auto-progress.md AC19 と対応
 - [ ] AC14: `handle-errors.sh` のエラーメッセージが Copilot 方式の再開手順に更新されている
-- [ ] AC15: `copilot-review-poll.yml` が 3 分おきの schedule で実行され、`auto/` ブランチの open PR の Copilot レビュー完了を検知する
+- [ ] AC15: `copilot-review-poll.yml` が 5 分おきの schedule で実行され、`auto/` ブランチの open PR の Copilot レビュー完了を検知する
 - [ ] AC16: Copilot レビュー完了検知時に `auto:copilot-reviewed` ラベルが `REPO_OWNER_PAT` で付与される
 - [ ] AC17: `auto:copilot-reviewed` / `auto:failed` ラベル付きの PR はポーリング対象外としてスキップされる
 

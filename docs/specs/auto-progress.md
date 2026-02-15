@@ -107,7 +107,7 @@ flowchart TD
     E --> G[テスト・品質チェック]
     G --> H[PR作成]
     H --> I[Copilot 自動レビュー<br/>GitHub ネイティブ]
-    I --> I2[copilot-review-poll.yml<br/>schedule 3分おき]
+    I --> I2[copilot-review-poll.yml<br/>schedule 5分おき]
     I2 --> I3[auto:copilot-reviewed<br/>ラベル付与]
     I3 --> J[copilot-auto-fix.yml<br/>pull_request labeled event]
     J --> K{unresolved<br/>threads?}
@@ -304,7 +304,7 @@ stateDiagram-v2
 | `pr-review.yml` | 稼働中 | `pull_request` / `issue_comment` | PRKit ベースの自動レビュー（`auto/` ブランチプレフィックス付き PR はスキップ） |
 | `auto-fix.yml` | **無効化** | — | PRKit ベースの自動修正ループ（copilot-auto-fix.yml に移行） |
 | `copilot-auto-fix.yml` | **変更** | `pull_request[labeled]`（`auto:copilot-reviewed`） | Copilot レビュー結果に基づく自動修正 + マージ |
-| `copilot-review-poll.yml` | **新規** | `schedule`（3分おき）+ `workflow_dispatch` | Copilot レビュー完了検知 → `auto:copilot-reviewed` ラベル付与 |
+| `copilot-review-poll.yml` | **新規** | `schedule`（5分おき）+ `workflow_dispatch` | Copilot レビュー完了検知 → `auto:copilot-reviewed` ラベル付与 |
 | `post-merge.yml` | 据え置き | `pull_request[closed]` | マージ後の次Issue自動ピックアップ + 実行テスト通知 |
 
 ### 無効化方針
@@ -359,7 +359,7 @@ Copilot ネイティブレビューに基づく自動修正 + マージのワー
 
 ```
 PR作成 → Copilot 初回レビュー（GitHub ネイティブ）
-  → copilot-review-poll.yml（schedule 3分おき）で Copilot レビュー完了を検知
+  → copilot-review-poll.yml（schedule 5分おき）で Copilot レビュー完了を検知
     → auto:copilot-reviewed ラベル付与（REPO_OWNER_PAT）
       → copilot-auto-fix.yml（pull_request[labeled]）:
           label == "auto:copilot-reviewed" & auto/ ブランチプレフィックス
@@ -823,7 +823,7 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 ### Phase 1（Copilot ベース — 現行）
 
 - [ ] AC5: `auto:copilot-reviewed` ラベル付与（`pull_request[labeled]`）で copilot-auto-fix.yml が起動する
-- [ ] AC5.1: `copilot-review-poll.yml` が 3 分おきの schedule で実行され、`auto/` ブランチの open PR の Copilot レビュー完了を検知する
+- [ ] AC5.1: `copilot-review-poll.yml` が 5 分おきの schedule で実行され、`auto/` ブランチの open PR の Copilot レビュー完了を検知する
 - [ ] AC5.2: Copilot レビュー完了検知時に `auto:copilot-reviewed` ラベルが `REPO_OWNER_PAT` で付与される
 - [ ] AC6: `auto:copilot-reviewed` 以外のラベル付与では copilot-auto-fix.yml がスキップされる
 - [ ] AC7: `auto/` ブランチプレフィックスのない PR、`auto:failed` ラベルのある PR、マージ済み/クローズ済みの PR では copilot-auto-fix.yml がスキップされる

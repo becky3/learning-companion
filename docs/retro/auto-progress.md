@@ -511,7 +511,7 @@ mixed-genius チームで根本設計を見直した。
 
 GitHub の内部イベント発火に依存しない、**観測可能な事実のみに基づく方式**に変更した。
 
-1. `copilot-review-poll.yml`（schedule: 3分おき）が REST API で Copilot レビューの存在を直接確認
+1. `copilot-review-poll.yml`（schedule: 5分おき）が REST API で Copilot レビューの存在を直接確認
 2. 完了検知 → `auto:copilot-reviewed` ラベルを `REPO_OWNER_PAT` で付与
 3. `copilot-auto-fix.yml` のトリガーを `pull_request[labeled]` に変更
 
