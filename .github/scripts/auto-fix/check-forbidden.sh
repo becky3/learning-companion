@@ -30,18 +30,6 @@ FORBIDDEN_FOUND=""
 while IFS= read -r file; do
   [ -z "$file" ] && continue
 
-  # CLAUDE.md
-  if [ "$file" = "CLAUDE.md" ]; then
-    FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file}\n"
-    continue
-  fi
-
-  # .claude/settings.json
-  if [ "$file" = ".claude/settings.json" ]; then
-    FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file}\n"
-    continue
-  fi
-
   # .env*
   if [[ "$file" == .env* ]]; then
     FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file}\n"

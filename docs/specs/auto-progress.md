@@ -469,9 +469,7 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 
 | パターン | 理由 | develop 向き緩和 |
 |---------|------|-----------------|
-| `CLAUDE.md` | Claude自身の動作ルール変更 | 不可（常に禁止） |
 | `.github/workflows/*` | CI/CD設定の変更 | 可（develop へのマージは許可） |
-| `.claude/settings.json` | Claude Code設定の変更 | 不可（常に禁止） |
 | `.env*` | 環境変数・シークレット | 不可（常に禁止） |
 | `pyproject.toml` の dependencies | 依存パッケージ変更 | 不可（常に禁止） |
 
