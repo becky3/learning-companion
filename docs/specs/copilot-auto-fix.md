@@ -62,7 +62,7 @@ flowchart TD
     J --> K{unresolved == 0?}
     K -->|Yes| L{マージ判定<br/>5条件チェック}
     K -->|No| M[claude-code-action<br/>で自動修正]
-    M --> N[対応済みスレッド resolve]
+    M --> N[判断済みスレッド resolve]
     N --> N2{unresolved<br/>再カウント}
     N2 -->|0| N3[CI 完了待機<br/>ポーリング]
     N2 -->|残存あり| P
@@ -146,7 +146,7 @@ if: >-
 |------|----------|
 | 禁止パターン検出 | `auto:failed` 付与 + PRコメントで通知 |
 | unresolved == 0 | マージ判定へ |
-| unresolved > 0 | `claude-code-action` で `/check-pr` を実行し自動修正 → 対応済みスレッドを `resolveReviewThread` で resolve → unresolved threads を再カウント（残存指摘の確認） → CI 完了待機 → マージ判定へ |
+| unresolved > 0 | `claude-code-action` で `/check-pr` を実行し自動修正 → 判断済みスレッド（✅❌⏸️）を resolve → unresolved threads を再カウント（残存指摘の確認） → CI 完了待機 → マージ判定へ |
 
 ### 5. CI 完了待機
 

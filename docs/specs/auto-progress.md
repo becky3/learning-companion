@@ -376,7 +376,7 @@ PRKit ベースのレビュー指摘自動修正ワークフロー。詳細は `
 
 ### 概要
 
-PRレビューの「Resolve conversation」を GitHub GraphQL API で自動実行する。check-pr スキルの指摘対応後に、対応済みスレッドを自動的に resolve する。
+PRレビューの「Resolve conversation」を GitHub GraphQL API で自動実行する。check-pr スキルの指摘対応後に、判断済みスレッド（✅ 対応済み、❌ 対応不要、⏸️ 別Issue化）を resolve する。
 
 ### 技術仕様
 
@@ -424,11 +424,21 @@ mutation {
 - 全スレッドの resolve が失敗した場合は `::error::` でログ（`auto:failed` は付与しない。再レビューで再検出されるため）
 - GraphQL レスポンスの `errors` フィールドをチェックし、エラー内容をログに記録
 
+### 実装
+
+resolve 処理は `.github/scripts/auto-fix/resolve-threads.sh` にスクリプト化されている。
+
+```bash
+# 全未解決スレッドを resolve
+PR_NUMBER=123 .github/scripts/auto-fix/resolve-threads.sh
+
+# 特定のスレッドIDのみ resolve
+PR_NUMBER=123 .github/scripts/auto-fix/resolve-threads.sh PRRT_xxx PRRT_yyy
+```
+
 ### 組み込み箇所
 
-check-pr スキル（`.claude/skills/check-pr/SKILL.md`）のステップ11（対応コメント投稿）の後に追加:
-
-> 11.5. 対応済みスレッドの resolve: 修正が完了した指摘のレビュースレッドを `resolveReviewThread` mutation で resolve する
+check-pr スキル（`.claude/skills/check-pr/SKILL.md`）のステップ12 で `resolve-threads.sh` を呼び出す。
 
 ### 自動パイプラインでのタイミング
 
@@ -436,14 +446,14 @@ check-pr スキル（`.claude/skills/check-pr/SKILL.md`）のステップ11（�
 
 ```
 Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 → コミット & push
-→ 対応済みスレッドを resolve → CI 完了待機 → マージ判定
+→ 判断済みスレッドを resolve → CI 完了待機 → マージ判定
 ```
 
 **PRKit 方式（休止中）:**
 
 ```
 レビュー指摘検出 → Claude が /check-pr で修正 → コミット & push
-→ 対応コメント投稿 → 対応済みスレッドを resolve → /fix 再リクエスト
+→ 対応コメント投稿 → 判断済みスレッドを resolve → /fix 再リクエスト
 → 再レビュー（resolve済みスレッドは対象外）
 ```
 
@@ -856,9 +866,10 @@ PRKit 復帰時に再度有効化する。
 | `.github/workflows/post-merge.yml` | マージ後処理 |
 | `docs/specs/copilot-auto-fix.md` | copilot-auto-fix.yml の詳細設計書（**新規**） |
 | `docs/specs/auto-fix-structure.md` | auto-fix.yml の詳細設計書（PRKit ベース、**休止中**） |
+| `.github/scripts/auto-fix/resolve-threads.sh` | レビュースレッド resolve スクリプト |
 | `.github/scripts/post-merge/update-review-issue.sh` | レビューIssue更新スクリプト（全PRをコメント記録） |
 | `.github/scripts/post-merge/pick-next-issue.sh` | 次Issue候補ピックアップスクリプト |
-| `.claude/skills/check-pr/SKILL.md` | check-prスキル（resolve追加） |
+| `.claude/skills/check-pr/SKILL.md` | check-prスキル（resolve は `resolve-threads.sh` に委譲） |
 | `CLAUDE.md` | 自動進行ルールセクション追加 |
 
 ## 参考資料

@@ -146,114 +146,21 @@ PRの内容を確認し、未解決のレビュー指摘があれば対応した
     - ❌ 対応不要: 判断理由付きで対応しないと決定した指摘
     - ⏸️ 別Issue化: 別Issueを作成して追跡可能にした指摘
 
-    エラーハンドリング方針（auto-fix.yml と統一）:
+    **実行方法**: `.github/scripts/auto-fix/resolve-threads.sh` を使用する。
 
-    | エラー種別 | 対応 |
-    |-----------|------|
-    | 認証/権限エラー（owner/repo取得失敗、全件resolve失敗） | exit 1 で即停止 |
-    | 一時的API障害（個別resolve失敗、スレッド取得失敗） | `::warning::` でログし続行 |
-    | データ不存在（PR番号不正、スレッド0件） | ログ出力しスキップ |
-    | 取得失敗（非クリティカル） | デフォルト値で続行 |
+    ```bash
+    # 全未解決スレッドを resolve（引数なし）
+    PR_NUMBER=$PR_NUMBER .github/scripts/auto-fix/resolve-threads.sh
 
-    - owner/repo の取得とバリデーション（失敗時は認証/権限エラーの可能性 → exit 1）:
+    # 特定のスレッドIDのみ resolve（引数にスレッドIDを指定）
+    PR_NUMBER=$PR_NUMBER .github/scripts/auto-fix/resolve-threads.sh PRRT_xxx PRRT_yyy
+    ```
 
-      ```bash
-      # owner/repo の取得と検証（認証/権限エラー → exit 1）
-      if ! OWNER=$(gh repo view --json owner --jq '.owner.login' 2>&1); then
-        echo "::error::Failed to get repository owner: $OWNER"
-        exit 1
-      fi
-      if ! REPO=$(gh repo view --json name --jq '.name' 2>&1); then
-        echo "::error::Failed to get repository name: $REPO"
-        exit 1
-      fi
-
-      # PR番号の数値バリデーション（データ不存在 → スキップ）
-      if ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
-        echo "::warning::Invalid PR number: '$PR_NUMBER'. Skipping thread resolution."
-        exit 1
-      fi
-      ```
-
-    - 未解決スレッドの取得（失敗時は一時的API障害の可能性 → warning で続行）:
-
-      ```bash
-      THREADS=""
-      QUERY_SUCCESS=true
-      if ! THREADS=$(gh api graphql -f query="
-      {
-        repository(owner: \"$OWNER\", name: \"$REPO\") {
-          pullRequest(number: $PR_NUMBER) {
-            reviewThreads(first: 100) {
-              # 注意: 100スレッドを超える場合はページネーション未対応
-              nodes {
-                id
-                isResolved
-              }
-            }
-          }
-        }
-      }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' 2>&1); then
-        QUERY_SUCCESS=false
-        # 認証エラー（401/403）→ 即停止
-        if echo "$THREADS" | grep -qE '401|403|authentication|forbidden'; then
-          echo "::error::Authentication/permission error: $THREADS"
-          exit 1
-        fi
-        # 一時的障害 → warning でスキップ
-        echo "::warning::Failed to query review threads: $THREADS"
-        echo "Skipping thread resolution due to API error"
-        THREADS=""
-      fi
-      ```
-
-    - 失敗カウンターで全件失敗を検知（全件失敗は認証エラーの可能性 → exit 1）:
-
-      ```bash
-      if [ -z "$THREADS" ]; then
-        if [ "$QUERY_SUCCESS" = true ]; then
-          echo "No unresolved threads to resolve. Skipping."
-        else
-          echo "::warning::Skipping resolve due to query failure."
-        fi
-      else
-        RESOLVED=0
-        FAILED=0
-        while IFS= read -r THREAD_ID; do
-          [ -z "$THREAD_ID" ] && continue
-          # THREAD_ID のフォーマット検証（GitHub thread IDは英数字・_・-のみ）
-          if ! [[ "$THREAD_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
-            echo "::warning::Invalid thread ID format: $THREAD_ID"
-            FAILED=$((FAILED + 1))
-            continue
-          fi
-          # 個別失敗は一時的障害の可能性 → warning で続行
-          # Windows Git Bash では GraphQL変数($threadId)が正しく渡らないため、
-          # IDをmutationクエリに直接埋め込む
-          if ! ERROR=$(gh api graphql -f query="
-          mutation {
-            resolveReviewThread(input: { threadId: \"$THREAD_ID\" }) {
-              thread { isResolved }
-            }
-          }" 2>&1); then
-            FAILED=$((FAILED + 1))
-            echo "::warning::Failed to resolve thread $THREAD_ID: $ERROR"
-          else
-            RESOLVED=$((RESOLVED + 1))
-          fi
-        done <<< "$THREADS"
-
-        echo "Resolved: $RESOLVED, Failed: $FAILED"
-        # 全件失敗は認証/権限エラーの可能性 → exit 1
-        if [ "$RESOLVED" -eq 0 ] && [ "$FAILED" -gt 0 ]; then
-          echo "::error::All thread resolutions failed. Possible causes:"
-          echo "::error::- Insufficient token permissions"
-          echo "::error::- API rate limit exceeded"
-          echo "::error::- GraphQL query syntax error"
-          exit 1
-        fi
-      fi
-      ```
+    エラーハンドリングはスクリプト内で実施される:
+    - 認証/権限エラー → exit 1 で即停止
+    - 個別失敗 → `::warning::` でログし続行
+    - 全件失敗 → `::error::` + exit 1
+    - スレッド0件 → ログ出力しスキップ
 
 13. prt レビュー評価（Issue #265 への記録）:
 
