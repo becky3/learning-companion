@@ -245,7 +245,7 @@ sequenceDiagram
 - [x] AC4: `docs/specs/overview.md` のGit運用セクションが更新されている
 - [x] AC5: `README.md` の開発フロー概要が更新されている
 - [x] AC6: feature/bugfix ブランチは `develop` からの分岐・マージで運用される
-- [x] AC7: `main` への反映は `develop` からのPRで行われる
+- [x] AC7: `main` への反映は `release` ブランチ経由で行われる
 - [x] AC8: GitHub Actions（claude.yml, pr-review.yml）が `develop` ベースで正しく動作する
 - [ ] AC9: `main` への反映は `release/v{X}.{Y}.{Z}` ブランチ経由で行われる（`develop` → `release` → `main`）
 - [ ] AC10: release → main は squash マージで行われる
