@@ -42,9 +42,11 @@ argument-hint: "[メッセージ]"
 
 | ファイル | パス | 役割 |
 |---------|------|------|
-| MEMORY.md | `~/.claude/projects/*/memory/MEMORY.md` | Claude Codeの永続メモリ（セッション横断） |
-| journal.md | `~/.claude/projects/*/memory/journal.md` | セッションジャーナル（直近10件） |
-| journal-archive.md | `~/.claude/projects/*/memory/journal-archive.md` | アーカイブ済みジャーナル |
+| MEMORY.md | `{MEMORY_DIR}/MEMORY.md` | Claude Codeの永続メモリ（セッション横断） |
+| journal.md | `{MEMORY_DIR}/journal.md` | セッションジャーナル（直近10件） |
+| journal-archive.md | `{MEMORY_DIR}/journal-archive.md` | アーカイブ済みジャーナル |
+
+> `{MEMORY_DIR}` は Claude Code のシステムプロンプトで提供されるプロジェクトメモリディレクトリパス。
 
 ### 処理フロー
 
@@ -116,23 +118,25 @@ MEMORY.mdの「進行中タスク」セクションを、収集した情報に�
 
 ### ステップ3: journal.md にエントリ追加
 
-セッションの記録をジャーナルに追加する。
+セッションの記録をジャーナルに追加する。既存の `journal-guidelines.md` のフォーマットに従う。
 
 **ジャーナルエントリの形式:**
 
 ```markdown
-## YYYY-MM-DD セッション概要（1行）
+## YYYY-MM-DD: 一言タイトル
 
-- **やったこと**: 箇条書きで成果を列挙
-- **PR/マージ**: マージしたPRがあれば記録
-- **次にやること**: 次セッションで着手すべきタスク
-- **メモ**: 引数で渡されたカスタムメッセージ（あれば）
+- **やったこと**: 概要（1-2行）
+- **判断**: 迷った点・選んだ選択肢・理由
+- **結果**: 良かった / 悪かった / 未検証
+- **気づき**: 次に活かすこと、ユーザーへの提案候補
 ```
+
+カスタムメッセージ（引数）がある場合は「**気づき**」の末尾に追記する。
 
 **追加ルール:**
 
 - 常に新しいエントリを先頭（ファイルの上部）に追加
-- journal.mdが存在しない場合は新規作成（ヘッダー付き）
+- journal.mdが存在しない場合は新規作成（ヘッダー: `# Journal`）
 - 日付はスキル実行時の日付を使用
 
 ### ステップ4: ジャーナルのローリング
@@ -176,7 +180,7 @@ journal.md のエントリが10件を超えた場合、古いものを journal-a
 ## 受け入れ条件
 
 - [ ] AC1: `/handoff` で MEMORY.md の「進行中タスク」セクションが更新される
-- [ ] AC2: `/handoff` で journal.md にセッションエントリが追加される
+- [ ] AC2: `/handoff` で journal.md にセッションエントリが追加される（journal-guidelines.md の形式に準拠）
 - [ ] AC3: journal.md のエントリが10件を超えた場合、超過分が journal-archive.md に移動される
 - [ ] AC4: 引き継ぎ結果がユーザーに報告される（次セッションの開始点が明示される）
 - [ ] AC5: `/handoff "メッセージ"` でカスタムメッセージがジャーナルに含まれる
@@ -188,9 +192,9 @@ journal.md のエントリが10件を超えた場合、古いものを journal-a
 | ファイル | 役割 |
 |---------|------|
 | `.claude/skills/handoff/SKILL.md` | handoffスキル定義 |
-| `~/.claude/projects/*/memory/MEMORY.md` | 永続メモリ |
-| `~/.claude/projects/*/memory/journal.md` | セッションジャーナル |
-| `~/.claude/projects/*/memory/journal-archive.md` | アーカイブ済みジャーナル |
+| `{MEMORY_DIR}/MEMORY.md` | 永続メモリ |
+| `{MEMORY_DIR}/journal.md` | セッションジャーナル |
+| `{MEMORY_DIR}/journal-archive.md` | アーカイブ済みジャーナル |
 | `CLAUDE.md` | スキル一覧への登録 |
 
 ## テスト方針
