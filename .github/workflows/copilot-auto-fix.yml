@@ -73,29 +73,45 @@ jobs:
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "PR number: $PR_NUMBER"
 
-      # --- workflow_dispatch 時のブランチ検証 ---
-      - name: Validate branch prefix (workflow_dispatch)
+      # --- workflow_dispatch 時のブランチ・リポジトリ検証 ---
+      - name: Validate branch and repo (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch'
+        id: branch-check
         run: |
           set -euo pipefail
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
 
-          if ! HEAD_REF=$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName' 2>&1); then
-            echo "::error::Failed to get PR head ref: $HEAD_REF"
+          # head ブランチ名と head リポジトリを取得
+          if ! HEAD_INFO=$(gh pr view "$PR_NUMBER" --json headRefName,headRepository --jq '.headRefName + "::" + .headRepository.nameWithOwner' 2>&1); then
+            echo "::error::Failed to get PR head info: $HEAD_INFO"
             exit 1
+          fi
+
+          HEAD_REF="${HEAD_INFO%%::*}"
+          HEAD_REPO_FULL_NAME="${HEAD_INFO#*::}"
+
+          # フォーク PR を誤って指定しても処理を進めないよう、head リポジトリを検証
+          if [[ -z "$HEAD_REPO_FULL_NAME" || "$HEAD_REPO_FULL_NAME" != "$GH_REPO" ]]; then
+            echo "::notice::PR #$PR_NUMBER head repo '$HEAD_REPO_FULL_NAME' does not match '$GH_REPO'. Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           if [[ "$HEAD_REF" != auto/* ]]; then
             echo "::notice::PR #$PR_NUMBER branch '$HEAD_REF' does not have auto/ prefix. Skipping."
-            exit 1
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          echo "Branch validation passed: $HEAD_REF"
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Branch validation passed: $HEAD_REF (repo: $HEAD_REPO_FULL_NAME)"
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
       # --- 前提条件チェック: PR OPEN, no auto:failed ---
       - name: Check preconditions
+        if: steps.branch-check.outputs.skip != 'true'
         id: preconditions
         run: |
           set -euo pipefail
@@ -457,7 +473,7 @@ jobs:
       # --- エラーハンドリング ---
 
       - name: Handle errors
-        if: failure() && steps.pr-info.outputs.number != '' && steps.preconditions.outputs.skip != 'true'
+        if: failure() && steps.pr-info.outputs.number != '' && steps.branch-check.outputs.skip != 'true' && steps.preconditions.outputs.skip != 'true'
         run: |
           SCRIPT_PATH="$GITHUB_WORKSPACE/.github/scripts/auto-fix/handle-errors.sh"
           if [ -f "$SCRIPT_PATH" ]; then
