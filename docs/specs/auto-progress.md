@@ -106,10 +106,9 @@ flowchart TD
     D4 -->|曖昧| F2[不明点をコメント<br/>auto:failed 付与]
     E --> G[テスト・品質チェック]
     G --> H[PR作成]
-    H --> I[Copilot 自動レビュー<br/>GitHub ネイティブ]
-    I --> I2[copilot-review-poll.yml<br/>schedule 5分おき]
-    I2 --> I3[auto:copilot-reviewed<br/>ラベル付与]
-    I3 --> J[copilot-auto-fix.yml<br/>pull_request labeled event]
+    H --> I[copilot-auto-fix.yml 起動<br/>pull_request opened]
+    I --> I2[Copilot レビュー待機<br/>30秒ポーリング]
+    I2 --> J[Copilot レビュー検知<br/>自動修正 + マージ判定]
     J --> K{unresolved<br/>threads?}
     K -->|0件| N{品質ゲート通過?}
     K -->|1件以上| L[claude-code-action<br/>で自動修正]
@@ -253,7 +252,7 @@ flowchart TD
 | `auto-implement` | `#0E8A16` (緑) | 自動実装トリガー（Issue用） | 管理者が手動 |
 | `auto:pipeline` | `#0E8A16` (緑) | 自動パイプラインで作成されたPRの検索・フィルタ用マーカー（ワークフロー制御には使用しない。制御は `auto/` ブランチプレフィックスで判定） | claude.yml が PR 作成後に付与 |
 | `auto:fix-requested` | `#FBCA04` (黄) | auto-fix の起動トリガー（PRKit 方式） | **休止中**。pr-review.yml が `/fix` or `auto:pipeline` 検出時に付与していた。Copilot 方式では不使用 |
-| `auto:copilot-reviewed` | `#1D76DB` (青) | Copilot レビュー完了マーカー。copilot-auto-fix.yml のトリガー | copilot-review-poll.yml が Copilot レビュー完了検知時に `REPO_OWNER_PAT` で付与 |
+| `auto:copilot-reviewed` | `#1D76DB` (青) | Copilot レビュー完了のステータスマーカー（ワークフロートリガーではない） | copilot-auto-fix.yml が Copilot レビュー検知後に `GITHUB_TOKEN` で付与 |
 | `auto:merged` | `#1D76DB` (青) | 自動マージ済みマーカー（post-merge.yml の発火条件） | copilot-auto-fix.yml（merge-or-dryrun.sh）がマージ直前に付与 |
 | `auto:failed` | `#d73a4a` (赤) | 自動処理の失敗・停止（緊急停止にも使用） | 各ワークフロー失敗時 or 管理者が手動 |
 | `auto:review-batch` | `#C2E0C6` (薄緑) | 自動マージレビューバッチIssue | post-merge.yml |
@@ -271,9 +270,8 @@ stateDiagram-v2
     実装中 --> PR作成: 実装成功
     実装中 --> auto_failed: 実装失敗
 
-    PR作成 --> Copilotレビュー: Copilot 自動レビュー
-    Copilotレビュー --> copilot_reviewed: copilot-review-poll.yml 検知
-    copilot_reviewed --> copilot_auto_fix: pull_request labeled イベント
+    PR作成 --> copilot_auto_fix: copilot-auto-fix.yml 起動（pull_request opened）
+    copilot_auto_fix --> copilot_reviewed: Copilot レビュー検知（sleep ポーリング）
     copilot_auto_fix --> マージ済み: 修正完了 or 指摘なし（auto:merged 付与 → develop へマージ）
     copilot_auto_fix --> auto_failed: 禁止パターン or マージ条件未達
 
@@ -300,8 +298,8 @@ stateDiagram-v2
 | `claude.yml` | 既存改修 | `issues[labeled]` 追加 | `auto-implement` ラベルで自動実装開始 |
 | `pr-review.yml` | 稼働中 | `pull_request` / `issue_comment` | PRKit ベースの自動レビュー（`auto/` ブランチプレフィックス付き PR はスキップ） |
 | `auto-fix.yml` | **無効化** | — | PRKit ベースの自動修正ループ（copilot-auto-fix.yml に移行） |
-| `copilot-auto-fix.yml` | **変更** | `pull_request[labeled]`（`auto:copilot-reviewed`） | Copilot レビュー結果に基づく自動修正 + マージ |
-| `copilot-review-poll.yml` | **新規** | `schedule`（5分おき）+ `workflow_dispatch` | Copilot レビュー完了検知 → `auto:copilot-reviewed` ラベル付与 |
+| `copilot-auto-fix.yml` | **変更** | `pull_request[opened]` + `workflow_dispatch` | Copilot レビュー検知（sleep ポーリング） + 自動修正 + マージ。自己完結型 |
+| ~~`copilot-review-poll.yml`~~ | **廃止・削除** | — | sleep ポーリングに移行したため不要（Issue #386） |
 | `post-merge.yml` | **変更** | `pull_request[closed]` | マージ後の全PRレビュー記録 + 次Issue自動ピックアップ |
 
 ### 無効化方針
@@ -355,13 +353,12 @@ Copilot ネイティブレビューに基づく自動修正 + マージのワー
 **概要フロー:**
 
 ```
-PR作成 → Copilot 初回レビュー（GitHub ネイティブ）
-  → copilot-review-poll.yml（schedule 5分おき）で Copilot レビュー完了を検知
-    → auto:copilot-reviewed ラベル付与（REPO_OWNER_PAT）
-      → copilot-auto-fix.yml（pull_request[labeled]）:
-          label == "auto:copilot-reviewed" & auto/ ブランチプレフィックス
-          → unresolved threads == 0 → マージ判定 → 自動マージ
-          → unresolved threads > 0  → claude-code-action で修正 → マージ判定 → 自動マージ
+PR作成 → copilot-auto-fix.yml 起動（pull_request[opened]、auto/ ブランチ）
+  → Copilot レビュー待機（30秒ポーリング、最大 COPILOT_REVIEW_TIMEOUT 秒）
+    → Copilot レビュー検知 → auto:copilot-reviewed ラベル付与（ステータスマーカー）
+      → unresolved threads == 0 → CI 完了待機 → マージ判定 → 自動マージ
+      → unresolved threads > 0  → claude-code-action で修正 → CI 完了待機 → マージ判定 → 自動マージ
+    → タイムアウト → auto:failed 付与 → 手動復旧（workflow_dispatch で再実行）
 ```
 
 **既存スクリプトの流用**: `check-review-result.sh`, `check-forbidden.sh`, `merge-check.sh`, `merge-or-dryrun.sh` 等はそのまま利用可能。
@@ -695,9 +692,9 @@ flowchart TD
 ## ワークフロー連鎖の技術仕様
 
 > **注記**: 以下のワークフロー連鎖（`/fix` コメントによる再トリガー）は **PRKit 方式固有**の仕組み。
-> Copilot 方式では `copilot-review-poll.yml` が `REPO_OWNER_PAT` で `auto:copilot-reviewed` ラベルを付与し、`copilot-auto-fix.yml`（`pull_request[labeled]`）をトリガーする。
-> `REPO_OWNER_PAT` は Copilot 方式では**ラベル付与によるワークフロー連鎖**、**自動マージ実行**、および **Copilot レビュートリガー用 PR 作成**（`claude-auto-implement` ジョブ）に使用する。
-> `auto/` ブランチプレフィックスにより `pr-review.yml` のスキップ条件で判定されるため、ラベルのタイミング依存によるレースコンディションは発生しない。
+> Copilot 方式では `copilot-auto-fix.yml` が `pull_request[opened]` で直接トリガーされ、Copilot レビュー検知は sleep ポーリングでワークフロー内完結する（ラベルベースのワークフロー連鎖は不要）。
+> `REPO_OWNER_PAT` は Copilot 方式では**自動マージ実行**（`merge-or-dryrun.sh`）および **PR 作成**（`claude-auto-implement` ジョブ、PR 作成イベントで copilot-auto-fix.yml をトリガーするため PAT 必須）に使用する。
+> `auto/` ブランチプレフィックスにより対象 PR を判定するため、ラベルのタイミング依存によるレースコンディションは発生しない。
 
 ### 問題（PRKit 方式固有）
 
@@ -801,15 +798,17 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 
 ### Phase 1（Copilot ベース — 現行）
 
-- [ ] AC5: `auto:copilot-reviewed` ラベル付与（`pull_request[labeled]`）で copilot-auto-fix.yml が起動する
-- [ ] AC5.1: `copilot-review-poll.yml` が 5 分おきの schedule で実行され、`auto/` ブランチの open PR の Copilot レビュー完了を検知する
-- [ ] AC5.2: Copilot レビュー完了検知時に `auto:copilot-reviewed` ラベルが `REPO_OWNER_PAT` で付与される
-- [ ] AC6: `auto:copilot-reviewed` 以外のラベル付与では copilot-auto-fix.yml がスキップされる
-- [ ] AC7: `auto/` ブランチプレフィックスのない PR、`auto:failed` ラベルのある PR、マージ済み/クローズ済みの PR では copilot-auto-fix.yml がスキップされる
-- [ ] AC8: unresolved threads == 0 のとき、マージ判定に進む
+- [ ] AC5: `auto/` ブランチプレフィックスの PR が `opened` イベントで copilot-auto-fix.yml が起動する
+- [ ] AC5.1: Copilot レビュー完了を 30 秒間隔の sleep ポーリングで検知する（最大待機: `COPILOT_REVIEW_TIMEOUT` 秒、Actions variable で設定可能）
+- [ ] AC5.2: Copilot レビュー検知後に `auto:copilot-reviewed` ラベルがステータスマーカーとして付与される
+- [ ] AC5.3: Copilot レビューがタイムアウトした場合に `auto:failed` が付与される
+- [ ] AC5.4: `workflow_dispatch` で PR 番号を指定して手動再実行できる
+- [ ] AC6: `auto/` ブランチプレフィックスのない PR では copilot-auto-fix.yml が起動しない
+- [ ] AC7: `auto:failed` ラベルのある PR、マージ済み/クローズ済みの PR では copilot-auto-fix.yml がスキップされる
+- [ ] AC8: unresolved threads == 0 のとき、CI 完了待機 → マージ判定に進む
 - [ ] AC9: unresolved threads > 0 のとき、claude-code-action で自動修正が実行される
 - [ ] AC10: 自動修正後、対応済みスレッドが `resolveReviewThread` で resolve され、unresolved threads が再カウントされる
-- [ ] AC10.1: 修正コミットの push 後、CI 完了をポーリング待機してからマージ判定に進む
+- [ ] AC10.1: CI 完了をポーリング待機してからマージ判定に進む（修正あり・なし問わず全パスで実施）
 - [ ] AC10.2: 修正後に再レビューループを行わず、マージ判定に進む（単方向フロー）
 - [ ] AC11: PR OPEN・レビュー指摘ゼロ・CI全通過・コンフリクトなし・auto:failedなしの5条件を全て満たす場合のみ自動マージが実行される
 - [ ] AC12: 禁止パターンに該当するファイルが変更に含まれるPRは自動マージされず `auto:failed` ラベルが付与される
@@ -859,8 +858,8 @@ PRKit 復帰時に再度有効化する。
 | ファイル | 役割 |
 |---------|------|
 | `.github/workflows/claude.yml` | 自動実装ワークフロー（既存改修） |
-| `.github/workflows/copilot-auto-fix.yml` | Copilot レビュー結果に基づく自動修正 + マージ |
-| `.github/workflows/copilot-review-poll.yml` | Copilot レビュー検知 schedule ワークフロー（`auto:copilot-reviewed` ラベル付与） |
+| `.github/workflows/copilot-auto-fix.yml` | Copilot レビュー検知（sleep ポーリング） + 自動修正 + マージ（自己完結型） |
+| ~~`.github/workflows/copilot-review-poll.yml`~~ | **廃止・削除**: sleep ポーリングに移行したため不要（Issue #386） |
 | `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（通常PR向けに稼働、`auto/` ブランチプレフィックス付き PR はスキップ） |
 | `.github/workflows/auto-fix.yml` | PRKit ベースの自動修正ループ（**休止中**） |
 | `.github/workflows/post-merge.yml` | マージ後処理 |
