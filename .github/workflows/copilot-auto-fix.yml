@@ -4,10 +4,11 @@
 # スクリプト: .github/scripts/auto-fix/（既存スクリプト流用）
 # 設計書: docs/specs/copilot-auto-fix.md
 #
-# トリガー: auto:copilot-reviewed ラベル付与（pull_request[labeled]）
-# ラベルは copilot-review-poll.yml（schedule ワークフロー）が Copilot レビュー検知時に付与する。
-# 元の pull_request_review[submitted] トリガーは Copilot の内部 dynamic ワークフロー実行中に
-# 発火しない問題 (Issue #365) があるため、ラベルトリガー方式に変更した。
+# トリガー:
+#   - pull_request[opened]: auto/ ブランチの PR 作成時に自動起動
+#   - workflow_dispatch: 障害復旧後の手動再実行（PR番号を指定）
+# 自己完結型: Copilot レビュー検知を sleep ポーリングでワークフロー内完結。
+# 外部 schedule ワークフロー（copilot-review-poll.yml）への依存を排除した。
 # 再レビューループなし: 単方向フロー（レビュー → 修正 → マージ）
 #
 # エラーハンドリング方針:
@@ -26,17 +27,24 @@ permissions:
 
 on:
   pull_request:
-    types: [labeled]
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to process (for manual re-trigger after failure recovery)'
+        required: true
+        type: number
 
 jobs:
   copilot-auto-fix:
-    # auto:copilot-reviewed ラベル付与時のみ実行（フォーク PR は除外）
-    # ラベルは copilot-review-poll.yml が Copilot レビュー検知時に REPO_OWNER_PAT で付与する
-    # auto/ ブランチプレフィックスで自動パイプライン由来のPRに限定（Actions分数節約）
+    # pull_request[opened]: 同一リポジトリ + auto/ ブランチプレフィックスのみ
+    # workflow_dispatch: ブランチ検証はステップ内で実施（ジョブレベル if では PR 情報がないため）
     if: >-
-      github.event.label.name == 'auto:copilot-reviewed'
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && startsWith(github.event.pull_request.head.ref, 'auto/')
+      github.event_name == 'workflow_dispatch'
+      || (
+        github.event.pull_request.head.repo.full_name == github.repository
+        && startsWith(github.event.pull_request.head.ref, 'auto/')
+      )
     runs-on: ubuntu-latest
     steps:
       # --- スクリプト・promptテンプレートの取得 ---
@@ -53,7 +61,11 @@ jobs:
         id: pr-info
         run: |
           set -euo pipefail
-          PR_NUMBER="${{ github.event.pull_request.number }}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUMBER="${{ github.event.inputs.pr_number }}"
+          else
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          fi
           if [ -z "$PR_NUMBER" ] || ! [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
             echo "::error::Invalid PR number: '$PR_NUMBER'"
             exit 1
@@ -61,9 +73,45 @@ jobs:
           echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "PR number: $PR_NUMBER"
 
+      # --- workflow_dispatch 時のブランチ・リポジトリ検証 ---
+      - name: Validate branch and repo (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        id: branch-check
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          # head ブランチ名と head リポジトリを取得
+          if ! HEAD_INFO=$(gh pr view "$PR_NUMBER" --json headRefName,headRepository --jq '.headRefName + "::" + .headRepository.nameWithOwner' 2>&1); then
+            echo "::error::Failed to get PR head info: $HEAD_INFO"
+            exit 1
+          fi
+
+          HEAD_REF="${HEAD_INFO%%::*}"
+          HEAD_REPO_FULL_NAME="${HEAD_INFO#*::}"
+
+          # フォーク PR を誤って指定しても処理を進めないよう、head リポジトリを検証
+          if [[ -z "$HEAD_REPO_FULL_NAME" || "$HEAD_REPO_FULL_NAME" != "$GH_REPO" ]]; then
+            echo "::notice::PR #$PR_NUMBER head repo '$HEAD_REPO_FULL_NAME' does not match '$GH_REPO'. Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$HEAD_REF" != auto/* ]]; then
+            echo "::notice::PR #$PR_NUMBER branch '$HEAD_REF' does not have auto/ prefix. Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "Branch validation passed: $HEAD_REF (repo: $HEAD_REPO_FULL_NAME)"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
       # --- 前提条件チェック: PR OPEN, no auto:failed ---
-      # auto/ ブランチプレフィックスの判定はジョブレベル if で実施済み
       - name: Check preconditions
+        if: steps.branch-check.outputs.skip != 'true'
         id: preconditions
         run: |
           set -euo pipefail
@@ -98,9 +146,55 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
+      # --- Copilot レビュー待機（sleep ポーリング）---
+      - name: Wait for Copilot review
+        if: steps.preconditions.outputs.skip != 'true'
+        id: copilot-wait
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/wait-for-copilot.sh"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr-info.outputs.number }}
+          COPILOT_REVIEW_TIMEOUT: ${{ vars.COPILOT_REVIEW_TIMEOUT }}
+
+      - name: Handle Copilot review timeout
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'false'
+        run: |
+          source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+
+          gh_safe gh issue edit "$PR_NUMBER" --add-label "auto:failed"
+          gh_comment "$PR_NUMBER" "## copilot-auto-fix: Copilot レビュータイムアウト
+
+          Copilot のレビューが制限時間内に検知されませんでした。
+          \`auto:failed\` ラベルを付与して自動処理を停止します。
+
+          **次のアクション**: Copilot の状態を確認し、問題を解消してください。
+          対応完了後、\`auto:failed\` を除去し、Actions タブから「Copilot Auto Fix」の Run workflow で PR 番号を指定して再実行してください。
+
+          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
+      # --- ステータスマーカー付与 ---
+      - name: Add copilot-reviewed label
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true'
+        run: |
+          source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+          # ステータスマーカーとして付与（GITHUB_TOKEN で付与、ワークフロー連鎖は不要）
+          if ! gh_safe_warning gh issue edit "$PR_NUMBER" --add-label "auto:copilot-reviewed"; then
+            echo "::warning::Failed to add auto:copilot-reviewed label (non-critical, continuing)"
+          fi
+          echo "Added auto:copilot-reviewed label to PR #$PR_NUMBER"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
       # --- 禁止パターンチェック ---
       - name: Check forbidden patterns
-        if: steps.preconditions.outputs.skip != 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true'
         id: forbidden-check
         run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/check-forbidden.sh"
         env:
@@ -109,7 +203,7 @@ jobs:
           PR_NUMBER: ${{ steps.pr-info.outputs.number }}
 
       - name: Handle forbidden patterns
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden == 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden == 'true'
         run: |
           source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
@@ -134,7 +228,7 @@ jobs:
 
       # --- unresolved threads カウント ---
       - name: Check review result
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true'
         id: review-result
         run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/check-review-result.sh"
         env:
@@ -146,7 +240,7 @@ jobs:
       # --- 自動修正パス（unresolved > 0）---
 
       - name: Post fix notification
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
         run: |
           source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
@@ -160,15 +254,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
+      - name: Get PR head ref for checkout
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
+        id: pr-head-ref
+        run: |
+          set -euo pipefail
+          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
+          if ! HEAD_REF=$(gh pr view "$PR_NUMBER" --json headRefName --jq '.headRefName' 2>&1); then
+            echo "::error::Failed to get PR head ref: $HEAD_REF"
+            exit 1
+          fi
+          echo "ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "PR head ref: $HEAD_REF"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+
       - name: Checkout for auto-fix
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ steps.pr-head-ref.outputs.ref }}
 
       - name: Load prompt template
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
         id: load-prompt
         run: |
           set -euo pipefail
@@ -188,7 +298,7 @@ jobs:
           PR_NUMBER: ${{ steps.pr-info.outputs.number }}
 
       - name: Auto-fix with Claude
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
         id: auto-fix
         uses: anthropics/claude-code-action@5994afaaa7f44611addc97a696a135acff5fd218 # v1.0.46
         with:
@@ -204,7 +314,7 @@ jobs:
       # --- 修正後の検証 ---
 
       - name: Recount unresolved threads
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true'
         id: recount
         run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/check-review-result.sh"
         env:
@@ -214,7 +324,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
 
       - name: Handle remaining issues
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true' && steps.recount.outputs.has_issues == 'true'
+        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true' && steps.recount.outputs.has_issues == 'true'
         run: |
           source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
           PR_NUMBER="${{ steps.pr-info.outputs.number }}"
@@ -226,18 +336,25 @@ jobs:
           \`auto:failed\` ラベルを付与して自動処理を停止します。
 
           **次のアクション**: 管理者が手動で残りの指摘に対応してください。
-          対応完了後、\`auto:failed\` を除去し、Copilot に再レビューをリクエストすると再開できます。
+          対応完了後、\`auto:failed\` を除去し、Actions タブから「Copilot Auto Fix」の Run workflow で PR 番号を指定して再実行してください。
 
           [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
-      # --- CI 完了待機（修正コミット push 後のみ）---
-      # 注記: unresolved == 0（修正不要）の場合、PR 作成時の CI が既に完了しているためスキップ
+      # --- CI 完了待機（全パスで実行）---
+      # PR 作成直後にワークフローが起動するため、CI がまだ実行中の可能性がある
 
       - name: Wait for CI
-        if: steps.preconditions.outputs.skip != 'true' && steps.forbidden-check.outputs.forbidden != 'true' && steps.review-result.outputs.has_issues == 'true' && steps.recount.outputs.has_issues != 'true'
+        if: |
+          steps.preconditions.outputs.skip != 'true'
+          && steps.copilot-wait.outputs.copilot_reviewed == 'true'
+          && steps.forbidden-check.outputs.forbidden != 'true'
+          && (
+            steps.review-result.outputs.has_issues != 'true'
+            || (steps.review-result.outputs.has_issues == 'true' && steps.recount.outputs.has_issues != 'true')
+          )
         id: ci-wait
         run: |
           set -euo pipefail
@@ -288,11 +405,11 @@ jobs:
           gh_safe gh issue edit "$PR_NUMBER" --add-label "auto:failed"
           gh_comment "$PR_NUMBER" "## copilot-auto-fix: CI タイムアウト
 
-          修正コミット後の CI チェックが10分以内に完了しませんでした。
+          CI チェックが10分以内に完了しませんでした。
           \`auto:failed\` ラベルを付与して自動処理を停止します。
 
           **次のアクション**: CI の状態を確認し、問題を解消してください。
-          対応完了後、\`auto:failed\` を除去し、Copilot に再レビューをリクエストすると再開できます。
+          対応完了後、\`auto:failed\` を除去し、Actions タブから「Copilot Auto Fix」の Run workflow で PR 番号を指定して再実行してください。
 
           [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
         env:
@@ -300,15 +417,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
 
       # --- マージ判定 ---
-      # 条件: (禁止パターンなし) AND (指摘なし OR (修正完了 AND CI通過))
+      # 条件: (Copilot検知済み) AND (禁止パターンなし) AND (CI通過) AND (指摘なし OR 修正完了)
 
       - name: Merge check
         if: |
           steps.preconditions.outputs.skip != 'true'
+          && steps.copilot-wait.outputs.copilot_reviewed == 'true'
           && steps.forbidden-check.outputs.forbidden != 'true'
+          && steps.ci-wait.outputs.timeout != 'true'
           && (
             steps.review-result.outputs.has_issues != 'true'
-            || (steps.recount.outputs.has_issues != 'true' && steps.ci-wait.outputs.timeout != 'true')
+            || steps.recount.outputs.has_issues != 'true'
           )
         id: merge-check
         run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/merge-check.sh"
@@ -344,7 +463,7 @@ jobs:
           \`auto:failed\` ラベルを付与して自動処理を停止します。
 
           **次のアクション**: 上記の条件を解消してください。
-          対応完了後、\`auto:failed\` を除去し、Copilot に再レビューをリクエストすると再開できます。
+          対応完了後、\`auto:failed\` を除去し、Actions タブから「Copilot Auto Fix」の Run workflow で PR 番号を指定して再実行してください。
 
           [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
         env:
@@ -354,7 +473,7 @@ jobs:
       # --- エラーハンドリング ---
 
       - name: Handle errors
-        if: failure() && steps.pr-info.outputs.number != '' && steps.preconditions.outputs.skip != 'true'
+        if: failure() && steps.pr-info.outputs.number != '' && steps.branch-check.outputs.skip != 'true' && steps.preconditions.outputs.skip != 'true'
         run: |
           SCRIPT_PATH="$GITHUB_WORKSPACE/.github/scripts/auto-fix/handle-errors.sh"
           if [ -f "$SCRIPT_PATH" ]; then
@@ -371,7 +490,7 @@ jobs:
           自動修正処理中にエラーが発生しました。\`auto:failed\` ラベルを付与して自動処理を停止します。
 
           **次のアクション**: [Actions ログ]($ACTIONS_URL) を確認し、問題を解消してください。
-          対応完了後、\`auto:failed\` を除去し、Copilot に再レビューをリクエストすると再開できます。" 2>&1); then
+          対応完了後、\`auto:failed\` を除去し、Actions タブから「Copilot Auto Fix」の Run workflow で PR 番号を指定して再実行してください。" 2>&1); then
               echo "::error::Failed to post error comment: $COMMENT_ERR"
             fi
           fi
@@ -396,5 +515,5 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 concurrency:
-  group: copilot-auto-fix-pr-${{ github.event.pull_request.number }}
+  group: copilot-auto-fix-pr-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
   cancel-in-progress: false
