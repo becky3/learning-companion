@@ -372,9 +372,15 @@ commitが成功していない状態でpushしないこと。
 | `/doc-review` | ドキュメントレビュー（doc-reviewer相当） | `/doc-review docs/specs/f1-chat.md` |
 | `/auto-finalize` | 品質チェック後のcommit/push/PR作成/Issue完了コメント | `/auto-finalize 272` |
 | `/handoff` | セッション引き継ぎ（MEMORY.md更新・ジャーナル記録） | `/handoff`, `/handoff "次はCopilotフロー"` |
+| `/check-review-batch` | 自動マージIssueの全PRチェック・レポート | `/check-review-batch`, `/check-review-batch 375` |
 
 **定義ファイル**: `.claude/skills/` 配下
-**仕様書**: `docs/specs/doc-gen-skill.md`（`/doc-gen`, `/doc-edit` 用）、`docs/specs/topic-skill.md`（`/topic` 用）、`docs/specs/handoff-skill.md`（`/handoff` 用）
+**仕様書**:
+
+- `docs/specs/doc-gen-skill.md`（`/doc-gen`, `/doc-edit` 用）
+- `docs/specs/topic-skill.md`（`/topic` 用）
+- `docs/specs/handoff-skill.md`（`/handoff` 用）
+- `docs/specs/check-review-batch-skill.md`（`/check-review-batch` 用）
 **補足**: `/check-pr` は `.claude/skills/check-pr/SKILL.md` の定義のみで、`docs/specs/` 配下に専用の仕様書はありません。
 
 ### サブエージェント（自動委譲タスク）
