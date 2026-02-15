@@ -15,7 +15,7 @@
 # エラー方針: API失敗 → 安全側に倒してマージ拒否
 
 set -euo pipefail
-# Dynamic path resolved at runtime
+# 動的パス解決のため静的解析不可
 # shellcheck disable=SC1091
 source "$(dirname "$0")/_common.sh"
 
@@ -44,15 +44,14 @@ echo "✅ Condition 2: No review issues"
 # 条件3: CI全チェック通過（GitHub API の statusCheckRollup を使用）
 # EXCLUDE_CHECK が設定されている場合、そのチェック名を除外する
 # （自ワークフローの実行中チェックを除外するため。copilot-auto-fix.yml から呼ばれる場合に使用）
+# gh pr view --jq は --arg 非対応のため、一時環境変数 + env オブジェクト経由で jq に渡す
 EXCLUDE_NAME="${EXCLUDE_CHECK:-}"
-# $exclude is a jq variable, not a bash variable
-# shellcheck disable=SC2016
-if ! CI_RESULT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq --arg exclude "$EXCLUDE_NAME" '
+if ! CI_RESULT=$(EXCLUDE_NAME="$EXCLUDE_NAME" gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '
   if .statusCheckRollup == null then
     "no_checks"
   else
     ([.statusCheckRollup[] |
-      select(if $exclude != "" then (.name | contains($exclude)) | not else true end) |
+      select(if env.EXCLUDE_NAME != "" then (.name | contains(env.EXCLUDE_NAME)) | not else true end) |
       select(
         (has("state") and .state != "SUCCESS" and .state != "NEUTRAL") or
         (has("conclusion") and .conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")
