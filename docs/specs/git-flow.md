@@ -253,8 +253,8 @@ sequenceDiagram
 - [ ] AC5: `README.md` の開発フロー概要が更新されている
 - [ ] AC6: feature/bugfix ブランチは `develop` からの分岐・マージで運用される
 - [ ] AC7: `main` への反映は `release/*` ブランチからのスカッシュマージで行われる
-- [ ] AC7.1: リリース後に `main` → `develop` への差分反映が行われる
-- [ ] AC8: GitHub Actions（claude.yml, pr-review.yml）が `develop` ベースで正しく動作する
+- [ ] AC8: リリース後に `main` → `develop` への差分反映が行われる
+- [ ] AC9: GitHub Actions（claude.yml, pr-review.yml）が `develop` ベースで正しく動作する
 
 ## テスト方針
 
