@@ -52,6 +52,8 @@ line-length = 100
 [tool.ruff.lint.per-file-ignores]
 # main.pyはChromaDBテレメトリ抑制のためimport前にログ設定が必要
 "src/main.py" = ["E402"]
+# test_e2e_dummy.py は copilot-auto-fix E2E テスト用の意図的なバグを含むコード
+"tests/test_e2e_dummy.py" = ["E722", "S602", "S307"]
 
 [tool.mypy]
 python_version = "3.11"
