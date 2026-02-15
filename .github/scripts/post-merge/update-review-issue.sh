@@ -16,8 +16,10 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../auto-fix/_common.sh"
 
-require_env PR_NUMBER PR_TITLE
+require_env PR_NUMBER
 validate_pr_number "$PR_NUMBER"
+# PR_TITLE は情報提供目的のため、空でもフォールバックして記録を続行
+PR_TITLE="${PR_TITLE:-(タイトル取得失敗)}"
 
 # --- PR の変更ファイル一覧を取得 ---
 CHANGED_FILES=""
