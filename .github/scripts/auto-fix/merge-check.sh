@@ -6,6 +6,7 @@
 #   GITHUB_OUTPUT   — GitHub Actions 出力ファイル
 #   GH_TOKEN        — GitHub トークン（env経由で gh CLI が自動参照）
 #   GH_REPO         — 対象リポジトリ（owner/repo）
+#   EXCLUDE_CHECK   — （任意）CI チェック除外名。自ワークフローの自己参照防止用
 #
 # 出力（$GITHUB_OUTPUT）:
 #   merge_ready     — "true" / "false"
@@ -14,6 +15,8 @@
 # エラー方針: API失敗 → 安全側に倒してマージ拒否
 
 set -euo pipefail
+# Dynamic path resolved at runtime
+# shellcheck disable=SC1091
 source "$(dirname "$0")/_common.sh"
 
 require_env PR_NUMBER GITHUB_OUTPUT
@@ -39,11 +42,17 @@ fi
 echo "✅ Condition 2: No review issues"
 
 # 条件3: CI全チェック通過（GitHub API の statusCheckRollup を使用）
-if ! CI_RESULT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq '
+# EXCLUDE_CHECK が設定されている場合、そのチェック名を除外する
+# （自ワークフローの実行中チェックを除外するため。copilot-auto-fix.yml から呼ばれる場合に使用）
+EXCLUDE_NAME="${EXCLUDE_CHECK:-}"
+# $exclude is a jq variable, not a bash variable
+# shellcheck disable=SC2016
+if ! CI_RESULT=$(gh pr view "$PR_NUMBER" --json statusCheckRollup --jq --arg exclude "$EXCLUDE_NAME" '
   if .statusCheckRollup == null then
     "no_checks"
   else
     ([.statusCheckRollup[] |
+      select(if $exclude != "" then (.name | contains($exclude)) | not else true end) |
       select(
         (has("state") and .state != "SUCCESS" and .state != "NEUTRAL") or
         (has("conclusion") and .conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED")
