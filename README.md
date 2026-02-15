@@ -135,6 +135,7 @@ CLAUDE.mdには以下の重要な情報が含まれています：
 4. 実装・テスト
 5. コミット (`feat(f{N}): 説明 (#{Issue番号})`)
 6. `develop` に向けてPR作成 (`gh pr create --base develop`)
+7. リリース時: `develop` から `release/v{X.Y.Z}` を作成し `main` にスカッシュマージ、その後 `main` → `develop` に差分反映
 
 ### テストと lint
 
