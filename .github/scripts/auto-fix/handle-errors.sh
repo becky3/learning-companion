@@ -20,7 +20,7 @@ set -euo pipefail
 # _common.sh の source（ベストエフォート）
 COMMON_SCRIPT="${COMMON_SCRIPT_PATH:-}"
 SOURCED=false
-# COMMON_SCRIPT is dynamically resolved at runtime
+# 動的パス解決のため静的解析不可
 # shellcheck disable=SC1090
 if [ -n "$COMMON_SCRIPT" ] && [ -f "$COMMON_SCRIPT" ]; then
   if ! SYNTAX_ERR=$(bash -n "$COMMON_SCRIPT" 2>&1); then
