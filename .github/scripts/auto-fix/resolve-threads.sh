@@ -41,15 +41,30 @@ validate_thread_id() {
 
 # --- スレッドIDリストの決定 ---
 if [ $# -gt 0 ]; then
-  # 引数指定: 指定スレッドのみ resolve
+  # 引数指定: 指定スレッドのみ resolve（即時バリデーション）
   THREADS=""
+  INVALID_COUNT=0
   for arg in "$@"; do
+    if [ -z "$arg" ]; then
+      echo "::warning::Skipping empty thread ID argument"
+      INVALID_COUNT=$((INVALID_COUNT + 1))
+      continue
+    fi
+    if ! validate_thread_id "$arg"; then
+      INVALID_COUNT=$((INVALID_COUNT + 1))
+      continue
+    fi
     if [ -n "$THREADS" ]; then
       THREADS="$THREADS"$'\n'"$arg"
     else
       THREADS="$arg"
     fi
   done
+  # 全引数が無効な場合はエラー終了
+  if [ -z "$THREADS" ] && [ "$INVALID_COUNT" -gt 0 ]; then
+    echo "::error::All provided thread IDs were invalid ($INVALID_COUNT rejected)"
+    exit 1
+  fi
   QUERY_SUCCESS=true
 else
   # 引数なし: 全未解決スレッドを取得
