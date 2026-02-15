@@ -28,15 +28,16 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 
 | ブランチ | 役割 | マージ方式 |
 |---------|------|-----------|
-| `main` | 本番（プロダクション）。常に安定版 | develop からの手動マージ |
-| `develop` | ステージング。自動マージ先。feature ブランチのベース | feature ブランチからの自動マージ |
+| `main` | 本番（プロダクション）。常に安定版 | release ブランチからの squash マージ（手動） |
+| `develop` | ステージング。自動マージ先。feature ブランチのベース | feature ブランチからの自動マージ、main からの差分反映 |
 | `feature/*` | 機能開発ブランチ。develop から分岐 | develop へのPRマージ |
+| `release/*` | リリース準備ブランチ。develop から分岐 | main への squash マージ後、main → develop に差分反映 |
 
 ### 採用理由
 
 - **自動マージの安全弁**: develop が「サンドボックス」として機能し、自動マージで何か壊れても main に影響しない
 - **ロールバックが容易**: develop で revert すれば OK。main はまだ更新されていない
-- **リリースの一括確認**: develop → main のリリース PR で全変更をまとめてレビュー可能
+- **リリースの一括確認**: release ブランチ → main のリリース PR で全変更をまとめてレビュー可能
 - **変更コストが軽微**: CLAUDE.md の Git 運用ルール変更 + GitHub 設定のみ
 
 ### ブランチ保護ルール
@@ -63,19 +64,32 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 | Include administrators | YES | 管理者も保護対象 |
 | Allow auto-merge | NO | 手動マージのみ |
 
-### リリースフロー（develop → main）
+### リリースフロー（release ブランチ経由で main へ反映）
 
 **Phase 0-1: 手動リリース**（推奨頻度: 週1回）
 
-管理者がローカルで実行テスト確認後、コマンド 1 つでリリース:
+管理者がローカルで実行テスト確認後、release ブランチを作成してリリース:
 
 ```bash
-gh pr create --base main --head develop \
+# 1. develop から release ブランチ作成
+git checkout develop
+git checkout -b release/vX.Y.Z
+git push origin release/vX.Y.Z
+
+# 2. main 向けPR作成
+gh pr create --base main --head release/vX.Y.Z \
   --title "Release: vX.Y.Z" \
-  --body "develop の変更を main にリリース"
+  --body "release/vX.Y.Z の変更を main にリリース"
+
+# 3. マージ後、main → develop に差分反映（履歴合わせ）
+git checkout develop
+git merge main
+git push origin develop
 ```
 
-main 向き PR が作成 → Copilot ネイティブレビュー（または管理者による手動レビュー）→ 管理者がマージ
+main 向き PR が作成 → Copilot ネイティブレビュー（または管理者による手動レビュー）→ 管理者が squash マージ → main の差分を develop に反映
+
+**目的**: release ブランチを作ることで、どの項目がどの期間に導入されたかの履歴を残す。
 
 **main への自動マージは手動維持**。将来的に自動化する場合も、GitHub 通知で猶予期間（「30分以内に auto:failed がなければ自動マージ」）を設ける。
 
@@ -121,8 +135,8 @@ flowchart TD
     S --> Q[post-merge.yml: 次Issue選定]
     Q --> B
 
-    O --> T{develop → main<br/>リリース}
-    T -->|手動| U[管理者がリリースPR作成]
+    O --> T{release → main<br/>リリース}
+    T -->|手動| U[管理者がrelease<br/>ブランチ作成→PR]
 
     style O fill:#0d0,color:#fff
     style P fill:#d00,color:#fff
@@ -472,7 +486,7 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 | `.env*` | 環境変数・シークレット |
 | `pyproject.toml` の dependencies | 依存パッケージ変更 |
 
-**注記**: `.github/workflows/*` は禁止パターンに含まない。自動マージパイプライン（`copilot-auto-fix.yml`）は `auto/` ブランチの develop 向け PR のみを処理するため、ワークフロー変更が main に直接自動マージされることはない。main への反映はリリースPR（develop → main）で管理者が手動レビュー・マージする。
+**注記**: `.github/workflows/*` は禁止パターンに含まない。自動マージパイプライン（`copilot-auto-fix.yml`）は `auto/` ブランチの develop 向け PR のみを処理するため、ワークフロー変更が main に直接自動マージされることはない。main への反映はリリースPR（release ブランチ → main）で管理者が手動レビュー・マージする。
 
 **第3層: `auto:failed` ラベル（緊急停止ボタン兼用）**
 
@@ -514,7 +528,7 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 
 **第9層: リリースPRゲートキーピング**
 
-- develop → main のリリースPRで、自動マージされた全変更を管理者が一括確認
+- release ブランチ → main のリリースPRで、自動マージされた全変更を管理者が一括確認
 - 管理者が手動でリリースPR作成
 
 ## GitHub Actions 環境の制約
@@ -740,7 +754,7 @@ GitHub Actions は `GITHUB_TOKEN` で作成したイベントでは同一リポ�
 - ブランチ保護ルール設定（develop: 自動マージ許可、main: 手動のみ）
 - ラベルの動作確認（`auto:failed` による停止・再開フロー）
 - 段階的マージ解禁の開始
-- develop → main のリリースPRは管理者が手動作成
+- release ブランチ → main のリリースPRは管理者が手動作成
 
 ### Phase 2: マージ後処理の自動化
 
