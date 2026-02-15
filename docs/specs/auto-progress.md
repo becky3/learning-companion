@@ -46,7 +46,7 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 | 設定 | 値 | 理由 |
 |------|-----|------|
 | Require a pull request before merging | YES | 直 push 禁止 |
-| Require status checks to pass | YES | CI 必須（pytest, mypy, ruff, markdownlint） |
+| Require status checks to pass | NO | 外部 CI ワークフロー不使用。品質チェック（pytest, mypy, ruff, markdownlint）はエージェント内テストで担保 |
 | Require approvals | NO | 自動マージを許可するため |
 | Require linear history | NO | 通常マージで開発履歴を保持（マージ方式は `git-flow.md` の「マージ方式」セクション参照） |
 | Include administrators | NO | 管理者は緊急時にバイパス可能 |
@@ -57,7 +57,7 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 | 設定 | 値 | 理由 |
 |------|-----|------|
 | Require a pull request before merging | YES | 直 push 禁止 |
-| Require status checks to pass | YES | CI 必須 |
+| Require status checks to pass | NO | 外部 CI ワークフロー不使用。品質チェックはエージェント内テストで担保 |
 | Require approvals | YES (1名) | 管理者の承認必須 |
 | Require linear history | NO | squash マージで履歴はリリース単位にまとまる（マージ方式は `git-flow.md` の「マージ方式」セクション参照） |
 | Include administrators | YES | 管理者も保護対象 |
@@ -356,8 +356,8 @@ Copilot ネイティブレビューに基づく自動修正 + マージのワー
 PR作成 → copilot-auto-fix.yml 起動（pull_request[opened]、auto/ ブランチ）
   → Copilot レビュー待機（30秒ポーリング、最大 COPILOT_REVIEW_TIMEOUT 秒）
     → Copilot レビュー検知 → auto:copilot-reviewed ラベル付与（ステータスマーカー）
-      → unresolved threads == 0 → CI 完了待機 → マージ判定 → 自動マージ
-      → unresolved threads > 0  → claude-code-action で修正 → CI 完了待機 → マージ判定 → 自動マージ
+      → unresolved threads == 0 → マージ判定 → 自動マージ
+      → unresolved threads > 0  → claude-code-action で修正 → マージ判定 → 自動マージ
     → タイムアウト → auto:failed 付与 → 手動復旧（workflow_dispatch で再実行）
 ```
 
@@ -443,7 +443,7 @@ check-pr スキル（`.claude/skills/check-pr/SKILL.md`）のステップ12 で 
 
 ```
 Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 → コミット & push
-→ 判断済みスレッドを resolve → CI 完了待機 → マージ判定
+→ 判断済みスレッドを resolve → マージ判定
 ```
 
 **PRKit 方式（休止中）:**
@@ -492,14 +492,14 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 
 1. PR が OPEN 状態
 2. レビュー指摘ゼロ
-3. CI全チェック通過
+3. ステータスチェック通過（外部 CI 未設定時は自動 PASS）
 4. コンフリクトなし
 5. `auto:failed` ラベルなし
 
 **第6層: ブランチ保護ルール（2層構成）**
 
-- **develop**: PR必須 + CI必須。承認不要（自動マージ許可）
-- **main**: PR必須 + CI必須 + 承認必須。手動マージのみ
+- **develop**: PR必須。承認不要（自動マージ許可）。品質チェックはエージェント内テストで担保
+- **main**: PR必須 + 承認必須。手動マージのみ
 - 自動マージは develop にのみ実行。main への直接自動マージは禁止
 
 **第7層: ロールバック準備**
@@ -608,7 +608,7 @@ flowchart TD
 |------|---------|
 | PR が OPEN 状態 | `gh pr view --json state` で `OPEN` を確認 |
 | レビュー指摘ゼロ | GraphQL API の reviewThreads で unresolved threads == 0 を確認 |
-| CI全チェック通過 | `gh pr checks` で全て SUCCESS or SKIPPED |
+| ステータスチェック通過 | `statusCheckRollup` で確認（外部 CI 未設定時は自動 PASS） |
 | コンフリクトなし | `gh pr view --json mergeable` が `MERGEABLE` |
 | `auto:failed` なし | PRのラベルに `auto:failed` が含まれない |
 
@@ -800,18 +800,17 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 - [ ] AC5.4: `workflow_dispatch` で PR 番号を指定して手動再実行できる
 - [ ] AC6: `auto/` ブランチプレフィックスのない PR では copilot-auto-fix.yml が起動しない
 - [ ] AC7: `auto:failed` ラベルのある PR、マージ済み/クローズ済みの PR では copilot-auto-fix.yml がスキップされる
-- [ ] AC8: unresolved threads == 0 のとき、CI 完了待機 → マージ判定に進む
+- [ ] AC8: unresolved threads == 0 のとき直接マージ判定に進む
 - [ ] AC9: unresolved threads > 0 のとき、claude-code-action で自動修正が実行される
 - [ ] AC10: 自動修正後、対応済みスレッドが `resolveReviewThread` で resolve され、unresolved threads が再カウントされる
-- [ ] AC10.1: CI 完了をポーリング待機してからマージ判定に進む（修正あり・なし問わず全パスで実施）
-- [ ] AC10.2: 修正後に再レビューループを行わず、マージ判定に進む（単方向フロー）
-- [ ] AC11: PR OPEN・レビュー指摘ゼロ・CI全通過・コンフリクトなし・auto:failedなしの5条件を全て満たす場合のみ自動マージが実行される
+- [ ] AC10.1: 修正後に再レビューループを行わず、マージ判定に進む（単方向フロー）
+- [ ] AC11: PR OPEN・レビュー指摘ゼロ・ステータスチェック通過（外部 CI 未設定時は自動 PASS）・コンフリクトなし・auto:failedなしの5条件を全て満たす場合のみ自動マージが実行される
 - [ ] AC12: 禁止パターンに該当するファイルが変更に含まれるPRは自動マージされず `auto:failed` ラベルが付与される
 - [ ] AC13: 同じPRに対する copilot-auto-fix.yml の同時実行が concurrency で防止される
 - [ ] AC14: `REPO_OWNER_PAT` シークレットが登録されている
 - [ ] AC15: feature ブランチが develop をベースに作成される
 - [ ] AC16: 自動マージが develop ブランチに対して実行される（main には直接マージしない）
-- [ ] AC17: develop ブランチに保護ルールが設定されている（CI必須、PR必須）
+- [ ] AC17: develop ブランチに保護ルールが設定されている（PR必須。品質チェックはエージェント内テストで担保）
 - [ ] AC18: main ブランチに保護ルールが設定されている（承認必須、手動マージのみ）
 - [ ] AC19: `auto-fix.yml` が無効化されており、`pr-review.yml` が `auto/` ブランチプレフィックス付きPRをスキップする
 
