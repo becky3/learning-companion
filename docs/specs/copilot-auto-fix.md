@@ -437,7 +437,7 @@ copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト
 | `.github/scripts/auto-fix/` | 共通スクリプト群（流用、`handle-errors.sh` のみ変更あり） |
 | `.github/prompts/auto-fix-check-pr.md` | auto-fix 用プロンプトテンプレート（流用） |
 | `.github/workflows/auto-fix.yml` | PRKit ベースの自動修正（**無効化対象**） |
-| `docs/specs/auto-progress.md` | 全体パイプライン仕様（参照元、更新が必要） |
+| `docs/specs/auto-progress.md` | 全体パイプライン仕様（参照元、本PRで更新済み） |
 | `docs/specs/auto-fix-structure.md` | PRKit ベースの設計書（休止中） |
 
 ### 廃止するファイル
