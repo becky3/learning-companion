@@ -20,7 +20,8 @@ argument-hint: "[issue-number]"
 - 未指定なら `auto:review-batch` ラベルのOpen Issueを自動検索:
 
   ```bash
-  gh issue list --label "auto:review-batch" --state open --json number,title --jq '.[0]'
+  gh issue list --label "auto:review-batch" --state open \
+    --json number,title --jq '.[0]'
   ```
 
 - 見つからない場合は「`auto:review-batch` ラベルのOpen Issueが見つかりません」と表示して終了
@@ -43,7 +44,7 @@ Issue body および全コメントのテキストから `## PR #(\d+):` パタ�
 # body + comments から PR番号を抽出
 gh issue view <Issue番号> --json body,comments --jq '
   [.body, (.comments[].body // empty)] | join("\n")
-' | grep -oP '## PR #\K\d+'
+' | sed -n 's/.*## PR #\([0-9][0-9]*\):.*/\1/p'
 ```
 
 PR番号が1件も見つからない場合は「PRが記録されていません」と表示して終了。
@@ -98,7 +99,7 @@ gh pr diff <PR番号>
 変更ファイルのパスに基づいて動作確認事項を自動判定する:
 
 | 変更パス | 動作確認事項 |
-|---------|------------|
+| --- | --- |
 | `src/services/` | Bot起動確認（`uv run python -m src.main`）、該当サービスの動作確認 |
 | `src/bot/` | Bot起動確認、Slackでの動作確認 |
 | `src/utils/` | 関連する機能の動作確認 |

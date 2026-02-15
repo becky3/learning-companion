@@ -6,7 +6,10 @@
 
 ## 背景
 
-自動マージパイプライン（`auto-progress.md`）では、PRマージ後に `post-merge.yml` が `auto:review-batch` ラベル付きIssueにPR情報をコメントとして記録する。管理者はこのIssueを定期的にチェックして品質を確認するが、PR数が増えると個別に確認する手間が大きい。
+自動マージパイプライン（`auto-progress.md`）では、PRマージ後に
+`post-merge.yml` が `auto:review-batch` ラベル付きIssueにPR情報を
+コメントとして記録する。管理者はこのIssueを定期的にチェックして
+品質を確認するが、PR数が増えると個別に確認する手間が大きい。
 
 本スキルは、レビューIssue内の全PRを自動解析し、管理者が効率的に確認できるサマリーレポートを生成する。
 
@@ -60,7 +63,9 @@ flowchart TD
 
 ### PR番号の抽出
 
-Issue body およびコメントから `## PR #(\d+):` パターンでPR番号を抽出する。これは `update-review-issue.sh` のコメントフォーマットに準拠している。
+Issue body およびコメントから `## PR #(\d+):` パターンでPR番号を
+抽出する。これは `update-review-issue.sh` のコメントフォーマットに
+準拠している。
 
 ### 各PRのチェック項目
 
@@ -81,7 +86,7 @@ Issue body およびコメントから `## PR #(\d+):` パターンでPR番号�
 変更ファイルのパスに基づいて自動判定する:
 
 | 変更パス | 動作確認事項 |
-|---------|------------|
+| --- | --- |
 | `src/services/` | Bot起動確認（`uv run python -m src.main`）、該当サービスの動作確認 |
 | `src/bot/` | Bot起動確認、Slackでの動作確認 |
 | `src/utils/` | 関連する機能の動作確認 |
@@ -152,7 +157,7 @@ PR数: X件
 ## 関連ファイル
 
 | ファイル | 役割 |
-|---------|------|
+| --- | --- |
 | `.claude/skills/check-review-batch/SKILL.md` | スキル定義（新規） |
 | `docs/specs/check-review-batch-skill.md` | 本仕様書（新規） |
 | `docs/specs/auto-progress.md` | 自動進行管理の仕様（参照） |
