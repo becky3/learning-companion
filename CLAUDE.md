@@ -105,12 +105,13 @@
 - **作業ブランチ**:
   - `feature/f{N}-{機能名}-#{Issue番号}` — 新機能開発（`develop` から分岐 → `develop` にマージ）
   - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` から分岐 → `develop` にマージ）
+  - `release/v{X.Y.Z}` — リリース準備（`develop` から分岐 → `main` に squash マージ）
   - `hotfix/{修正内容}-#{Issue番号}` — 本番緊急修正（`main` から分岐 → `main` + `develop` にマージ）
   - `claude/issue-{N}-{date}-{id}` — Claude Code Action 自動生成（命名はシステム依存）
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
 - PR作成時に `Closes #{Issue番号}` で紐付け
-- **PRのbaseブランチ**: 通常は `develop`、hotfix は `main`
-- **マージ方式**: feature/bugfix → develop は通常マージ（`--merge`）、develop → main は squash マージ（`--squash`）。詳細は `docs/specs/git-flow.md` の「マージ方式」セクション参照
+- **PRのbaseブランチ**: 通常は `develop`、リリースは `main`、hotfix は `main`
+- **マージ方式**: feature/bugfix → develop は通常マージ（`--merge`）、release → main は squash マージ（`--squash`）。リリース後は `main` → `develop` に差分反映（通常マージ）。詳細は `docs/specs/git-flow.md` の「マージ方式」セクション参照
 - GitHub Milestones で Step 単位の進捗管理
 - `gh` コマンドで Issue/PR を操作
 

@@ -126,7 +126,9 @@ git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](git-f
 - **作業ブランチ**:
   - `feature/f{N}-{機能名}-#{Issue番号}` — 新機能（`develop` → `develop`）
   - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` → `develop`）
+  - `release/v{X.Y.Z}` — リリース準備（`develop` → `main` squash マージ）
   - `hotfix/{修正内容}-#{Issue番号}` — 緊急修正（`main` → `main` + `develop`）
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
-- PR作成時に `Closes #{Issue番号}` でIssueを紐付け（feature/bugfix: base `develop`, hotfix: base `main`）
+- PR作成時に `Closes #{Issue番号}` でIssueを紐付け（feature/bugfix: base `develop`, release/hotfix: base `main`）
+- リリース後は `main` → `develop` に差分反映（履歴の整合性維持）
 - マイルストーンでStep単位の進捗管理
