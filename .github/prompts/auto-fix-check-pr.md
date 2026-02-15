@@ -87,9 +87,9 @@ Markdown のみの変更の場合、pytest / ruff / mypy はスキップ可（ma
 
 - 各指摘に対して「対応済み ✅」「別Issue化 ⏸️」「対応不要（理由）❌」を明記
 
-## ステップ 7/8: 対応済みスレッドの resolve
+## ステップ 7/8: 判断済みスレッドの resolve
 
-対応済みと判断したスレッドのみ resolveReviewThread mutation で resolve する。
+判断済みスレッド（✅ 対応済み、❌ 対応不要、⏸️ 別Issue化）を resolveReviewThread mutation で resolve する。
 以下のエラーハンドリング方針に従うこと:
 
 - owner/repo 取得失敗 → エラーログを出力して resolve をスキップ
@@ -157,8 +157,8 @@ else
   FAILED=0
   while IFS= read -r THREAD_ID; do
     [ -z "$THREAD_ID" ] && continue
-    # THREAD_ID のフォーマット検証（GitHub thread IDは英数字・_・-のみ）
-    if ! [[ "$THREAD_ID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    # THREAD_ID のフォーマット検証（GitHub thread IDはBase64エンコードされるため=も許容）
+    if ! [[ "$THREAD_ID" =~ ^[A-Za-z0-9_=-]+$ ]]; then
       echo "::warning::Invalid thread ID format: $THREAD_ID"
       FAILED=$((FAILED + 1))
       continue
