@@ -57,7 +57,7 @@ done <<< "$CHANGED_FILES"
 
 if [ -n "$FORBIDDEN_FOUND" ]; then
   echo "forbidden=true" >> "$GITHUB_OUTPUT"
-  FORBIDDEN_LIST=$(echo -e "$FORBIDDEN_FOUND" | head -c 1000)
+  FORBIDDEN_LIST=$(printf '%b' "$FORBIDDEN_FOUND" | head -c 1000)
   {
     echo "forbidden_files<<EOF"
     echo "$FORBIDDEN_LIST"
