@@ -87,7 +87,8 @@ src/
   llm/factory.py     # プロバイダー生成ファクトリ
   embedding/         # Embeddingプロバイダー（LM Studio / OpenAI）
   rag/               # RAGインフラ（チャンキング、ChromaDBベクトルストア、評価CLI）
-  mcp/
+  process_guard.py   # Bot重複起動防止
+  mcp_bridge/
     __init__.py
     client_manager.py  # MCPサーバー接続管理
   services/chat.py           # チャット応答 (オンラインLLM)
@@ -97,6 +98,9 @@ src/
   services/topic_recommender.py # 学習トピック提案 (オンラインLLM)
   services/web_crawler.py     # Webクローラー（RAG用）
   services/rag_knowledge.py   # RAGナレッジサービス
+  services/ogp_extractor.py   # OGPメタデータ抽出
+  services/safe_browsing.py   # Google Safe Browsing API
+  services/thread_history.py  # Slackスレッド履歴取得
   scheduler/jobs.py  # APScheduler 毎朝の収集・配信ジョブ
 mcp-servers/                 # MCPサーバー群（将来リポジトリ分離対象）
   weather/
