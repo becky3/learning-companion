@@ -109,7 +109,7 @@ else
   echo "Merge conditions not met"
   {
     echo "reasons<<EOF"
-    echo -e "$REASONS"
+    printf '%b\n' "$REASONS"
     echo "EOF"
   } >> "$GITHUB_OUTPUT"
 fi
