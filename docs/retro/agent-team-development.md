@@ -410,7 +410,6 @@ Issue番号、関連ファイルパスを記載すると、メンバーが自分
 ### 作成した成果物: 議論タスク用プロンプトテンプレート
 
 今回の議論を通じて、議論タスク向けのプロンプトテンプレートを作成した。
-詳細は [agent-teams-operations.md](../specs/agent-teams-operations.md#議論タスク用プロンプトテンプレート) を参照。
 
 ### 次に活かすこと
 
@@ -554,7 +553,7 @@ OSS「multi-agent-shogun」のアーキテクチャを参考に、6つの改善�
 
 ## 参考
 
-- エージェントチーム仕様: [docs/specs/agent-teams.md](../specs/agent-teams.md)
-- エージェントチーム運用詳細: [docs/specs/agent-teams-operations.md](../specs/agent-teams-operations.md)
+- エージェントチーム仕様: [docs/specs/agent-teams/common.md](../specs/agent-teams/common.md)
+- エージェントチーム運用詳細: [docs/specs/agent-teams/common.md](../specs/agent-teams/common.md)
 - 関連PR: #172（エンコーディング自動検出修正）、#193（キャラクター演出ガイドライン）、#200（テーマ履歴管理＋物語構造ルール）、#221（ストーリーテラー役追加）、#247（Phase 1 リーダー管理専任・メンバー自律行動）
 - 関連Issue: #169（RAG検索結果がチャット回答に反映されない）、#190（キャラクター演出）、#198（チームビルディングの偏りを防ぐ）、#220（メタレビュアー役の検討）、#224（SendMessage の content が届かない問題）、#238（agent-teams.md の簡素化）、#240（Agent Teams運用改善Phase 1）、#244（Phase 2/3候補）
