@@ -47,5 +47,8 @@ bot.pid
 htmlcov/
 .coverage
 
+# Temporary files
+.tmp/
+
 # Zenn drafts (personal, not for repository)
 docs/zenn-drafts/
