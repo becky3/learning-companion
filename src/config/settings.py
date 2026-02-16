@@ -12,6 +12,9 @@ import yaml
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# LM Studio のデフォルトベースURL（Single Source of Truth）
+DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
+
 
 class Settings(BaseSettings):
     """環境変数から読み込むアプリケーション設定."""
@@ -53,7 +56,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-5-sonnet-20241022"
 
     # LM Studio (ローカルLLM)
-    lmstudio_base_url: str = "http://localhost:1234/v1"
+    lmstudio_base_url: str = DEFAULT_LMSTUDIO_BASE_URL
     lmstudio_model: str = "local-model"
 
     # Scheduler

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.config.settings import Settings
+from src.config.settings import DEFAULT_LMSTUDIO_BASE_URL, Settings
 from src.embedding.base import EmbeddingProvider
 from src.embedding.factory import get_embedding_provider
 from src.embedding.lmstudio_embedding import LMStudioEmbedding
@@ -40,7 +40,7 @@ def test_ac1_openai_is_subclass() -> None:
 async def test_ac2_lmstudio_embedding_converts_text() -> None:
     """AC2: LMStudioEmbedding が LM Studio 経由でテキストをベクトルに変換できること."""
     provider = LMStudioEmbedding(
-        base_url="http://localhost:1234/v1",
+        base_url=DEFAULT_LMSTUDIO_BASE_URL,
         model="nomic-embed-text",
     )
 
