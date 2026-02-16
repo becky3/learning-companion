@@ -31,26 +31,24 @@ fi
 # 今日の日付（失敗時はフォールバック）
 DATE=$(date -u +"%Y-%m-%d") || DATE="unknown-date"
 
-# ファイル一覧を整形（バッククォート付きカンマ区切り）
+# ファイル一覧を整形（リスト形式）
 FILE_LIST=""
 while IFS= read -r file; do
   if [ -n "$file" ]; then
-    if [ -n "$FILE_LIST" ]; then
-      FILE_LIST="${FILE_LIST}, \`${file}\`"
-    else
-      FILE_LIST="\`${file}\`"
-    fi
+    FILE_LIST="${FILE_LIST}
+- \`${file}\`"
   fi
 done <<< "$CHANGED_FILES"
 
 if [ -z "$FILE_LIST" ]; then
-  FILE_LIST="(取得失敗)"
+  FILE_LIST="
+- (取得失敗)"
 fi
 
 # コメントとして追記するセクション
 COMMENT_BODY="## PR #${PR_NUMBER}: ${PR_TITLE} (${DATE})
 
-- 変更: ${FILE_LIST}"
+### 変更ファイル${FILE_LIST}"
 
 # --- 既存 review-batch Issue を検索 ---
 EXISTING_ISSUE=""
