@@ -19,6 +19,7 @@ from src.scheduler.jobs import (
     format_daily_digest,
     setup_scheduler,
 )
+from src.services.feed_collector import NO_SUMMARY_TEXT
 
 
 def _make_article(
@@ -87,7 +88,7 @@ def test_ac5_format_empty_summary_shows_fallback() -> None:
     section_texts = [
         b["text"]["text"] for b in article_blocks if b["type"] == "section"
     ]
-    assert any("要約なし" in t for t in section_texts)
+    assert any(NO_SUMMARY_TEXT in t for t in section_texts)
 
 
 def test_ac14_1_build_parent_message_shows_feed_name() -> None:

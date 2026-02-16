@@ -15,7 +15,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.db.models import Article, Feed
-from src.services.feed_collector import FeedCollector
+from src.services.feed_collector import NO_SUMMARY_TEXT, FeedCollector
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def _build_article_blocks(
 
     summary = (article.summary or "").strip()
     if not summary:
-        summary = "要約なし"
+        summary = NO_SUMMARY_TEXT
 
     if layout == "horizontal":
         title_part = f":newspaper: *<{article.url}|{article.title}>*\n{dt_str}\n\n"
