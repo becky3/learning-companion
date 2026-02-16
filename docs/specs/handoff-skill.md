@@ -43,8 +43,9 @@ argument-hint: "[メッセージ]"
 | ファイル | パス | 役割 |
 |---------|------|------|
 | MEMORY.md | `{MEMORY_DIR}/MEMORY.md` | Claude Codeの永続メモリ（セッション横断） |
-| journal.md | `{MEMORY_DIR}/journal.md` | セッションジャーナル（直近10件） |
-| journal-archive.md | `{MEMORY_DIR}/journal-archive.md` | アーカイブ済みジャーナル |
+| journal.jsonl | `{MEMORY_DIR}/journal.jsonl` | セッションジャーナル（直近10件、JSONL形式） |
+| journal-archive.jsonl | `{MEMORY_DIR}/journal-archive.jsonl` | アーカイブ済みジャーナル（JSONL形式） |
+| journal-rolling.py | `.claude/scripts/journal-rolling.py` | ローリングスクリプト |
 
 > `{MEMORY_DIR}` は Claude Code のシステムプロンプトで提供されるプロジェクトメモリディレクトリパス。
 
@@ -54,12 +55,13 @@ argument-hint: "[メッセージ]"
 flowchart TD
     A[/handoff 実行] --> B[セッション情報の収集]
     B --> C[MEMORY.md 更新]
-    C --> D[journal.md にエントリ追加]
-    D --> E{エントリ数 > 10?}
-    E -->|Yes| F[超過分を journal-archive.md に移動]
-    E -->|No| G[ローリング不要]
-    F --> H[ユーザーへの報告]
-    G --> H
+    C --> D[journal.jsonl にエントリ追加]
+    D --> E[journal-rolling.py 実行]
+    E --> F{エントリ数 > 10?}
+    F -->|Yes| G[超過分を journal-archive.jsonl に移動]
+    F -->|No| H[ローリング不要]
+    G --> I[ユーザーへの報告]
+    H --> I
 ```
 
 ### ステップ1: セッション情報の収集
@@ -116,39 +118,49 @@ MEMORY.mdの「進行中タスク」セクションを、収集した情報に�
 - MEMORY.mdが存在しない場合は新規作成
 - 200行を超えないよう簡潔に記述する（Claude Codeのシステムプロンプトに読み込まれるため）
 
-### ステップ3: journal.md にエントリ追加
+### ステップ3: journal.jsonl にエントリ追加
 
-セッションの記録をジャーナルに追加する。既存の `journal-guidelines.md` のフォーマットに従う。
+セッションの記録をジャーナルにJSONL形式で追加する。
 
-**ジャーナルエントリの形式:**
+**ジャーナルエントリの形式（1行のJSON）:**
 
-```markdown
-## YYYY-MM-DD: 一言タイトル
-
-- **やったこと**: 概要（1-2行）
-- **判断**: 迷った点・選んだ選択肢・理由
-- **結果**: 良かった / 悪かった / 未検証
-- **気づき**: 次に活かすこと、ユーザーへの提案候補
+```json
+{"at": "2026-02-17T07:40:00+09:00", "title": "一言タイトル", "did": "概要", "decision": "判断", "result": "結果", "insight": "気づき"}
 ```
 
-カスタムメッセージ（引数）がある場合は「**気づき**」の末尾に追記する。
+**フィールド定義:**
+
+| フィールド | 旧形式の対応 | 内容 |
+|-----------|-------------|------|
+| `at` | 日付見出し | ISO 8601タイムスタンプ（`date -Iseconds`で取得、同日複数セッション区別用に時分秒含む） |
+| `title` | 見出しタイトル | セッションの一言タイトル |
+| `did` | やったこと | 概要（1-2行） |
+| `decision` | 判断 | 迷った点・選んだ選択肢・理由 |
+| `result` | 結果 | 良かった / 悪かった / 未検証 |
+| `insight` | 気づき | 次に活かすこと、ユーザーへの提案候補 |
+
+カスタムメッセージ（引数）がある場合は `insight` フィールドの末尾に追記する。
 
 **追加ルール:**
 
-- 常に新しいエントリを先頭（ファイルの上部）に追加
-- journal.mdが存在しない場合は新規作成（ヘッダー: `# Journal`）
-- 日付はスキル実行時の日付を使用
+- 常に新しいエントリを先頭（ファイルの1行目）に追加
+- journal.jsonlが存在しない場合は新規作成（空ファイル）
+- タイムスタンプは `date -Iseconds` で取得
 
 ### ステップ4: ジャーナルのローリング
 
-journal.md のエントリが10件を超えた場合、古いものを journal-archive.md に移動する。
+ローリングスクリプト（`.claude/scripts/journal-rolling.py`）を呼び出す:
+
+```bash
+python3 "$(git rev-parse --show-toplevel)/.claude/scripts/journal-rolling.py" "$MEMORY_DIR"
+```
 
 **ローリングルール:**
 
-- エントリ数のカウント: `## YYYY-MM-DD` 形式の見出しの数
-- 10件を超えた分（11件目以降）を journal-archive.md に移動
-- journal-archive.md が存在しない場合は新規作成（ヘッダー付き）
-- journal-archive.md では新しいエントリが上部に来るよう追加
+- journal.jsonl の行数（= エントリ数）をカウント
+- 10件を超えた分（11件目以降）を journal-archive.jsonl に移動
+- journal-archive.jsonl が存在しない場合は新規作成
+- journal-archive.jsonl では新しいエントリが上部に来るよう追加
 
 ### ステップ5: ユーザーへの報告
 
@@ -180,11 +192,11 @@ journal.md のエントリが10件を超えた場合、古いものを journal-a
 ## 受け入れ条件
 
 - [ ] AC1: `/handoff` で MEMORY.md の「進行中タスク」セクションが更新される
-- [ ] AC2: `/handoff` で journal.md にセッションエントリが追加される（journal-guidelines.md の形式に準拠）
-- [ ] AC3: journal.md のエントリが10件を超えた場合、超過分が journal-archive.md に移動される
+- [ ] AC2: `/handoff` で journal.jsonl にセッションエントリがJSONL形式で追加される
+- [ ] AC3: journal.jsonl のエントリが10件を超えた場合、ローリングスクリプトにより超過分が journal-archive.jsonl に移動される
 - [ ] AC4: 引き継ぎ結果がユーザーに報告される（次セッションの開始点が明示される）
 - [ ] AC5: `/handoff "メッセージ"` でカスタムメッセージがジャーナルに含まれる
-- [ ] AC6: MEMORY.md・journal.md が存在しない場合、新規作成される
+- [ ] AC6: MEMORY.md・journal.jsonl が存在しない場合、新規作成される
 - [ ] AC7: MEMORY.md が200行を超えないよう簡潔に記述される
 
 ## 関連ファイル
@@ -192,9 +204,10 @@ journal.md のエントリが10件を超えた場合、古いものを journal-a
 | ファイル | 役割 |
 |---------|------|
 | `.claude/skills/handoff/SKILL.md` | handoffスキル定義 |
+| `.claude/scripts/journal-rolling.py` | ローリングスクリプト |
 | `{MEMORY_DIR}/MEMORY.md` | 永続メモリ |
-| `{MEMORY_DIR}/journal.md` | セッションジャーナル |
-| `{MEMORY_DIR}/journal-archive.md` | アーカイブ済みジャーナル |
+| `{MEMORY_DIR}/journal.jsonl` | セッションジャーナル（JSONL形式） |
+| `{MEMORY_DIR}/journal-archive.jsonl` | アーカイブ済みジャーナル（JSONL形式） |
 | `CLAUDE.md` | スキル一覧への登録 |
 
 ## テスト方針
@@ -202,8 +215,8 @@ journal.md のエントリが10件を超えた場合、古いものを journal-a
 Claude Codeスキルは実行時テストが中心となるため、手動テストで確認:
 
 - [ ] `/handoff` でMEMORY.md が正しく更新される（AC1）
-- [ ] journal.md にエントリが追加される（AC2）
-- [ ] 11件目のエントリ追加時にローリングが動作する（AC3）
+- [ ] journal.jsonl にJSONLエントリが追加される（AC2）
+- [ ] 11件目のエントリ追加時にローリングスクリプトが動作する（AC3）
 - [ ] 結果報告に次セッションの開始点が含まれる（AC4）
 - [ ] カスタムメッセージが反映される（AC5）
 
