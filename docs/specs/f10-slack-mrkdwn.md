@@ -50,7 +50,7 @@ LLMの応答がSlack mrkdwn形式でフォーマットされる。
 ### Markdown → Slack mrkdwn 変換ルール
 
 | 要素 | Markdown | Slack mrkdwn |
-|------|----------|--------------|
+| ------ | ---------- | -------------- |
 | 太字 | `**text**` | `*text*` |
 | イタリック | `_text_` | `_text_` |
 | 取り消し線 | `~~text~~` | `~text~` |
@@ -83,14 +83,14 @@ if slack_instruction:
 
 ## 受け入れ条件
 
-- [ ] AC1: `config/assistant.yaml` に `slack_format_instruction` が定義されている
-- [ ] AC2: システムプロンプトに `slack_format_instruction` の内容が追記される
-- [ ] AC3: `slack_format_instruction` が未定義・空の場合は既存動作に影響しない
+- [x] AC1: `config/assistant.yaml` に `slack_format_instruction` が定義されている
+- [x] AC2: システムプロンプトに `slack_format_instruction` の内容が追記される
+- [x] AC3: `slack_format_instruction` が未定義・空の場合は既存動作に影響しない
 
 ## 関連ファイル
 
 | ファイル | 役割 |
-|---------|------|
+| --------- | ------ |
 | `config/assistant.yaml` | アシスタント設定（フォーマット指示を追加） |
 | `src/main.py` | エントリーポイント（システムプロンプト構築） |
 | `src/services/chat.py` | チャットサービス（変更なし） |
