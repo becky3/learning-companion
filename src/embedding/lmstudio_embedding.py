@@ -8,6 +8,7 @@ import logging
 
 from openai import AsyncOpenAI
 
+from src.config.settings import DEFAULT_LMSTUDIO_BASE_URL
 from src.embedding.base import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ class LMStudioEmbedding(EmbeddingProvider):
 
     def __init__(
         self,
-        base_url: str = "http://localhost:1234/v1",
+        base_url: str = DEFAULT_LMSTUDIO_BASE_URL,
         model: str = "nomic-embed-text",
     ) -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")

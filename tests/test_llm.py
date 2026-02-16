@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.config.settings import Settings
+from src.config.settings import DEFAULT_LMSTUDIO_BASE_URL, Settings
 from src.llm.base import LLMProvider
 from src.llm.factory import create_local_provider, create_online_provider, get_provider_for_service
 from src.llm.lmstudio_provider import LMStudioProvider
@@ -32,7 +32,7 @@ def test_ac2_three_providers_exist() -> None:
 
 def test_ac3_lmstudio_uses_openai_sdk() -> None:
     """AC3: LM StudioはOpenAI SDKでbase_url変更で対応."""
-    provider = LMStudioProvider(base_url="http://localhost:1234/v1")
+    provider = LMStudioProvider(base_url=DEFAULT_LMSTUDIO_BASE_URL)
     assert provider._client.base_url.host == "localhost"
 
 
@@ -239,7 +239,7 @@ async def test_ac11_lmstudio_complete_with_tools() -> None:
     from src.llm.base import Message, ToolDefinition
     from src.llm.lmstudio_provider import LMStudioProvider
 
-    provider = LMStudioProvider(base_url="http://localhost:1234/v1")
+    provider = LMStudioProvider(base_url=DEFAULT_LMSTUDIO_BASE_URL)
 
     # OpenAI互換APIのモックレスポンス（ツール呼び出しあり）
     mock_tool_call = MagicMock()
@@ -285,7 +285,7 @@ async def test_ac11_lmstudio_complete_with_tools_no_tool_call() -> None:
     from src.llm.base import Message, ToolDefinition
     from src.llm.lmstudio_provider import LMStudioProvider
 
-    provider = LMStudioProvider(base_url="http://localhost:1234/v1")
+    provider = LMStudioProvider(base_url=DEFAULT_LMSTUDIO_BASE_URL)
 
     # ツール呼び出しなしのモックレスポンス
     mock_choice = MagicMock()

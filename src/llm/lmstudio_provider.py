@@ -23,6 +23,7 @@ from openai.types.chat.chat_completion_message_tool_call_param import (
     Function,
 )
 
+from src.config.settings import DEFAULT_LMSTUDIO_BASE_URL
 from src.llm.base import LLMProvider, LLMResponse, Message, ToolCall, ToolDefinition
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ def _tool_def_to_openai(td: ToolDefinition) -> ChatCompletionToolParam:
 class LMStudioProvider(LLMProvider):
     """LM Studio (OpenAI互換API) を使用するローカルLLMプロバイダー."""
 
-    def __init__(self, base_url: str = "http://localhost:1234/v1", model: str = "local-model") -> None:
+    def __init__(self, base_url: str = DEFAULT_LMSTUDIO_BASE_URL, model: str = "local-model") -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
         self._model = model
 
