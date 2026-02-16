@@ -92,6 +92,9 @@ async def main() -> None:
         # アシスタント設定
         assistant = load_assistant_config()
         system_prompt = assistant.get("personality", "")
+        slack_format_instruction = assistant.get("slack_format_instruction", "")
+        if slack_format_instruction:
+            system_prompt = system_prompt + "\n\n" + slack_format_instruction
 
         # サービスごとのLLMプロバイダー（設定に基づいて選択）
         chat_llm = get_provider_for_service(settings, settings.chat_llm_provider)

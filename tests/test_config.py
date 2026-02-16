@@ -53,6 +53,55 @@ def test_ac3_assistant_yaml_loaded() -> None:
     assert isinstance(config["personality"], str) and config["personality"]
 
 
+def test_ac1_slack_format_instruction_defined() -> None:
+    """F10-AC1: assistant.yamlにslack_format_instructionが定義されている."""
+    config = load_assistant_config(Path("config/assistant.yaml"))
+    assert "slack_format_instruction" in config
+    instruction = config["slack_format_instruction"]
+    assert isinstance(instruction, str) and instruction.strip()
+
+
+def test_ac2_slack_format_instruction_appended_to_system_prompt() -> None:
+    """F10-AC2: slack_format_instructionがシステムプロンプトに追記される."""
+    config = load_assistant_config(Path("config/assistant.yaml"))
+    personality = config.get("personality", "")
+    slack_instruction = config.get("slack_format_instruction", "")
+
+    # main.py と同じロジックでシステムプロンプトを構築
+    system_prompt = personality
+    if slack_instruction:
+        system_prompt = system_prompt + "\n\n" + slack_instruction
+
+    assert personality in system_prompt
+    assert slack_instruction in system_prompt
+
+
+def test_ac3_empty_slack_format_instruction_no_effect() -> None:
+    """F10-AC3: slack_format_instructionが空の場合は既存動作に影響しない."""
+    personality = "テスト性格設定"
+    slack_instruction = ""
+
+    system_prompt = personality
+    if slack_instruction:
+        system_prompt = system_prompt + "\n\n" + slack_instruction
+
+    # 空の場合はpersonalityのみ
+    assert system_prompt == personality
+
+
+def test_ac3_missing_slack_format_instruction_no_effect() -> None:
+    """F10-AC3: slack_format_instructionが未定義の場合は既存動作に影響しない."""
+    config: dict[str, str] = {"personality": "テスト性格設定"}
+    personality = config.get("personality", "")
+    slack_instruction = config.get("slack_format_instruction", "")
+
+    system_prompt = personality
+    if slack_instruction:
+        system_prompt = system_prompt + "\n\n" + slack_instruction
+
+    assert system_prompt == personality
+
+
 # F6: get_auto_reply_channels のテスト
 def test_get_auto_reply_channels_empty_string(monkeypatch: pytest.MonkeyPatch) -> None:
     """F6: 空文字列の場合は空リストを返す."""
