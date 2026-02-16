@@ -96,7 +96,7 @@ PreToolUse フックの `permissionDecision: "deny"` を活用し、警告では
 ## 参考
 
 - エージェントチーム仕様: [docs/specs/agent-teams.md](../specs/agent-teams.md)
-- エージェントチーム運用詳細: [docs/specs/agent-teams-operations.md](../specs/agent-teams-operations.md)
+- エージェントチーム運用詳細: [docs/specs/agent-teams/common.md](../specs/agent-teams/common.md)
 - Claude Code Hooks 仕様: [docs/specs/claude-code-hooks.md](../specs/claude-code-hooks.md)
 - 関連Issue: #248
 - 関連PR: #249
