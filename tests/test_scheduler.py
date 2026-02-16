@@ -19,6 +19,7 @@ from src.scheduler.jobs import (
     format_daily_digest,
     setup_scheduler,
 )
+from src.services.feed_collector import NO_SUMMARY_TEXT
 
 
 def _make_article(
@@ -76,7 +77,7 @@ def test_ac5_format_empty_articles() -> None:
 
 
 def test_ac5_format_empty_summary_shows_fallback() -> None:
-    """AC5: 要約が空の場合は「要約なし」と表示する."""
+    """AC5: 要約が空の場合は「（要約なし）」と表示する."""
     feeds = {1: Feed(id=1, url="https://a.com/rss", name="A Feed", category="Python")}
     articles = [_make_article(1, "Title", "https://a.com/1", "")]
 
@@ -87,7 +88,7 @@ def test_ac5_format_empty_summary_shows_fallback() -> None:
     section_texts = [
         b["text"]["text"] for b in article_blocks if b["type"] == "section"
     ]
-    assert any("要約なし" in t for t in section_texts)
+    assert any(NO_SUMMARY_TEXT in t for t in section_texts)
 
 
 def test_ac14_1_build_parent_message_shows_feed_name() -> None:

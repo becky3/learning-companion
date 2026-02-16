@@ -22,6 +22,8 @@ from src.services.summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
 
+NO_SUMMARY_TEXT = "（要約なし）"
+
 
 def strip_html(text: str) -> str:
     """HTMLタグを除去してプレーンテキストに変換する."""
@@ -156,7 +158,7 @@ class FeedCollector:
                     continue
 
                 if skip_summary:
-                    summary = description if description else "（要約なし）"
+                    summary = description if description else NO_SUMMARY_TEXT
                 else:
                     try:
                         timeout = self._summarize_timeout if self._summarize_timeout > 0 else None

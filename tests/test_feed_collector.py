@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.db.models import Article, Base, Feed
-from src.services.feed_collector import FeedCollector, strip_html
+from src.services.feed_collector import NO_SUMMARY_TEXT, FeedCollector, strip_html
 from src.services.ogp_extractor import OgpExtractor
 from src.services.summarizer import Summarizer
 
@@ -721,7 +721,7 @@ async def test_ac18_4_skip_summary_placeholder_when_no_description(db_factory) -
             select(Article).where(Article.url == "https://example.com/nodesc")
         )
         article = result.scalar_one()
-        assert article.summary == "（要約なし）"
+        assert article.summary == NO_SUMMARY_TEXT
 
 
 async def test_ac18_5_skip_summary_then_normal_collect(db_factory) -> None:  # type: ignore[no-untyped-def]
