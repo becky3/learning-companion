@@ -569,7 +569,9 @@ auto:review-batch ラベルの Open Issue を検索
 ```markdown
 ## PR #123: フィード追加機能の改善 (2026-02-12)
 
-- 変更: `src/services/feed.py`, `src/utils/parser.py`
+### 変更ファイル
+- `src/services/feed.py`
+- `src/utils/parser.py`
 ```
 
 **Issueの管理ルール:**
