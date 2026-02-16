@@ -15,7 +15,7 @@
 - リーダーかつチーム稼働中（`~/.claude/teams/` 配下にディレクトリが存在）の場合、deny 応答でブロック
 - メンバー（`bypassPermissions`）やチーム非稼働時は素通り
 - `.claude/settings.json` に PreToolUse フック設定を追加
-- 仕様書3つ（`agent-teams.md`, `agent-teams-operations.md`, `claude-code-hooks.md`）を更新
+- 仕様書（`agent-teams/common.md`, `claude-code-hooks.md`）を更新
 
 ## うまくいったこと
 
@@ -95,7 +95,7 @@ PreToolUse フックの `permissionDecision: "deny"` を活用し、警告では
 
 ## 参考
 
-- エージェントチーム仕様: [docs/specs/agent-teams.md](../specs/agent-teams.md)
+- エージェントチーム仕様: [docs/specs/agent-teams/common.md](../specs/agent-teams/common.md)
 - エージェントチーム運用詳細: [docs/specs/agent-teams/common.md](../specs/agent-teams/common.md)
 - Claude Code Hooks 仕様: [docs/specs/claude-code-hooks.md](../specs/claude-code-hooks.md)
 - 関連Issue: #248
