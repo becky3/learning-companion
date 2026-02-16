@@ -77,7 +77,7 @@ def test_ac5_format_empty_articles() -> None:
 
 
 def test_ac5_format_empty_summary_shows_fallback() -> None:
-    """AC5: 要約が空の場合は「要約なし」と表示する."""
+    """AC5: 要約が空の場合は「（要約なし）」と表示する."""
     feeds = {1: Feed(id=1, url="https://a.com/rss", name="A Feed", category="Python")}
     articles = [_make_article(1, "Title", "https://a.com/1", "")]
 
