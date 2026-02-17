@@ -105,7 +105,14 @@ fi
 # 条件6: 禁止パターンなし（auto-fix は続行させるが、マージのみブロック）
 if [ "${FORBIDDEN_DETECTED:-}" = "true" ]; then
   MERGE_READY=false
-  REASONS="${REASONS}\n- ❌ Forbidden patterns detected (manual merge required)"
+  FILE_LIST=""
+  if [ -n "${FORBIDDEN_FILES:-}" ]; then
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      FILE_LIST="${FILE_LIST}\n  - $f"
+    done <<< "$FORBIDDEN_FILES"
+  fi
+  REASONS="${REASONS}\n- ❌ Forbidden patterns detected (manual merge required)${FILE_LIST}"
   echo "❌ Condition 6: Forbidden patterns detected"
 else
   echo "✅ Condition 6: No forbidden patterns"
