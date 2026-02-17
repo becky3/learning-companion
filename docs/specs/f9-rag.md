@@ -628,6 +628,36 @@ class WebCrawler:
 
 - **ページ数上限**: `RAG_MAX_CRAWL_PAGES`（デフォルト: 50）
 - **リクエスト間隔**: `RAG_CRAWL_DELAY_SEC`（デフォルト: 1.0秒）
+- **robots.txt 遵守**: `RAG_RESPECT_ROBOTS_TXT`（デフォルト: `true`）
+
+### robots.txt 解析・遵守
+
+サイト運営者の意図を尊重するため、クロール前に対象サイトの `robots.txt` を取得・解析し、Disallow 指定されたパスのクロールをスキップする。
+
+**実装方式**:
+
+- Python 標準ライブラリ `urllib.robotparser.RobotFileParser` を使用（外部依存なし）
+- `robots.txt` の取得は `aiohttp` で非同期に行い、取得した内容を `RobotFileParser.parse()` に渡す
+- User-Agent は `AIAssistantBot` を使用（`*` にもフォールバック）
+
+**機能**:
+
+- クロール前に対象サイトの `robots.txt` を取得・解析
+- Disallow 指定されたパスはクロールをスキップ（`can_fetch()` で判定）
+- `Crawl-delay` の遵守: `robots.txt` の `Crawl-delay` と設定値（`RAG_CRAWL_DELAY_SEC`）のうち大きい方を採用
+- `robots.txt` のキャッシュ: ドメイン単位でキャッシュし、TTL（`RAG_ROBOTS_TXT_CACHE_TTL`）で制御
+
+**設定項目**:
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `RAG_RESPECT_ROBOTS_TXT` | bool | `true` | robots.txt 遵守の有効/無効 |
+| `RAG_ROBOTS_TXT_CACHE_TTL` | int | `3600` | robots.txt キャッシュTTL（秒） |
+
+**エラーハンドリング**:
+
+- `robots.txt` の取得に失敗した場合（タイムアウト、HTTP エラー等）はクロールを許可する（フェイルオープン）
+- ログに警告を出力する
 
 **HTML本文抽出ロジック（BeautifulSoup4使用）**:
 
@@ -839,6 +869,10 @@ class Settings(BaseSettings):
     rag_crawl_delay_sec: float = 1.0
     rag_crawl_progress_interval: int = 5
 
+    # robots.txt
+    rag_respect_robots_txt: bool = True
+    rag_robots_txt_cache_ttl: int = 3600
+
     # ハイブリッド検索
     rag_hybrid_search_enabled: bool = False
     rag_vector_weight: float = 0.5
@@ -975,6 +1009,14 @@ class Settings(BaseSettings):
 - [ ] **AC66**: `--fail-on-regression` 指定時、リグレッション検出で exit code 1 になること
 - [ ] **AC67**: `init-test-db` コマンドでテスト用ChromaDBを初期化できること
 
+### robots.txt 遵守
+
+- [ ] **AC71**: `RAG_RESPECT_ROBOTS_TXT=true` の場合、Disallow 指定されたパスのクロールがスキップされること
+- [ ] **AC72**: `RAG_RESPECT_ROBOTS_TXT=false` の場合、robots.txt を無視してクロールすること
+- [ ] **AC73**: robots.txt の `Crawl-delay` が `RAG_CRAWL_DELAY_SEC` より大きい場合、`Crawl-delay` の値が採用されること
+- [ ] **AC74**: robots.txt の取得に失敗した場合、フェイルオープンでクロールを許可すること
+- [ ] **AC75**: robots.txt がドメイン単位でキャッシュされ、TTL 内は再取得されないこと
+
 ### テストケース
 
 - [ ] **AC68**: テストページを使ったローカル評価ができること
@@ -1063,7 +1105,7 @@ class Settings(BaseSettings):
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
 5. **LLMコンテキストウィンドウ**: `RAG_RETRIEVAL_COUNT` で検索件数を制限
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
-7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない（将来対応予定）
+7. **robots.txt**: `RAG_RESPECT_ROBOTS_TXT=true`（デフォルト）で `robots.txt` を遵守する。Python 標準ライブラリ `urllib.robotparser` を使用
 8. **BM25は少数ドキュメントでの評価に不向き**: IDF計算の特性上、テストには十分なドキュメント数が必要
 9. **辞書サイズ**: `unidic-lite` は約50MB。本番環境でのディスク使用量に注意
 10. **ベースライン管理**: ベースラインファイルはリポジトリにコミットし、チーム全体で共有
@@ -1074,7 +1116,7 @@ class Settings(BaseSettings):
 |-------|------|
 | #157 | ドメイン許可リストをSlackから動的管理 |
 | #159 | URL安全性チェック（Google Safe Browsing API） |
-| #160 | robots.txt の解析・遵守 |
+| ~~#160~~ | ~~robots.txt の解析・遵守~~（実装済み） |
 
 ## 関連ドキュメント
 
@@ -1085,6 +1127,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-17 | robots.txt 解析・遵守機能を追加（#160） |
 | 2026-02-12 | 4つの仕様書を統合・整理（旧: f9-rag-knowledge.md, f9-rag-evaluation.md, f9-rag-chunking-hybrid.md, f9-rag-auto-evaluation.md） |
 | 2026-02-11 | クロール進捗フィードバック機能を追加（#158） |
 | 2026-02-10 | PR #211 レビュー対応: 土台実装のみであることをアーキテクチャセクションに明記 |
