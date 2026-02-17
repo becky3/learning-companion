@@ -273,7 +273,7 @@ stateDiagram-v2
     PR作成 --> copilot_auto_fix: copilot-auto-fix.yml 起動（pull_request opened）
     copilot_auto_fix --> copilot_reviewed: Copilot レビュー検知（sleep ポーリング）
     copilot_auto_fix --> マージ済み: 修正完了 or 指摘なし（auto:merged 付与 → develop へマージ）
-    copilot_auto_fix --> auto_failed: 禁止パターン or マージ条件未達
+    copilot_auto_fix --> auto_failed: マージ条件未達（禁止パターン含む）
 
     マージ済み --> review_issue: 全PRを記録
     review_issue --> [*]: テスト完了
@@ -465,7 +465,7 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 
 **第2層: 禁止パターン（自動マージ不可ファイル）**
 
-以下のファイルが変更に含まれるPRは `auto:failed` ラベルを付与し、自動マージしない:
+以下のファイルが変更に含まれるPRは自動マージしない（auto-fix は続行し、マージ判定でブロック）:
 
 | パターン | 理由 |
 |---------|------|
@@ -486,7 +486,7 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 - PR番号ごとの concurrency グループで同じPRに対する同時実行を防止
 - `cancel-in-progress: false`（進行中のジョブはキャンセルしない）
 
-**第5層: マージ前5条件チェック**
+**第5層: マージ前6条件チェック**
 
 自動マージ実行前に以下を全て確認:
 
@@ -495,6 +495,7 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 3. ステータスチェック通過（外部 CI 未設定時は自動 PASS）
 4. コンフリクトなし
 5. `auto:failed` ラベルなし
+6. 禁止パターンなし（`FORBIDDEN_DETECTED` 環境変数で判定）
 
 **第6層: ブランチ保護ルール（2層構成）**
 
@@ -604,7 +605,7 @@ flowchart TD
 
 ## マージ判定基準
 
-自動マージは以下の5条件を全て満たす場合のみ実行:
+自動マージは以下の6条件を全て満たす場合のみ実行:
 
 | 条件 | 確認方法 |
 |------|---------|
@@ -613,6 +614,7 @@ flowchart TD
 | ステータスチェック通過 | `statusCheckRollup` で確認（外部 CI 未設定時は自動 PASS） |
 | コンフリクトなし | `gh pr view --json mergeable` が `MERGEABLE` |
 | `auto:failed` なし | PRのラベルに `auto:failed` が含まれない |
+| 禁止パターンなし | `FORBIDDEN_DETECTED` 環境変数で判定（auto-fix は続行、マージのみブロック） |
 
 マージ方式: `gh pr merge --merge`（通常マージ）。マージ方式の統一ルールは `docs/specs/git-flow.md` の「マージ方式」セクションを参照。
 マージ先: `develop` ブランチ（main への直接マージは禁止）
@@ -806,8 +808,8 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 - [ ] AC9: unresolved threads > 0 のとき、claude-code-action で自動修正が実行される
 - [ ] AC10: 自動修正後、対応済みスレッドが `resolveReviewThread` で resolve され、unresolved threads が再カウントされる
 - [ ] AC10.1: 修正後に再レビューループを行わず、マージ判定に進む（単方向フロー）
-- [ ] AC11: PR OPEN・レビュー指摘ゼロ・ステータスチェック通過（外部 CI 未設定時は自動 PASS）・コンフリクトなし・auto:failedなしの5条件を全て満たす場合のみ自動マージが実行される
-- [ ] AC12: 禁止パターンに該当するファイルが変更に含まれるPRは自動マージされず `auto:failed` ラベルが付与される
+- [ ] AC11: PR OPEN・レビュー指摘ゼロ・ステータスチェック通過（外部 CI 未設定時は自動 PASS）・コンフリクトなし・auto:failedなし・禁止パターンなしの6条件を全て満たす場合のみ自動マージが実行される
+- [ ] AC12: 禁止パターンに該当するファイルが変更に含まれるPRは自動修正が続行されるが、マージ判定でブロックされる（手動マージ待ち）
 - [ ] AC13: 同じPRに対する copilot-auto-fix.yml の同時実行が concurrency で防止される
 - [ ] AC14: `REPO_OWNER_PAT` シークレットが登録されている
 - [ ] AC15: feature ブランチが develop をベースに作成される
@@ -844,7 +846,7 @@ PRKit 復帰時に再度有効化する。
 - Phase 1（Copilot）: テスト用PRを作成し、Copilot レビュー → 自動修正 → マージの全サイクルが自動実行されることを確認
 - 自動設計テスト: 仕様書がないIssueに `auto-implement` を付与し、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進むことを確認
 - レビュー記録: 自動マージ後に `auto:review-batch` レビューIssueにPR情報がコメントとして記録されることを確認
-- 安全弁テスト: `auto:failed` ラベルで処理が停止すること、禁止パターンで `auto:failed` が付くことを各々確認
+- 安全弁テスト: `auto:failed` ラベルで処理が停止すること、禁止パターンで自動修正は続行しマージ判定でブロックされることを各々確認
 - ブランチ戦略テスト: 自動実装PRのベースブランチが develop であること、main への直接自動マージが行われないことを確認
 - **注意**: GitHub Actions 環境ではローカル LLM・Slack Bot の統合テストは実行不可。pytest はモック使用のユニットテストのみ実行される
 - **Phase 2**: post-merge.yml がマージ後に正しくトリガーされ、review-batch Issue へのコメント記録・次Issue候補の投稿が行われることを確認する
