@@ -29,7 +29,7 @@ AI Assistantは、Slack上で動作するAIアシスタントである。
 | オンラインLLM | OpenAI (openai SDK) / Anthropic (anthropic SDK) |
 | ローカルLLM | LM Studio (OpenAI互換API) |
 | DB | SQLite + SQLAlchemy (ORM経由で将来DB切替可能) |
-| スケジューラ | APScheduler |
+| スケジューラ | Slackリマインダー（`/remind`コマンドでボットメンション実行） |
 | RSS | feedparser |
 | ベクトルDB | ChromaDB (SQLiteベース, Embedding永続化) |
 | HTML解析 | BeautifulSoup4 |
