@@ -100,20 +100,24 @@ Markdown のみの変更の場合、pytest / ruff / mypy はスキップ可（ma
 ```bash
 PR_NUMBER={{PR_NUMBER}}
 
+# Note: このコードブロック内で "if !" パターンを使用しないこと
+# Claude Code サンドボックスの shell-quote が ! を \! にエスケープし
+# bash が予約語として認識できなくなる (claude-code#24136)
+
 # owner/repo の取得と検証（環境情報付きエラーログ）
-if ! OWNER=$(gh repo view --json owner --jq '.owner.login' 2>&1); then
+OWNER=$(gh repo view --json owner --jq '.owner.login' 2>&1) || {
   echo "::error::Failed to get repository owner: $OWNER (GH_REPO=${GH_REPO:-unset}, GH_TOKEN length=${#GH_TOKEN})"
   exit 1
-fi
-if ! REPO=$(gh repo view --json name --jq '.name' 2>&1); then
+}
+REPO=$(gh repo view --json name --jq '.name' 2>&1) || {
   echo "::error::Failed to get repository name: $REPO (GH_REPO=${GH_REPO:-unset}, OWNER=$OWNER)"
   exit 1
-fi
+}
 
 # 未解決スレッドIDの取得
 THREADS=""
 QUERY_SUCCESS=true
-if ! THREADS=$(gh api graphql -f query="
+if THREADS=$(gh api graphql -f query="
 {
   repository(owner: \"$OWNER\", name: \"$REPO\") {
     pullRequest(number: $PR_NUMBER) {
@@ -126,6 +130,8 @@ if ! THREADS=$(gh api graphql -f query="
     }
   }
 }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' 2>&1); then
+  : # クエリ成功
+else
   QUERY_SUCCESS=false
   # GraphQLエラー形式を確認してからフォールバック
   if echo "$THREADS" | jq -e '.errors' > /dev/null 2>&1; then
@@ -158,18 +164,20 @@ else
   while IFS= read -r THREAD_ID; do
     [ -z "$THREAD_ID" ] && continue
     # THREAD_ID のフォーマット検証（GitHub thread IDはBase64エンコードされるため=も許容）
-    if ! [[ "$THREAD_ID" =~ ^[A-Za-z0-9_=-]+$ ]]; then
+    [[ "$THREAD_ID" =~ ^[A-Za-z0-9_=-]+$ ]] || {
       echo "::warning::Invalid thread ID format: $THREAD_ID"
       FAILED=$((FAILED + 1))
       continue
-    fi
+    }
     # IDを直接埋め込む（GraphQL変数は環境依存の問題があるため）
-    if ! ERROR=$(gh api graphql -f query="
+    if ERROR=$(gh api graphql -f query="
     mutation {
       resolveReviewThread(input: { threadId: \"$THREAD_ID\" }) {
         thread { isResolved }
       }
     }" 2>&1); then
+      RESOLVED=$((RESOLVED + 1))
+    else
       FAILED=$((FAILED + 1))
       # エラー種別の推定と分類
       if echo "$ERROR" | jq -e '.errors' > /dev/null 2>&1; then
@@ -183,8 +191,6 @@ else
       else
         echo "::warning::Failed to resolve thread $THREAD_ID: [API_ERROR] $ERROR"
       fi
-    else
-      RESOLVED=$((RESOLVED + 1))
     fi
   done <<< "$THREADS"
 
