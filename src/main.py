@@ -92,6 +92,7 @@ async def main() -> None:
         # アシスタント設定
         assistant = load_assistant_config()
         system_prompt = assistant.get("personality", "")
+        slack_format = assistant.get("slack_format_instruction", "")
 
         # サービスごとのLLMプロバイダー（設定に基づいて選択）
         chat_llm = get_provider_for_service(settings, settings.chat_llm_provider)
@@ -178,6 +179,7 @@ async def main() -> None:
             mcp_manager=mcp_manager,
             thread_history_service=thread_history_service,
             rag_service=rag_service,
+            slack_format_instruction=slack_format,
         )
 
         # ユーザー情報抽出サービス
