@@ -95,6 +95,7 @@ class Settings(BaseSettings):
     rag_max_crawl_pages: int = Field(default=50, ge=1)
     rag_crawl_delay_sec: float = Field(default=1.0, ge=0)
     rag_crawl_progress_interval: int = Field(default=5, ge=1)  # 進捗報告間隔（ページ数）
+    rag_respect_robots_txt: bool = True  # robots.txt 遵守（デフォルト: 有効）
     rag_similarity_threshold: float | None = Field(default=None, ge=0.0, le=2.0)  # cosine距離閾値
 
     # RAG評価・デバッグ (Phase 1)

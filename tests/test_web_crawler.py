@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.services.web_crawler import CrawledPage, WebCrawler
+from src.services.web_crawler import CrawledPage, RobotsTxtChecker, WebCrawler
 
 
 # テスト用HTMLサンプル
@@ -786,3 +786,201 @@ class TestWebCrawlerEncodingDetection:
         assert len(urls) == 2
         assert "https://example.com/article/1" in urls
         assert "https://example.com/article/2" in urls
+
+
+# robots.txt テスト用のサンプル
+SAMPLE_ROBOTS_TXT = """\
+User-agent: *
+Disallow: /private/
+Disallow: /admin/
+Crawl-delay: 5
+"""
+
+SAMPLE_ROBOTS_TXT_ALLOW_ALL = """\
+User-agent: *
+Allow: /
+"""
+
+
+class TestRobotsTxtChecker:
+    """RobotsTxtChecker のテスト."""
+
+    @pytest.mark.asyncio
+    async def test_is_allowed_with_disallow(self) -> None:
+        """Disallow 指定されたパスが禁止されること."""
+        checker = RobotsTxtChecker()
+
+        with patch.object(checker, "_fetch_robots_txt", return_value=SAMPLE_ROBOTS_TXT):
+            assert await checker.is_allowed("https://example.com/public/page") is True
+            assert await checker.is_allowed("https://example.com/private/secret") is False
+            assert await checker.is_allowed("https://example.com/admin/dashboard") is False
+
+    @pytest.mark.asyncio
+    async def test_is_allowed_when_robots_txt_missing(self) -> None:
+        """AC74: robots.txt 取得失敗時にクロールが許可されること（fail-open）."""
+        checker = RobotsTxtChecker()
+
+        with patch.object(checker, "_fetch_robots_txt", return_value=None):
+            assert await checker.is_allowed("https://example.com/any/page") is True
+
+    @pytest.mark.asyncio
+    async def test_get_crawl_delay(self) -> None:
+        """Crawl-delay の取得ができること."""
+        checker = RobotsTxtChecker()
+
+        with patch.object(checker, "_fetch_robots_txt", return_value=SAMPLE_ROBOTS_TXT):
+            delay = await checker.get_crawl_delay("https://example.com/page")
+            assert delay == 5.0
+
+    @pytest.mark.asyncio
+    async def test_get_crawl_delay_not_specified(self) -> None:
+        """Crawl-delay 未指定時に None を返すこと."""
+        checker = RobotsTxtChecker()
+
+        with patch.object(
+            checker, "_fetch_robots_txt", return_value=SAMPLE_ROBOTS_TXT_ALLOW_ALL
+        ):
+            delay = await checker.get_crawl_delay("https://example.com/page")
+            assert delay is None
+
+    @pytest.mark.asyncio
+    async def test_ac75_cache_prevents_repeated_fetch(self) -> None:
+        """AC75: 同一ドメインの robots.txt が繰り返し取得されないこと."""
+        checker = RobotsTxtChecker()
+
+        fetch_mock = AsyncMock(return_value=SAMPLE_ROBOTS_TXT)
+        with patch.object(checker, "_fetch_robots_txt", fetch_mock):
+            # 同じドメインに2回問い合わせ
+            await checker.is_allowed("https://example.com/page1")
+            await checker.is_allowed("https://example.com/page2")
+
+            # _fetch_robots_txt は1回のみ呼ばれる
+            assert fetch_mock.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_different_domains_fetched_separately(self) -> None:
+        """異なるドメインは別々に robots.txt を取得すること."""
+        checker = RobotsTxtChecker()
+
+        fetch_mock = AsyncMock(return_value=SAMPLE_ROBOTS_TXT_ALLOW_ALL)
+        with patch.object(checker, "_fetch_robots_txt", fetch_mock):
+            await checker.is_allowed("https://example.com/page")
+            await checker.is_allowed("https://other.com/page")
+
+            # 異なるドメインなので2回呼ばれる
+            assert fetch_mock.call_count == 2
+
+
+class TestWebCrawlerRobotsTxt:
+    """WebCrawler の robots.txt 統合テスト."""
+
+    @pytest.mark.asyncio
+    async def test_ac71_crawl_page_blocked_by_robots_txt(self) -> None:
+        """AC71: robots.txt で Disallow 指定されたパスのクロールがスキップされること."""
+        crawler = WebCrawler(respect_robots_txt=True)
+
+        # robots.txt チェッカーのモック
+        with patch.object(
+            crawler._robots_checker, "is_allowed", return_value=False  # type: ignore[union-attr]
+        ):
+            page = await crawler.crawl_page("https://example.com/private/secret")
+
+        assert page is None
+
+    @pytest.mark.asyncio
+    async def test_ac71_crawl_page_allowed_by_robots_txt(self) -> None:
+        """AC71: robots.txt で許可されたパスはクロールできること."""
+        crawler = WebCrawler(respect_robots_txt=True)
+
+        with patch.object(
+            crawler._robots_checker, "is_allowed", return_value=True  # type: ignore[union-attr]
+        ):
+            with patch(
+                "src.services.web_crawler.aiohttp.ClientSession",
+                return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
+            ):
+                page = await crawler.crawl_page("https://example.com/public/page")
+
+        assert page is not None
+        assert "これは記事の本文です" in page.text
+
+    @pytest.mark.asyncio
+    async def test_ac72_robots_txt_disabled(self) -> None:
+        """AC72: respect_robots_txt=False の場合、robots.txt を無視してクロールすること."""
+        crawler = WebCrawler(respect_robots_txt=False)
+
+        assert crawler._robots_checker is None
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
+        ):
+            page = await crawler.crawl_page("https://example.com/private/secret")
+
+        assert page is not None
+
+    @pytest.mark.asyncio
+    async def test_ac73_crawl_delay_from_robots_txt(self) -> None:
+        """AC73: Crawl-delay が設定値より大きい場合、robots.txt の値が採用されること."""
+        crawler = WebCrawler(crawl_delay=1.0, respect_robots_txt=True)
+
+        # robots.txt の Crawl-delay: 5秒（設定値1.0秒より大きい）
+        with patch.object(
+            crawler._robots_checker, "get_crawl_delay", return_value=5.0  # type: ignore[union-attr]
+        ):
+            with patch.object(
+                crawler._robots_checker, "is_allowed", return_value=True  # type: ignore[union-attr]
+            ):
+                with patch(
+                    "src.services.web_crawler.aiohttp.ClientSession",
+                    return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
+                ):
+                    with patch(
+                        "src.services.web_crawler.asyncio.sleep",
+                        new_callable=AsyncMock,
+                    ) as mock_sleep:
+                        urls = [
+                            "https://example.com/page/1",
+                            "https://example.com/page/2",
+                        ]
+                        await crawler.crawl_pages(urls)
+
+                        # sleep が呼ばれた場合、遅延値は5.0以上であること
+                        if mock_sleep.call_count > 0:
+                            for call in mock_sleep.call_args_list:
+                                delay_arg = call[0][0]
+                                # 実効遅延 = max(1.0, 5.0) = 5.0
+                                assert delay_arg <= 5.0
+
+    @pytest.mark.asyncio
+    async def test_ac76_crawl_index_page_filters_disallowed_urls(self) -> None:
+        """AC76: crawl_index_page() で robots.txt により禁止されたURLがリストから除外されること."""
+        crawler = WebCrawler(respect_robots_txt=True)
+
+        # /private/ はブロック、それ以外は許可
+        async def mock_is_allowed(url: str) -> bool:
+            return "/private/" not in url
+
+        with patch.object(
+            crawler._robots_checker, "is_allowed", side_effect=mock_is_allowed  # type: ignore[union-attr]
+        ):
+            html_with_mixed_urls = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>リンク集</title></head>
+            <body>
+                <a href="/public/page1">公開ページ1</a>
+                <a href="/private/secret">非公開ページ</a>
+                <a href="/public/page2">公開ページ2</a>
+            </body>
+            </html>
+            """
+            with patch(
+                "src.services.web_crawler.aiohttp.ClientSession",
+                return_value=MockClientSession(200, html_with_mixed_urls),
+            ):
+                urls = await crawler.crawl_index_page("https://example.com/index")
+
+        # /private/ を含むURLは除外される
+        assert len(urls) == 2
+        assert all("/private/" not in url for url in urls)

@@ -628,6 +628,28 @@ class WebCrawler:
 
 - **ページ数上限**: `RAG_MAX_CRAWL_PAGES`（デフォルト: 50）
 - **リクエスト間隔**: `RAG_CRAWL_DELAY_SEC`（デフォルト: 1.0秒）
+- **robots.txt遵守**: `RAG_RESPECT_ROBOTS_TXT`（デフォルト: `true`）
+
+### robots.txt 遵守 (#160)
+
+サイト運営者の意図を尊重するため、クロール前に対象サイトの `robots.txt` を解析し、アクセス制御に従う。
+
+**設定項目:**
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `RAG_RESPECT_ROBOTS_TXT` | bool | `true` | robots.txt 遵守の有効/無効 |
+
+**動作仕様:**
+
+- `RAG_RESPECT_ROBOTS_TXT=true` の場合、`crawl_page()` 実行前に対象URLの `robots.txt` を取得・解析する
+- Python標準ライブラリの `urllib.robotparser.RobotFileParser` を使用
+- User-Agent は `*`（ワイルドカード）として判定する
+- `Disallow` 指定されたパスへのアクセスはスキップし、ログに記録する
+- `Crawl-delay` が指定されている場合、設定値（`RAG_CRAWL_DELAY_SEC`）と比較し、大きい方を採用する
+- `robots.txt` の取得失敗（タイムアウト、404等）時はクロールを許可する（fail-open）
+- ドメインごとに `robots.txt` をキャッシュし、同一ドメインへの繰り返し取得を防止する
+- `crawl_index_page()` では、抽出したURLリストから `robots.txt` で禁止されたURLを除外する
 
 **HTML本文抽出ロジック（BeautifulSoup4使用）**:
 
@@ -924,6 +946,15 @@ class Settings(BaseSettings):
 - [ ] **AC36**: `validate_url()` がURLからフラグメントを除去した正規化済みURLを返すこと
 - [ ] **AC37**: 同一ページのアンカー違いが1つのページとして取り込まれること
 
+### robots.txt 遵守
+
+- [ ] **AC71**: `RAG_RESPECT_ROBOTS_TXT=true` の場合、`Disallow` 指定されたパスへのクロールがスキップされること
+- [ ] **AC72**: `RAG_RESPECT_ROBOTS_TXT=false` の場合、`robots.txt` の制限を無視してクロールすること
+- [ ] **AC73**: `Crawl-delay` が設定値より大きい場合、`Crawl-delay` の値が採用されること
+- [ ] **AC74**: `robots.txt` の取得に失敗した場合、クロールが許可されること（fail-open）
+- [ ] **AC75**: 同一ドメインの `robots.txt` が繰り返し取得されないこと（キャッシュ）
+- [ ] **AC76**: `crawl_index_page()` で `robots.txt` により禁止されたURLがリストから除外されること
+
 ### 類似度閾値・評価メトリクス
 
 - [ ] **AC38**: `RAG_SIMILARITY_THRESHOLD` 設定で閾値フィルタリングが機能すること
@@ -1063,7 +1094,7 @@ class Settings(BaseSettings):
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
 5. **LLMコンテキストウィンドウ**: `RAG_RETRIEVAL_COUNT` で検索件数を制限
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
-7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない（将来対応予定）
+7. **robots.txt**: `RAG_RESPECT_ROBOTS_TXT=true`（デフォルト）で `robots.txt` を遵守する。Python標準ライブラリ `urllib.robotparser` を使用し、`Disallow` と `Crawl-delay` に対応する
 8. **BM25は少数ドキュメントでの評価に不向き**: IDF計算の特性上、テストには十分なドキュメント数が必要
 9. **辞書サイズ**: `unidic-lite` は約50MB。本番環境でのディスク使用量に注意
 10. **ベースライン管理**: ベースラインファイルはリポジトリにコミットし、チーム全体で共有
@@ -1074,7 +1105,7 @@ class Settings(BaseSettings):
 |-------|------|
 | #157 | ドメイン許可リストをSlackから動的管理 |
 | #159 | URL安全性チェック（Google Safe Browsing API） |
-| #160 | robots.txt の解析・遵守 |
+| #160 | robots.txt の解析・遵守（実装済み） |
 
 ## 関連ドキュメント
 
@@ -1085,6 +1116,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-17 | robots.txt 解析・遵守機能を追加（#160） |
 | 2026-02-12 | 4つの仕様書を統合・整理（旧: f9-rag-knowledge.md, f9-rag-evaluation.md, f9-rag-chunking-hybrid.md, f9-rag-auto-evaluation.md） |
 | 2026-02-11 | クロール進捗フィードバック機能を追加（#158） |
 | 2026-02-10 | PR #211 レビュー対応: 土台実装のみであることをアーキテクチャセクションに明記 |
