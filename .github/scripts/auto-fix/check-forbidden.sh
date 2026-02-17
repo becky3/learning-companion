@@ -47,8 +47,8 @@ while IFS= read -r file; do
       FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (diff取得失敗のため要手動確認)\n"
       continue
     fi
-    # pyproject.toml の diff セクションを抽出（diff --git a/pyproject.toml から次の diff --git まで）
-    PYPROJECT_DIFF=$(echo "$FULL_DIFF" | sed -n '/^diff --git a\/pyproject\.toml/,/^diff --git/{/^diff --git a\/pyproject\.toml/p;/^diff --git a\/pyproject\.toml/!{/^diff --git/!p}}')
+    # pyproject.toml の diff セクションを抽出（b/ パスでマッチし、リネームケースも検出）
+    PYPROJECT_DIFF=$(echo "$FULL_DIFF" | sed -n '/^diff --git [^ ]* b\/pyproject\.toml/,/^diff --git/{/^diff --git [^ ]* b\/pyproject\.toml/p;/^diff --git [^ ]* b\/pyproject\.toml/!{/^diff --git/!p}}')
     # 追加行・削除行の両方を対象にする（セクションヘッダと代入のみ検出、コメント等の誤検知を防止）
     if echo "$PYPROJECT_DIFF" | grep -qE '^[+-]\s*(dependencies\s*=|\[project\.dependencies\]|\[dependency-groups\])'; then
       FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (dependencies変更)\n"
