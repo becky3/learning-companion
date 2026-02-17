@@ -221,6 +221,7 @@ ai-assistant/
 │   ├── services/
 │   │   ├── web_crawler.py          # Webクローラー
 │   │   ├── rag_knowledge.py        # RAGナレッジサービス
+│   │   ├── robots_txt.py           # robots.txt 解析・遵守
 │   │   └── safe_browsing.py        # Google Safe Browsing API
 │   ├── config/
 │   │   └── settings.py             # RAG設定
@@ -246,6 +247,7 @@ ai-assistant/
 │   ├── test_rag_cli.py
 │   ├── test_rag_evaluation.py
 │   ├── test_safe_browsing.py
+│   ├── test_robots_txt.py
 │   └── test_slack_rag_handlers.py
 ├── reports/
 │   └── rag-evaluation/
@@ -635,6 +637,46 @@ class WebCrawler:
 2. `<article>` → `<main>` → `<body>` の優先順で本文領域を特定
 3. テキストを抽出してクリーンアップ
 
+### robots.txt 遵守 (`src/services/robots_txt.py`)
+
+```python
+class RobotsTxtChecker:
+    """robots.txt の取得・解析・判定を行う.
+
+    仕様: docs/specs/f9-rag.md
+    """
+
+    def __init__(
+        self,
+        user_agent: str = "*",
+        timeout: float = 10.0,
+        cache_ttl: int = 3600,
+    ) -> None: ...
+
+    async def is_allowed(self, url: str) -> bool:
+        """URLへのクロールが robots.txt で許可されているかを判定する."""
+
+    async def get_crawl_delay(self, url: str) -> float | None:
+        """robots.txt で指定された Crawl-delay を取得する."""
+
+    def clear_cache(self) -> None:
+        """キャッシュをクリアする."""
+```
+
+**設計ポイント**:
+
+- Python標準ライブラリ `urllib.robotparser.RobotFileParser` を使用（外部依存なし）
+- ホスト単位でキャッシュ（TTL: `RAG_ROBOTS_TXT_CACHE_TTL`、デフォルト3600秒）
+- robots.txt 取得失敗時はフェイルオープン（クロール許可）
+- User-Agent は `*`（汎用）をデフォルトとする
+
+**設定項目**:
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `RAG_RESPECT_ROBOTS_TXT` | bool | `true` | robots.txt 遵守の有効/無効 |
+| `RAG_ROBOTS_TXT_CACHE_TTL` | int | `3600` | robots.txt キャッシュTTL（秒） |
+
 ### URL安全性チェック（Google Safe Browsing API）
 
 マルウェア・フィッシングサイトへのアクセスを防ぐため、Google Safe Browsing APIによる事前判定機能を提供する。
@@ -849,6 +891,10 @@ class Settings(BaseSettings):
     # 類似度閾値
     rag_similarity_threshold: float | None = None
 
+    # robots.txt
+    rag_respect_robots_txt: bool = True
+    rag_robots_txt_cache_ttl: int = 3600  # キャッシュTTL（秒）
+
     # デバッグ・可視化
     rag_debug_log_enabled: bool = True
     rag_show_sources: bool = False
@@ -959,6 +1005,15 @@ class Settings(BaseSettings):
 - [ ] **AC56**: 重み設定でベクトル検索とBM25の比率を調整できること
 - [ ] **AC57**: `HybridSearchResult` がベクトル検索スコア、BM25スコア、RRFスコアを保持できること
 
+### robots.txt 遵守
+
+- [ ] **AC71**: `RAG_RESPECT_ROBOTS_TXT=true`（デフォルト）の場合、クロール前に対象サイトの robots.txt を取得・解析すること
+- [ ] **AC72**: robots.txt で Disallow 指定されたパスへのクロールがスキップされること
+- [ ] **AC73**: robots.txt の Crawl-delay が設定値（`RAG_CRAWL_DELAY_SEC`）より長い場合、Crawl-delay の値を採用すること
+- [ ] **AC74**: `RAG_RESPECT_ROBOTS_TXT=false` の場合、robots.txt を無視して従来通りクロールすること
+- [ ] **AC75**: robots.txt の取得に失敗した場合（タイムアウト・404等）、クロールを許可すること（フェイルオープン）
+- [ ] **AC76**: robots.txt のキャッシュが機能し、同一ホストへの重複取得を抑制すること
+
 ### デバッグ・可視化
 
 - [ ] **AC58**: `RAG_DEBUG_LOG_ENABLED=true` の場合、検索クエリと結果がログに出力されること
@@ -1063,7 +1118,7 @@ class Settings(BaseSettings):
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
 5. **LLMコンテキストウィンドウ**: `RAG_RETRIEVAL_COUNT` で検索件数を制限
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
-7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない（将来対応予定）
+7. **robots.txt**: `RAG_RESPECT_ROBOTS_TXT=true`（デフォルト）でサイト運営者の意図を尊重する。Python標準ライブラリの `urllib.robotparser` を使用し、外部依存は追加しない
 8. **BM25は少数ドキュメントでの評価に不向き**: IDF計算の特性上、テストには十分なドキュメント数が必要
 9. **辞書サイズ**: `unidic-lite` は約50MB。本番環境でのディスク使用量に注意
 10. **ベースライン管理**: ベースラインファイルはリポジトリにコミットし、チーム全体で共有
@@ -1074,7 +1129,6 @@ class Settings(BaseSettings):
 |-------|------|
 | #157 | ドメイン許可リストをSlackから動的管理 |
 | #159 | URL安全性チェック（Google Safe Browsing API） |
-| #160 | robots.txt の解析・遵守 |
 
 ## 関連ドキュメント
 
@@ -1085,6 +1139,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-17 | robots.txt 解析・遵守機能を追加（#160） |
 | 2026-02-12 | 4つの仕様書を統合・整理（旧: f9-rag-knowledge.md, f9-rag-evaluation.md, f9-rag-chunking-hybrid.md, f9-rag-auto-evaluation.md） |
 | 2026-02-11 | クロール進捗フィードバック機能を追加（#158） |
 | 2026-02-10 | PR #211 レビュー対応: 土台実装のみであることをアーキテクチャセクションに明記 |

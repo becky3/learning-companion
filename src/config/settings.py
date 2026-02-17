@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     rag_bm25_b: float = Field(default=0.75, ge=0.0, le=1.0)  # BM25の文書長正規化パラメータ
     rag_rrf_k: int = Field(default=60, ge=1)  # RRFの定数
 
+    # robots.txt
+    rag_respect_robots_txt: bool = True
+    rag_robots_txt_cache_ttl: int = Field(default=3600, ge=0)  # キャッシュTTL秒
+
     # Safe Browsing (URL安全性チェック)
     rag_url_safety_check: bool = False
     google_safe_browsing_api_key: str = ""

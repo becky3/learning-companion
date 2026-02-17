@@ -12,11 +12,15 @@ import re
 import socket
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from urllib.parse import urldefrag, urljoin, urlparse
 
 import aiohttp
 from bs4 import BeautifulSoup
 from charset_normalizer import from_bytes
+
+if TYPE_CHECKING:
+    from src.services.robots_txt import RobotsTxtChecker
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,7 @@ class WebCrawler:
         max_pages: int = 50,
         crawl_delay: float = 1.0,
         max_concurrent: int = 5,
+        robots_txt_checker: RobotsTxtChecker | None = None,
     ) -> None:
         """WebCrawlerを初期化する.
 
@@ -51,11 +56,13 @@ class WebCrawler:
             max_pages: 1回のクロールで取得する最大ページ数
             crawl_delay: 同一ドメインへの連続リクエスト間の待機秒数
             max_concurrent: 同時接続数の上限
+            robots_txt_checker: robots.txt チェッカー（オプション）
         """
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._max_pages = max_pages
         self._crawl_delay = crawl_delay
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._robots_txt_checker = robots_txt_checker
 
     def validate_url(self, url: str) -> str:
         """URL検証・正規化. 問題なければ正規化済みURLを返す.
@@ -321,6 +328,7 @@ class WebCrawler:
         """単一ページの本文テキストを取得する. 失敗時は None.
 
         - validate_url() でURL検証後にHTTPアクセスを行う
+        - robots_txt_checker が設定されている場合、robots.txt による許可を確認する
 
         Args:
             url: クロールするURL
@@ -333,6 +341,20 @@ class WebCrawler:
         except ValueError as e:
             logger.warning("URL validation failed: %s - %s", url, e)
             return None
+
+        # robots.txt チェック
+        if self._robots_txt_checker is not None:
+            try:
+                if not await self._robots_txt_checker.is_allowed(validated_url):
+                    logger.info("Blocked by robots.txt: %s", validated_url)
+                    return None
+            except Exception:
+                # robots.txt チェック失敗時はフェイルオープン（クロール許可）
+                logger.debug(
+                    "robots.txt check failed (fail-open): %s",
+                    validated_url,
+                    exc_info=True,
+                )
 
         try:
             async with self._semaphore:
@@ -397,14 +419,33 @@ class WebCrawler:
             """同一ドメインへの遅延を挿入してクロールする."""
             hostname = urlparse(url).hostname
 
-            if hostname and self._crawl_delay > 0:
+            # robots.txt の Crawl-delay と設定値の大きい方を採用
+            effective_delay = self._crawl_delay
+            if self._robots_txt_checker is not None:
+                try:
+                    robots_delay = await self._robots_txt_checker.get_crawl_delay(url)
+                    if robots_delay is not None and robots_delay > effective_delay:
+                        effective_delay = robots_delay
+                        logger.debug(
+                            "Using robots.txt Crawl-delay: %.1f for %s",
+                            robots_delay,
+                            hostname,
+                        )
+                except Exception:
+                    logger.debug(
+                        "Failed to get robots.txt Crawl-delay: %s",
+                        url,
+                        exc_info=True,
+                    )
+
+            if hostname and effective_delay > 0:
                 async with time_lock:
                     previous = last_request_time.get(hostname)
                     if previous is not None:
                         now = asyncio.get_event_loop().time()
                         elapsed = now - previous
-                        if elapsed < self._crawl_delay:
-                            await asyncio.sleep(self._crawl_delay - elapsed)
+                        if elapsed < effective_delay:
+                            await asyncio.sleep(effective_delay - elapsed)
                     # リクエスト前に時刻を更新（他のタスクが同じホストに同時アクセスしないようにする）
                     last_request_time[hostname] = asyncio.get_event_loop().time()
 

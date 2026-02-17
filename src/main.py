@@ -37,6 +37,7 @@ from src.services.summarizer import Summarizer
 from src.services.thread_history import ThreadHistoryService
 from src.services.topic_recommender import TopicRecommender
 from src.services.user_profiler import UserProfiler
+from src.services.robots_txt import RobotsTxtChecker
 from src.services.web_crawler import WebCrawler
 from src.services.safe_browsing import create_safe_browsing_client
 from src.slack.app import create_app, socket_mode_handler
@@ -114,9 +115,18 @@ async def main() -> None:
         if settings.rag_enabled:
             embedding = get_embedding_provider(settings, settings.embedding_provider)
             vector_store = VectorStore(embedding, settings.chromadb_persist_dir)
+            # robots.txt チェッカー（有効時のみ）
+            robots_txt_checker: RobotsTxtChecker | None = None
+            if settings.rag_respect_robots_txt:
+                robots_txt_checker = RobotsTxtChecker(
+                    cache_ttl=settings.rag_robots_txt_cache_ttl,
+                )
+                logger.info("robots.txt 遵守有効")
+
             web_crawler = WebCrawler(
                 max_pages=settings.rag_max_crawl_pages,
                 crawl_delay=settings.rag_crawl_delay_sec,
+                robots_txt_checker=robots_txt_checker,
             )
             # Safe Browsing クライアント（URL安全性チェック）
             safe_browsing_client = create_safe_browsing_client(settings)
