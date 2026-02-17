@@ -41,15 +41,20 @@ async def test_ac2_slack_format_appended_to_system_prompt(db_session_factory) ->
 
     personality = "テスト性格"
     slack_format = "【出力フォーマット】\nSlack mrkdwn形式で出力してください。"
-    system_prompt = personality + "\n\n" + slack_format
 
-    service = ChatService(llm=llm, session_factory=db_session_factory, system_prompt=system_prompt)
+    service = ChatService(
+        llm=llm,
+        session_factory=db_session_factory,
+        system_prompt=personality,
+        slack_format_instruction=slack_format,
+    )
     await service.respond(user_id="U1", text="hi", thread_ts="t1")
 
     messages = llm.complete.call_args[0][0]
     assert messages[0].role == "system"
     assert personality in messages[0].content
     assert slack_format in messages[0].content
+    assert messages[0].content.endswith(slack_format)
 
 
 async def test_ac3_empty_slack_format_no_effect(db_session_factory) -> None:  # type: ignore[no-untyped-def]
@@ -59,37 +64,15 @@ async def test_ac3_empty_slack_format_no_effect(db_session_factory) -> None:  # 
 
     personality = "テスト性格"
     slack_format = ""
-    # 空の場合はpersonalityのみ
-    system_prompt = personality
-    if slack_format:
-        system_prompt = system_prompt + "\n\n" + slack_format
 
-    service = ChatService(llm=llm, session_factory=db_session_factory, system_prompt=system_prompt)
+    service = ChatService(
+        llm=llm,
+        session_factory=db_session_factory,
+        system_prompt=personality,
+        slack_format_instruction=slack_format,
+    )
     await service.respond(user_id="U1", text="hi", thread_ts="t1")
 
     messages = llm.complete.call_args[0][0]
     assert messages[0].role == "system"
     assert messages[0].content == personality
-
-
-async def test_ac2_system_prompt_construction_logic() -> None:
-    """AC2: main.pyのシステムプロンプト構築ロジックを検証する."""
-    # main.pyと同じロジックを再現
-    personality = "あなたはデイジーです。"
-    slack_format = "【出力フォーマット】\nSlack mrkdwn形式で出力してください。"
-
-    system_prompt = personality
-    if slack_format:
-        system_prompt = system_prompt + "\n\n" + slack_format
-
-    assert system_prompt.startswith(personality)
-    assert system_prompt.endswith(slack_format)
-    assert "\n\n" in system_prompt
-
-    # 空の場合
-    system_prompt_empty = personality
-    slack_format_empty = ""
-    if slack_format_empty:
-        system_prompt_empty = system_prompt_empty + "\n\n" + slack_format_empty
-
-    assert system_prompt_empty == personality

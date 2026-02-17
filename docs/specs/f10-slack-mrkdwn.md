@@ -78,20 +78,41 @@ slack_format_instruction: |
   Markdown記法（**太字**、[リンク](URL)、- リスト等）は使用しないでください。
 ```
 
-### 2. `src/main.py` でシステムプロンプトに追加
+### 2. `src/main.py` で `ChatService` に渡す
 
 ```python
 system_prompt = assistant.get("personality", "")
 slack_format = assistant.get("slack_format_instruction", "")
-if slack_format:
-    system_prompt = system_prompt + "\n\n" + slack_format
+
+chat_service = ChatService(
+    llm=chat_llm,
+    session_factory=session_factory,
+    system_prompt=system_prompt,
+    slack_format_instruction=slack_format,
+    ...
+)
+```
+
+### 3. `src/services/chat.py` でシステムプロンプトの最後に追加
+
+ChatService は RAG コンテキストやツール応答指示の後に mrkdwn 指示を追加することで、
+常に最終段に配置されることを保証する:
+
+```python
+# RAGコンテキスト追加後
+if self._slack_format_instruction:
+    system_content = (
+        system_content + "\n\n" + self._slack_format_instruction
+        if system_content
+        else self._slack_format_instruction
+    )
 ```
 
 ## 受け入れ条件
 
-- [ ] AC1: `config/assistant.yaml` に `slack_format_instruction` が定義されている
-- [ ] AC2: `slack_format_instruction` がシステムプロンプトの末尾に追加される
-- [ ] AC3: `slack_format_instruction` が空の場合、システムプロンプトに影響しない
+- [x] AC1: `config/assistant.yaml` に `slack_format_instruction` が定義されている
+- [x] AC2: `slack_format_instruction` がシステムプロンプトの末尾に追加される（RAGコンテキストの後）
+- [x] AC3: `slack_format_instruction` が空の場合、システムプロンプトに影響しない
 
 ## 関連ファイル
 
