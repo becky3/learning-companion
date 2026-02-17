@@ -64,12 +64,16 @@ class RobotsChecker:
     def _robots_url(url: str) -> str:
         """URLからrobots.txtのURLを生成する."""
         parsed = urlparse(url)
+        if not parsed.scheme or parsed.hostname is None:
+            raise ValueError(f"Invalid URL for robots.txt: {url!r}")
         return f"{parsed.scheme}://{parsed.hostname}{':' + str(parsed.port) if parsed.port else ''}/robots.txt"
 
     @staticmethod
     def _cache_key(url: str) -> str:
         """URLからキャッシュキーを生成する（スキーム+ホスト+ポート）."""
         parsed = urlparse(url)
+        if not parsed.scheme or parsed.hostname is None:
+            raise ValueError(f"Invalid URL for robots.txt cache key: {url!r}")
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
         return f"{parsed.scheme}://{parsed.hostname}:{port}"
 
@@ -90,7 +94,7 @@ class RobotsChecker:
         crawl_delay: float | None = None
 
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with aiohttp.ClientSession(timeout=timeout, headers={"User-Agent": USER_AGENT}) as session:
                 async with session.get(robots_url, allow_redirects=False) as resp:
                     if resp.status == 200:
                         text = await resp.text()
@@ -521,6 +525,7 @@ class WebCrawler:
             async with self._semaphore:
                 async with aiohttp.ClientSession(
                     timeout=self._timeout,
+                    headers={"User-Agent": USER_AGENT},
                 ) as session:
                     # SSRF対策: リダイレクト追従を無効化
                     async with session.get(validated_url, allow_redirects=False) as resp:
@@ -608,9 +613,26 @@ class WebCrawler:
 
             if hostname:
                 # 実効遅延を取得（ホスト単位でキャッシュ）
+                # 競合状態を避けるため、ロック内でチェック＆設定
+                delay: float
+                async with time_lock:
+                    if hostname in effective_delays:
+                        delay = effective_delays[hostname]
+                    else:
+                        # ロックを保持したまま遅延を取得するとデッドロックの恐れがあるため
+                        # ロックを一時解放する必要がある。ダブルチェックロッキングで対応。
+                        pass
+
+                # ロック外で遅延を取得（初回のみ）
                 if hostname not in effective_delays:
-                    effective_delays[hostname] = await self._get_effective_crawl_delay(url)
-                delay = effective_delays[hostname]
+                    delay_value = await self._get_effective_crawl_delay(url)
+                    async with time_lock:
+                        # 他のタスクが設定済みでなければ設定
+                        if hostname not in effective_delays:
+                            effective_delays[hostname] = delay_value
+                        delay = effective_delays[hostname]
+                else:
+                    delay = effective_delays[hostname]
 
                 if delay > 0:
                     async with time_lock:
