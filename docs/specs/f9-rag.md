@@ -669,6 +669,7 @@ class RobotsTxtChecker:
 - ホスト単位でキャッシュ（TTL: `RAG_ROBOTS_TXT_CACHE_TTL`、デフォルト3600秒）
 - robots.txt 取得失敗時はフェイルオープン（クロール許可）
 - User-Agent は `*`（汎用）をデフォルトとする
+- **SSRF対策**: robots.txt 取得時も `WebCrawler` と同様にリダイレクト追従を無効化（`allow_redirects=False`）。リダイレクト応答時はフェイルオープン（クロール許可）
 
 **設定項目**:
 
@@ -1011,7 +1012,7 @@ class Settings(BaseSettings):
 - [ ] **AC72**: robots.txt で Disallow 指定されたパスへのクロールがスキップされること
 - [ ] **AC73**: robots.txt の Crawl-delay が設定値（`RAG_CRAWL_DELAY_SEC`）より長い場合、Crawl-delay の値を採用すること
 - [ ] **AC74**: `RAG_RESPECT_ROBOTS_TXT=false` の場合、robots.txt を無視して従来通りクロールすること
-- [ ] **AC75**: robots.txt の取得に失敗した場合（タイムアウト・404等）、クロールを許可すること（フェイルオープン）
+- [ ] **AC75**: robots.txt の取得に失敗した場合（タイムアウト・404・リダイレクト等）、クロールを許可すること（フェイルオープン）。リダイレクト追従は SSRF 対策のため無効化
 - [ ] **AC76**: robots.txt のキャッシュが機能し、同一ホストへの重複取得を抑制すること
 
 ### デバッグ・可視化

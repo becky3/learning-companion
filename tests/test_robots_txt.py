@@ -41,20 +41,26 @@ Disallow: /
 class MockRobotsResponse:
     """robots.txt 取得用のモックレスポンス."""
 
-    def __init__(self, status: int = 200, body: str = "") -> None:
+    def __init__(self, status: int = 200, body: str = "", headers: dict[str, str] | None = None) -> None:
         self.status = status
         self._body = body
+        self.headers = headers or {}
 
     async def text(self) -> str:
         return self._body
+
+    def get(self, key: str, default: str = "") -> str:
+        """ヘッダー取得（互換性のため）."""
+        return self.headers.get(key, default)
 
 
 class MockRobotsSession:
     """robots.txt 取得用のモックセッション."""
 
-    def __init__(self, status: int = 200, body: str = "") -> None:
+    def __init__(self, status: int = 200, body: str = "", headers: dict[str, str] | None = None) -> None:
         self._status = status
         self._body = body
+        self._headers = headers or {}
 
     async def __aenter__(self) -> "MockRobotsSession":
         return self
@@ -63,18 +69,19 @@ class MockRobotsSession:
         pass
 
     def get(self, url: str, **kwargs: object) -> "MockRobotsContextManager":  # noqa: ARG002
-        return MockRobotsContextManager(self._status, self._body)
+        return MockRobotsContextManager(self._status, self._body, self._headers)
 
 
 class MockRobotsContextManager:
     """robots.txt 取得用のモックコンテキストマネージャ."""
 
-    def __init__(self, status: int, body: str) -> None:
+    def __init__(self, status: int, body: str, headers: dict[str, str] | None = None) -> None:
         self._status = status
         self._body = body
+        self._headers = headers or {}
 
     async def __aenter__(self) -> MockRobotsResponse:
-        return MockRobotsResponse(self._status, self._body)
+        return MockRobotsResponse(self._status, self._body, self._headers)
 
     async def __aexit__(self, *args: object) -> None:
         pass
@@ -250,6 +257,35 @@ class TestRobotsTxtCheckerFailOpen:
         with patch(
             "src.services.robots_txt.aiohttp.ClientSession",
             return_value=mock_session,
+        ):
+            result = await checker.is_allowed("https://example.com/page")
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_ac75_redirect_allows_crawl_ssrf_protection(self) -> None:
+        """AC75: リダイレクト応答時にクロールを許可すること（SSRF対策）."""
+        checker = RobotsTxtChecker()
+
+        # 301 redirect
+        with patch(
+            "src.services.robots_txt.aiohttp.ClientSession",
+            return_value=MockRobotsSession(
+                301, "", {"Location": "http://internal.local/robots.txt"}
+            ),
+        ):
+            result = await checker.is_allowed("https://example.com/page")
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_ac75_302_redirect_allows_crawl(self) -> None:
+        """AC75: 302 リダイレクト時にクロールを許可すること（SSRF対策）."""
+        checker = RobotsTxtChecker()
+
+        with patch(
+            "src.services.robots_txt.aiohttp.ClientSession",
+            return_value=MockRobotsSession(
+                302, "", {"Location": "http://169.254.169.254/latest/meta-data/"}
+            ),
         ):
             result = await checker.is_allowed("https://example.com/page")
             assert result is True

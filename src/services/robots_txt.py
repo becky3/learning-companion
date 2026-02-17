@@ -109,8 +109,17 @@ class RobotsTxtChecker:
 
         try:
             async with aiohttp.ClientSession(timeout=self._timeout) as session:
-                async with session.get(robots_url, allow_redirects=True) as resp:
-                    if resp.status == 200:
+                # SSRF対策: リダイレクト追従を無効化（WebCrawlerと同様）
+                async with session.get(robots_url, allow_redirects=False) as resp:
+                    # リダイレクト応答の場合はフェイルオープン
+                    if resp.status in (301, 302, 303, 307, 308):
+                        logger.debug(
+                            "Redirect detected for robots.txt (SSRF protection, fail-open): %s -> %s",
+                            robots_url,
+                            resp.headers.get("Location", "unknown"),
+                        )
+                        parser.allow_all = True  # type: ignore[attr-defined]
+                    elif resp.status == 200:
                         text = await resp.text()
                         parser.parse(text.splitlines())
                         # Crawl-delay の取得
