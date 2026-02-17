@@ -8,6 +8,7 @@
 #   GH_REPO         — 対象リポジトリ（owner/repo）
 #   EXCLUDE_CHECK   — （任意）CI チェック除外名。自ワークフローの自己参照防止用
 #   FORBIDDEN_DETECTED — （任意）禁止パターン検出結果。"true" の場合マージ拒否
+#   FORBIDDEN_FILES  — （任意）禁止パターン該当ファイル一覧（multiline）。REASONS に含める
 #
 # 出力（$GITHUB_OUTPUT）:
 #   merge_ready     — "true" / "false"
@@ -105,7 +106,14 @@ fi
 # 条件6: 禁止パターンなし（auto-fix は続行させるが、マージのみブロック）
 if [ "${FORBIDDEN_DETECTED:-}" = "true" ]; then
   MERGE_READY=false
-  REASONS="${REASONS}\n- ❌ Forbidden patterns detected (manual merge required)"
+  FILE_LIST=""
+  if [ -n "${FORBIDDEN_FILES:-}" ]; then
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      FILE_LIST="${FILE_LIST}\n  - $f"
+    done <<< "$FORBIDDEN_FILES"
+  fi
+  REASONS="${REASONS}\n- ❌ Forbidden patterns detected (manual merge required)${FILE_LIST}"
   echo "❌ Condition 6: Forbidden patterns detected"
 else
   echo "✅ Condition 6: No forbidden patterns"

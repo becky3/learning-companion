@@ -360,6 +360,7 @@ jobs:
           PR_NUMBER: ${{ steps.pr-info.outputs.number }}
           EXCLUDE_CHECK: "copilot-auto-fix"
           FORBIDDEN_DETECTED: ${{ steps.forbidden-check.outputs.forbidden }}
+          FORBIDDEN_FILES: ${{ steps.forbidden-check.outputs.forbidden_files }}
 
       - name: Merge or dry-run
         if: steps.merge-check.outputs.merge_ready == 'true'
