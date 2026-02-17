@@ -116,7 +116,7 @@ REPO=$(gh repo view --json name --jq '.name' 2>&1) || {
 
 # 未解決スレッドIDの取得
 THREADS=""
-QUERY_SUCCESS=true
+QUERY_SUCCESS=false
 if THREADS=$(gh api graphql -f query="
 {
   repository(owner: \"$OWNER\", name: \"$REPO\") {
@@ -130,9 +130,8 @@ if THREADS=$(gh api graphql -f query="
     }
   }
 }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' 2>&1); then
-  : # クエリ成功
+  QUERY_SUCCESS=true
 else
-  QUERY_SUCCESS=false
   # GraphQLエラー形式を確認してからフォールバック
   if echo "$THREADS" | jq -e '.errors' > /dev/null 2>&1; then
     ERROR_TYPE=$(echo "$THREADS" | jq -r '.errors[0].type // "UNKNOWN"')
