@@ -38,21 +38,9 @@ while IFS= read -r file; do
     continue
   fi
 
-  # pyproject.toml の dependencies 変更検出
-  # gh pr diff はファイル指定不可のため、全 diff を取得して pyproject.toml セクションを抽出
+  # pyproject.toml（依存関係・ツール設定を含むため、全変更を禁止）
   if [ "$file" = "pyproject.toml" ]; then
-    if ! FULL_DIFF=$(gh pr diff "$PR_NUMBER" 2>&1); then
-      echo "::error::Failed to get PR diff: $FULL_DIFF"
-      # 安全側に倒す: diff取得失敗時は依存関係変更ありと見なす
-      FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (diff取得失敗のため要手動確認)\n"
-      continue
-    fi
-    # pyproject.toml の diff セクションを抽出（b/ パスでマッチし、リネームケースも検出）
-    PYPROJECT_DIFF=$(echo "$FULL_DIFF" | sed -n '/^diff --git [^ ]* b\/pyproject\.toml/,/^diff --git/{/^diff --git [^ ]* b\/pyproject\.toml/p;/^diff --git [^ ]* b\/pyproject\.toml/!{/^diff --git/!p}}')
-    # 追加行・削除行の両方を対象にする（セクションヘッダと代入のみ検出、コメント等の誤検知を防止）
-    if echo "$PYPROJECT_DIFF" | grep -qE '^[+-]\s*(dependencies\s*=|\[project\.dependencies\]|\[dependency-groups\])'; then
-      FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (dependencies変更)\n"
-    fi
+    FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (依存パッケージ・ツール設定変更)\n"
     continue
   fi
 
