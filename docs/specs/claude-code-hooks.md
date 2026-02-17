@@ -27,6 +27,10 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
   "hooks": {
     "PreToolUse": [
       {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "./.claude/scripts/destructive-command-guard.sh" }]
+      },
+      {
         "matcher": "Edit",
         "hooks": [{ "type": "command", "command": "./.claude/scripts/leader-guard.sh" }]
       },
@@ -223,6 +227,14 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 - `permissions.allow` からの除外は、メンバーにも影響するため見送り
 - 関連仕様: [agent-teams.md](agent-teams.md)（リーダー管理専任ルール）
 
+**Phase 2.4 (破壊コマンドガード)** — 完了:
+
+- `PreToolUse` フック追加（Bash ツール用）
+- `.claude/scripts/destructive-command-guard.sh` で `gh * delete` 系コマンドを検出してブロック
+- 対象: `gh issue delete`, `gh repo delete`, `gh release delete`, `gh label delete`
+- 背景: Issue #444 がローカルセッションから誤削除された疑い (2026-02-17)
+- GA 環境では Fine-grained PAT の権限制約により Issue 削除は不可のため、ローカル環境の防御が主目的
+
 **Phase 3 (最適化)** — 未実装:
 
 - 通知のカスタマイズ設定
@@ -237,6 +249,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 | `.claude/scripts/notify.sh` | クロスプラットフォーム対応の通知スクリプト |
 | `.claude/scripts/precompact_rule.sh` | PreCompact フック用ルール出力スクリプト |
 | `.claude/scripts/leader-guard.sh` | リーダー管理専任ルールのPreToolUseフックスクリプト |
+| `.claude/scripts/destructive-command-guard.sh` | 破壊コマンド（`gh * delete`）のPreToolUseブロックスクリプト |
 
 ## 参考資料
 

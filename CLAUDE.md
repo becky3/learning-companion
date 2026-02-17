@@ -341,11 +341,15 @@ commitが成功していない状態でpushしないこと。
 
 ### Hooks
 
-プロジェクトには Claude Code の hooks 機能を使った通知システムが設定されています。
+プロジェクトには Claude Code の hooks 機能を使った通知・ガードシステムが設定されています。
 
 - **仕様**: `docs/specs/claude-code-hooks.md`
 - **設定ファイル**: `.claude/settings.json`
 - **通知スクリプト**: `.claude/scripts/notify.sh`
+- **破壊コマンドガード**: `.claude/scripts/destructive-command-guard.sh`
+  - PreToolUse フック（Bash）で `gh issue delete` / `gh repo delete` / `gh release delete` / `gh label delete` をブロック
+  - 取り消し不能な破壊コマンドの誤実行を防止（Issue #444 消失を受けた再発防止策）
+  - 本当に実行が必要な場合はターミナルから直接実行する
 
 **Windows環境での注意点**:
 
