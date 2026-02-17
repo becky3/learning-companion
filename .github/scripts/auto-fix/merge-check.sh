@@ -8,6 +8,7 @@
 #   GH_REPO         — 対象リポジトリ（owner/repo）
 #   EXCLUDE_CHECK   — （任意）CI チェック除外名。自ワークフローの自己参照防止用
 #   FORBIDDEN_DETECTED — （任意）禁止パターン検出結果。"true" の場合マージ拒否
+#   FORBIDDEN_FILES  — （任意）禁止パターン該当ファイル一覧（multiline）。REASONS に含める
 #
 # 出力（$GITHUB_OUTPUT）:
 #   merge_ready     — "true" / "false"
