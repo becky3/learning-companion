@@ -194,37 +194,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
 
-      # --- 禁止パターンチェック ---
-      - name: Check forbidden patterns
-        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true'
-        id: forbidden-check
-        run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/check-forbidden.sh"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.pr-info.outputs.number }}
-
-      - name: Handle forbidden patterns
-        if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true' && steps.forbidden-check.outputs.forbidden == 'true'
-        run: |
-          source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
-          PR_NUMBER="${{ steps.pr-info.outputs.number }}"
-
-          gh_comment "$PR_NUMBER" "## copilot-auto-fix: 禁止パターン検出（自動修正は続行）
-
-          以下のファイルが変更に含まれているため、**自動マージは行いません**:
-
-          \`\`\`
-          ${{ steps.forbidden-check.outputs.forbidden_files }}
-          \`\`\`
-
-          レビュー指摘の自動修正は続行します。修正完了後、管理者が手動でレビュー・マージしてください。
-
-          [Actions ログ](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-
       # --- unresolved threads カウント ---
       - name: Check review result
         if: steps.preconditions.outputs.skip != 'true' && steps.copilot-wait.outputs.copilot_reviewed == 'true'
@@ -356,11 +325,11 @@ jobs:
 
       # --- マージ判定 ---
       # 条件: (Copilot検知済み) AND (指摘なし OR 修正完了)
-      # 禁止パターンは merge-check.sh 内で条件6としてチェック（auto-fix は続行させるため）
+      # 禁止パターンはマージ直前にチェックし、merge-check.sh 内で条件6として判定
       # 品質チェック（pytest/ruff/mypy/markdownlint）はエージェント内テストで担保済み（外部CIワークフロー不使用）
 
-      # 禁止パターン再チェック（auto-fix が禁止ファイルの変更を消した可能性があるため、マージ直前に再判定）
-      - name: Re-check forbidden patterns
+      # 禁止パターンチェック（マージ直前に実施。auto-fix が禁止ファイルの変更を消した可能性があるため）
+      - name: Check forbidden patterns
         if: |
           steps.preconditions.outputs.skip != 'true'
           && steps.copilot-wait.outputs.copilot_reviewed == 'true'
@@ -368,7 +337,7 @@ jobs:
             steps.review-result.outputs.has_issues != 'true'
             || steps.recount.outputs.has_issues != 'true'
           )
-        id: forbidden-recheck
+        id: forbidden-check
         run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/check-forbidden.sh"
         env:
           GH_TOKEN: ${{ github.token }}
@@ -390,7 +359,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.pr-info.outputs.number }}
           EXCLUDE_CHECK: "copilot-auto-fix"
-          FORBIDDEN_DETECTED: ${{ steps.forbidden-recheck.outputs.forbidden }}
+          FORBIDDEN_DETECTED: ${{ steps.forbidden-check.outputs.forbidden }}
 
       - name: Merge or dry-run
         if: steps.merge-check.outputs.merge_ready == 'true'
