@@ -118,6 +118,8 @@ async def main() -> None:
             web_crawler = WebCrawler(
                 max_pages=settings.rag_max_crawl_pages,
                 crawl_delay=settings.rag_crawl_delay_sec,
+                respect_robots_txt=settings.rag_respect_robots_txt,
+                robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
             )
             # Safe Browsing クライアント（URL安全性チェック）
             safe_browsing_client = create_safe_browsing_client(settings)
