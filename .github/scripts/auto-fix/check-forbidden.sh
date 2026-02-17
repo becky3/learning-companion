@@ -40,7 +40,7 @@ while IFS= read -r file; do
 
   # pyproject.toml（依存関係・ツール設定を含むため、全変更を禁止）
   if [ "$file" = "pyproject.toml" ]; then
-    FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file}\n"
+    FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (依存パッケージ・ツール設定変更)\n"
     continue
   fi
 
