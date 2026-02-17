@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Merge check — マージ条件5項目（PR状態・レビュー・CI・コンフリクト・ラベル）のチェック
+# Merge check — マージ条件6項目（PR状態・レビュー・CI・コンフリクト・ラベル・禁止パターン）のチェック
 #
 # 入力（環境変数）:
 #   PR_NUMBER       — 対象PR番号
@@ -7,6 +7,7 @@
 #   GH_TOKEN        — GitHub トークン（env経由で gh CLI が自動参照）
 #   GH_REPO         — 対象リポジトリ（owner/repo）
 #   EXCLUDE_CHECK   — （任意）CI チェック除外名。自ワークフローの自己参照防止用
+#   FORBIDDEN_DETECTED — （任意）禁止パターン検出結果。"true" の場合マージ拒否
 #
 # 出力（$GITHUB_OUTPUT）:
 #   merge_ready     — "true" / "false"
@@ -99,6 +100,15 @@ elif echo "$LABELS" | grep -q "^auto:failed$"; then
   echo "❌ Condition 5: auto:failed label found"
 else
   echo "✅ Condition 5: No auto:failed label"
+fi
+
+# 条件6: 禁止パターンなし（auto-fix は続行させるが、マージのみブロック）
+if [ "${FORBIDDEN_DETECTED:-}" = "true" ]; then
+  MERGE_READY=false
+  REASONS="${REASONS}\n- ❌ Forbidden patterns detected (manual merge required)"
+  echo "❌ Condition 6: Forbidden patterns detected"
+else
+  echo "✅ Condition 6: No forbidden patterns"
 fi
 
 echo "merge_ready=$MERGE_READY" >> "$GITHUB_OUTPUT"

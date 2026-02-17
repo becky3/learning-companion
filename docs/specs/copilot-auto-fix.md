@@ -76,10 +76,11 @@ flowchart TD
     B2 -->|タイムアウト| I2[auto:failed 付与]
     B2 -->|検知| B3[auto:copilot-reviewed<br/>ラベル付与 ステータスマーカー]
     B3 --> H[禁止パターンチェック]
-    H -->|検出| I[auto:failed 付与]
+    H -->|検出| H2[PRコメントで通知<br/>auto-fix は続行]
+    H2 --> J
     H -->|なし| J[unresolved threads カウント<br/>GraphQL API]
     J --> K{unresolved == 0?}
-    K -->|Yes| L{マージ判定<br/>5条件チェック}
+    K -->|Yes| L{マージ判定<br/>6条件チェック}
     K -->|No| M[claude-code-action<br/>で自動修正]
     M --> M2[テスト実行<br/>失敗時は再修正]
     M2 --> M3[commit & push]
@@ -92,7 +93,7 @@ flowchart TD
     L -->|条件未達| P
 
     style O fill:#0d0,color:#fff
-    style I fill:#d00,color:#fff
+    style H2 fill:#f90,color:#fff
     style I2 fill:#d00,color:#fff
     style P fill:#d00,color:#fff
     style Z fill:#999,color:#fff
@@ -229,7 +230,7 @@ Copilot のレビューは guaranteed delivery ではない。サービス障害
 
 ### 3. 禁止パターンチェック
 
-既存 `check-forbidden.sh` を流用。禁止パターン検出時は `auto:failed` 付与 + PRコメント。
+既存 `check-forbidden.sh` を流用。禁止パターン検出時はPRコメントで通知するが、後続の自動修正（auto-fix）は続行する。マージ判定（条件6）でブロックし、手動マージを要求する。
 
 ### 4. unresolved threads カウント
 
@@ -241,19 +242,20 @@ Copilot のレビューは guaranteed delivery ではない。サービス障害
 
 | 条件 | アクション |
 |------|----------|
-| 禁止パターン検出 | `auto:failed` 付与 + PRコメントで通知 |
+| 禁止パターン検出 | PRコメントで通知（auto-fix は続行、マージ判定でブロック） |
 | unresolved == 0 | マージ判定へ |
 | unresolved > 0 | `claude-code-action` で `/check-pr` を実行し自動修正（テスト → 失敗時は再修正のループ） → commit & push → 判断済みスレッド（✅❌⏸️）を resolve → unresolved threads を再カウント（残存指摘の確認） → マージ判定へ |
 
 ### 6. マージ判定
 
-既存 `merge-check.sh` を流用。5条件を全て確認:
+既存 `merge-check.sh` を流用。6条件を全て確認:
 
 1. PR が OPEN 状態であること（既にマージ済みの場合はスキップ）
 2. レビュー指摘ゼロ（unresolved threads == 0）
 3. ステータスチェック通過（`statusCheckRollup` で確認。外部 CI 未設定時は自動 PASS。`EXCLUDE_CHECK` で自ワークフローを除外）
 4. コンフリクトなし
 5. `auto:failed` ラベルなし
+6. 禁止パターンなし（`FORBIDDEN_DETECTED` 環境変数で判定。auto-fix は続行させつつマージのみブロック）
 
 ### 7. 自動マージ
 
@@ -300,7 +302,7 @@ Copilot のレビューは guaranteed delivery ではない。サービス障害
 | `_common.sh` | `.github/scripts/auto-fix/` | 共通ユーティリティ | なし |
 | `check-review-result.sh` | `.github/scripts/auto-fix/` | unresolved threads カウント | なし |
 | `check-forbidden.sh` | `.github/scripts/auto-fix/` | 禁止パターンチェック | なし |
-| `merge-check.sh` | `.github/scripts/auto-fix/` | マージ5条件チェック | なし |
+| `merge-check.sh` | `.github/scripts/auto-fix/` | マージ6条件チェック | **あり**: 条件6（禁止パターン `FORBIDDEN_DETECTED` 環境変数チェック）の追加 |
 | `merge-or-dryrun.sh` | `.github/scripts/auto-fix/` | マージ実行 / ドライラン | なし |
 | `handle-errors.sh` | `.github/scripts/auto-fix/` | エラー時の auto:failed 付与 | **あり**: エラーメッセージ内の再開手順を修正（「`workflow_dispatch` で再実行」に変更） |
 
@@ -390,7 +392,7 @@ Copilot のレビューは guaranteed delivery ではない。サービス障害
 
 ### 安全ガード
 
-- [ ] AC16: 禁止パターン検出時に `auto:failed` が付与される
+- [ ] AC16: 禁止パターン検出時に自動修正は続行され、マージ判定（条件6）でブロックされる
 
 ### 廃止
 
