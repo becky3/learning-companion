@@ -31,10 +31,9 @@ Claude Code のシステムプロンプトに `You have a persistent auto memory
 
 `$MEMORY_DIR/journal/` ディレクトリから、ファイル名のソート順で最新のN件（デフォルト1件）を取得して読む。
 
-```bash
-# 最新1件のファイル名を取得（ファイル名ソート降順で先頭）
-ls -1 "$MEMORY_DIR/journal/" | sort -r | head -n ${N:-1}
-```
+**件数の決定**: `$ARGUMENTS` が数値ならその値、未指定または非数値なら1件をデフォルトとする。
+
+**取得方法**: Glob ツールで `journal/*.md` を取得し、ファイル名降順で先頭N件を Read ツールで読む。`journal/` ディレクトリが存在しない場合はエラーハンドリングに従う。
 
 ### ステップ3: ユーザーへの報告
 
