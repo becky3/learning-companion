@@ -75,12 +75,9 @@ flowchart TD
     B1 --> B2{Copilot レビュー<br/>検知?}
     B2 -->|タイムアウト| I2[auto:failed 付与]
     B2 -->|検知| B3[auto:copilot-reviewed<br/>ラベル付与 ステータスマーカー]
-    B3 --> H[禁止パターンチェック]
-    H -->|検出| H2[PRコメントで通知<br/>auto-fix は続行]
-    H2 --> J
-    H -->|なし| J[unresolved threads カウント<br/>GraphQL API]
+    B3 --> J[unresolved threads カウント<br/>GraphQL API]
     J --> K{unresolved == 0?}
-    K -->|Yes| L0[禁止パターン再チェック<br/>マージ直前に再判定]
+    K -->|Yes| L0[禁止パターンチェック<br/>マージ直前に実施]
     L0 --> L{マージ判定<br/>6条件チェック}
     K -->|No| M[claude-code-action<br/>で自動修正]
     M --> M2[テスト実行<br/>失敗時は再修正]
@@ -94,7 +91,6 @@ flowchart TD
     L -->|条件未達| P
 
     style O fill:#0d0,color:#fff
-    style H2 fill:#f90,color:#fff
     style I2 fill:#d00,color:#fff
     style P fill:#d00,color:#fff
     style Z fill:#999,color:#fff
@@ -229,26 +225,24 @@ Copilot のレビューは guaranteed delivery ではない。サービス障害
 
 **検知後**: `auto:copilot-reviewed` ラベルをステータスマーカーとして付与（`GITHUB_TOKEN` で付与。ワークフロートリガーではないため PAT 不要）。
 
-### 3. 禁止パターンチェック
-
-既存 `check-forbidden.sh` を流用。禁止パターンチェックは2回実行される:
-
-1. **早期チェック（通知用）**: Copilot レビュー検知後に実行。検出時はPRコメントで通知するが、後続の自動修正（auto-fix）は続行する
-2. **マージ直前の再チェック（判定用）**: auto-fix が禁止ファイルの変更を消す可能性があるため、マージ判定前に再実行し、fresh な結果で条件6を判定する
-
-### 4. unresolved threads カウント
+### 3. unresolved threads カウント
 
 既存 `check-review-result.sh` を流用。GraphQL API で PR の reviewThreads を取得し、`isResolved == false` のスレッド数をカウント。
 
 **前提条件（PR #352 で検証済み）**: Copilot のインラインレビューコメントは GitHub の `reviewThreads.nodes` に含まれ、`isResolved` フラグで管理される。Copilot が PR 全体への general comment のみ投稿するケースでは `reviewThreads` にカウントされないが、Copilot のコード指摘はインラインコメントとして投稿されることを確認済み。
 
-### 5. 分岐処理
+### 4. 分岐処理
 
 | 条件 | アクション |
 |------|----------|
-| 禁止パターン検出 | PRコメントで通知（auto-fix は続行、マージ判定でブロック） |
-| unresolved == 0 | マージ判定へ |
-| unresolved > 0 | `claude-code-action` で `/check-pr` を実行し自動修正（テスト → 失敗時は再修正のループ） → commit & push → 判断済みスレッド（✅❌⏸️）を resolve → unresolved threads を再カウント（残存指摘の確認） → マージ判定へ |
+| unresolved == 0 | 禁止パターンチェック → マージ判定へ |
+| unresolved > 0 | `claude-code-action` で `/check-pr` を実行し自動修正（テスト → 失敗時は再修正のループ） → commit & push → 判断済みスレッド（✅❌⏸️）を resolve → unresolved threads を再カウント（残存指摘の確認） → 禁止パターンチェック → マージ判定へ |
+
+### 5. 禁止パターンチェック
+
+既存 `check-forbidden.sh` を流用。マージ判定の直前に1回だけ実行する。
+
+auto-fix が禁止ファイルの変更を取り消す可能性があるため、チェックはマージ直前に行い、fresh な結果で条件6を判定する。検出時はマージ条件未達として `auto:failed` で停止する。
 
 ### 6. マージ判定
 
