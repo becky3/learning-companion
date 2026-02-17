@@ -132,7 +132,6 @@ if THREADS=$(gh api graphql -f query="
 }" --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false) | .id' 2>&1); then
   QUERY_SUCCESS=true
 else
-  QUERY_SUCCESS=false
   # GraphQLエラー形式を確認してからフォールバック
   if echo "$THREADS" | jq -e '.errors' > /dev/null 2>&1; then
     ERROR_TYPE=$(echo "$THREADS" | jq -r '.errors[0].type // "UNKNOWN"')
