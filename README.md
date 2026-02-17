@@ -23,7 +23,7 @@ RSS記事の自動収集・要約配信、チャットでの質問応答、ユ�
 
 ## 技術スタック
 
-Python 3.11+ / uv / slack-bolt / OpenAI SDK / Anthropic SDK / SQLite + SQLAlchemy / APScheduler / feedparser / MCP SDK / ChromaDB / BeautifulSoup4
+Python 3.11+ / uv / slack-bolt / OpenAI SDK / Anthropic SDK / SQLite + SQLAlchemy / feedparser / MCP SDK / ChromaDB / BeautifulSoup4
 
 ## セットアップ
 
@@ -101,7 +101,7 @@ src/
   services/ogp_extractor.py   # OGPメタデータ抽出
   services/safe_browsing.py   # Google Safe Browsing API
   services/thread_history.py  # Slackスレッド履歴取得
-  scheduler/jobs.py  # APScheduler 毎朝の収集・配信ジョブ
+  scheduler/jobs.py  # 配信ジョブ・フォーマット
 mcp-servers/                 # MCPサーバー群（将来リポジトリ分離対象）
   weather/
     server.py          # 天気予報MCPサーバー（気象庁API）
