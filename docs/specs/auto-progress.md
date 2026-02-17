@@ -470,7 +470,7 @@ Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 
 | パターン | 理由 |
 |---------|------|
 | `.env*` | 環境変数・シークレット |
-| `pyproject.toml` の dependencies | 依存パッケージ変更 |
+| `pyproject.toml` | 依存パッケージ・ツール設定 |
 
 **注記**: `.github/workflows/*` は禁止パターンに含まない。自動マージパイプライン（`copilot-auto-fix.yml`）は `auto/` ブランチの develop 向け PR のみを処理するため、ワークフロー変更が main に直接自動マージされることはない。main への反映はリリースPR（develop → main）で管理者が手動レビュー・マージする。
 
