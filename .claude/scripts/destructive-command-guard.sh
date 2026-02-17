@@ -20,11 +20,11 @@ fi
 
 # tool_input.command を抽出（jq 優先、なければ python3 フォールバック）
 if command -v jq > /dev/null 2>&1; then
-  COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  COMMAND=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
 elif command -v python3 > /dev/null 2>&1; then
-  COMMAND=$(echo "$INPUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)
+  COMMAND=$(printf '%s' "$INPUT" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)
 elif command -v python > /dev/null 2>&1; then
-  COMMAND=$(echo "$INPUT" | python -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)
+  COMMAND=$(printf '%s' "$INPUT" | python -c 'import sys,json; d=json.load(sys.stdin); print(d.get("tool_input",{}).get("command",""))' 2>/dev/null)
 else
   # jq も python もない環境では fail-open
   exit 0
