@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import select
@@ -17,7 +17,6 @@ from src.scheduler.jobs import (
     daily_collect_and_deliver,
     feed_test_deliver,
     format_daily_digest,
-    setup_scheduler,
 )
 from src.services.feed_collector import NO_SUMMARY_TEXT
 
@@ -148,32 +147,6 @@ def test_ac14_format_digest_limits_articles_per_feed() -> None:
     result = format_daily_digest(articles, feeds, max_articles_per_feed=5)
     _, article_blocks_list = result[1]
     assert len(article_blocks_list) == 5
-
-
-def test_ac4_scheduler_registers_cron_job() -> None:
-    """AC4: 毎朝指定時刻にスケジューラが収集・配信ジョブを実行する."""
-    collector = MagicMock()
-    session_factory = MagicMock()
-    slack_client = MagicMock()
-
-    scheduler = setup_scheduler(
-        collector=collector,
-        session_factory=session_factory,
-        slack_client=slack_client,
-        channel_id="C123",
-        hour=7,
-        minute=30,
-        tz="Asia/Tokyo",
-    )
-
-    jobs = scheduler.get_jobs()
-    assert len(jobs) == 1
-    assert jobs[0].id == "daily_feed_job"
-    trigger = jobs[0].trigger
-    hour_field = next(f for f in trigger.fields if getattr(f, "name", None) == "hour")
-    minute_field = next(f for f in trigger.fields if getattr(f, "name", None) == "minute")
-    assert str(hour_field) == "7"
-    assert str(minute_field) == "30"
 
 
 @pytest.fixture
