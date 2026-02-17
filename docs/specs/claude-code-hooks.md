@@ -234,6 +234,7 @@ Claude Code の hooks 機能を使用して、ツール実行時やタスク完�
 - 対象: `gh issue delete`, `gh repo delete`, `gh release delete`, `gh label delete`
 - 背景: Issue #444 がローカルセッションから誤削除された疑い (2026-02-17)
 - GA 環境では Fine-grained PAT の権限制約により Issue 削除は不可のため、ローカル環境の防御が主目的
+- 注意: `permissions.allow` の自動許可が `PreToolUse` の deny を上書きするケースが報告されている（#258）。現状 `Bash(gh *)` を allow しているが、テストでブロック動作を確認済み。環境・バージョン差でガードが効かない場合は `Bash(gh *)` の allow を見直す
 
 **Phase 3 (最適化)** — 未実装:
 
