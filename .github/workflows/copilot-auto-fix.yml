@@ -359,6 +359,22 @@ jobs:
       # 禁止パターンは merge-check.sh 内で条件6としてチェック（auto-fix は続行させるため）
       # 品質チェック（pytest/ruff/mypy/markdownlint）はエージェント内テストで担保済み（外部CIワークフロー不使用）
 
+      # 禁止パターン再チェック（auto-fix が禁止ファイルの変更を消した可能性があるため、マージ直前に再判定）
+      - name: Re-check forbidden patterns
+        if: |
+          steps.preconditions.outputs.skip != 'true'
+          && steps.copilot-wait.outputs.copilot_reviewed == 'true'
+          && (
+            steps.review-result.outputs.has_issues != 'true'
+            || steps.recount.outputs.has_issues != 'true'
+          )
+        id: forbidden-recheck
+        run: bash "$GITHUB_WORKSPACE/.github/scripts/auto-fix/check-forbidden.sh"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr-info.outputs.number }}
+
       - name: Merge check
         if: |
           steps.preconditions.outputs.skip != 'true'
@@ -374,7 +390,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.pr-info.outputs.number }}
           EXCLUDE_CHECK: "copilot-auto-fix"
-          FORBIDDEN_DETECTED: ${{ steps.forbidden-check.outputs.forbidden }}
+          FORBIDDEN_DETECTED: ${{ steps.forbidden-recheck.outputs.forbidden }}
 
       - name: Merge or dry-run
         if: steps.merge-check.outputs.merge_ready == 'true'

@@ -14,6 +14,8 @@
 # エラー方針: ファイル一覧取得失敗 → exit 1（セキュリティ処理のため安全側）
 
 set -euo pipefail
+# 動的パス解決のため静的解析不可
+# shellcheck disable=SC1091
 source "$(dirname "$0")/_common.sh"
 
 require_env PR_NUMBER GITHUB_OUTPUT
@@ -37,15 +39,18 @@ while IFS= read -r file; do
   fi
 
   # pyproject.toml の dependencies 変更検出
+  # gh pr diff はファイル指定不可のため、全 diff を取得して pyproject.toml セクションを抽出
   if [ "$file" = "pyproject.toml" ]; then
-    if ! DIFF=$(gh pr diff "$PR_NUMBER" -- "$file" 2>&1); then
-      echo "::error::Failed to get diff for pyproject.toml: $DIFF"
+    if ! FULL_DIFF=$(gh pr diff "$PR_NUMBER" 2>&1); then
+      echo "::error::Failed to get PR diff: $FULL_DIFF"
       # 安全側に倒す: diff取得失敗時は依存関係変更ありと見なす
       FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (diff取得失敗のため要手動確認)\n"
       continue
     fi
+    # pyproject.toml の diff セクションを抽出（b/ パスでマッチし、リネームケースも検出）
+    PYPROJECT_DIFF=$(echo "$FULL_DIFF" | sed -n '/^diff --git [^ ]* b\/pyproject\.toml/,/^diff --git/{/^diff --git [^ ]* b\/pyproject\.toml/p;/^diff --git [^ ]* b\/pyproject\.toml/!{/^diff --git/!p}}')
     # 追加行・削除行の両方を対象にする（セクションヘッダと代入のみ検出、コメント等の誤検知を防止）
-    if echo "$DIFF" | grep -qE '^[+-]\s*(dependencies\s*=|\[project\.dependencies\]|\[dependency-groups\])'; then
+    if echo "$PYPROJECT_DIFF" | grep -qE '^[+-]\s*(dependencies\s*=|\[project\.dependencies\]|\[dependency-groups\])'; then
       FORBIDDEN_FOUND="${FORBIDDEN_FOUND}${file} (dependencies変更)\n"
     fi
     continue

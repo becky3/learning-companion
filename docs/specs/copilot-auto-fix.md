@@ -80,14 +80,15 @@ flowchart TD
     H2 --> J
     H -->|なし| J[unresolved threads カウント<br/>GraphQL API]
     J --> K{unresolved == 0?}
-    K -->|Yes| L{マージ判定<br/>6条件チェック}
+    K -->|Yes| L0[禁止パターン再チェック<br/>マージ直前に再判定]
+    L0 --> L{マージ判定<br/>6条件チェック}
     K -->|No| M[claude-code-action<br/>で自動修正]
     M --> M2[テスト実行<br/>失敗時は再修正]
     M2 --> M3[commit & push]
     M3 --> N[判断済みスレッド resolve]
     N --> N2{unresolved<br/>再カウント}
     N2 -->|残存あり| P[auto:failed 付与]
-    N2 -->|0| L
+    N2 -->|0| L0
     L -->|条件クリア| L2[auto:merged ラベル付与]
     L2 --> O[自動マージ → develop]
     L -->|条件未達| P
@@ -230,7 +231,10 @@ Copilot のレビューは guaranteed delivery ではない。サービス障害
 
 ### 3. 禁止パターンチェック
 
-既存 `check-forbidden.sh` を流用。禁止パターン検出時はPRコメントで通知するが、後続の自動修正（auto-fix）は続行する。マージ判定（条件6）でブロックし、手動マージを要求する。
+既存 `check-forbidden.sh` を流用。禁止パターンチェックは2回実行される:
+
+1. **早期チェック（通知用）**: Copilot レビュー検知後に実行。検出時はPRコメントで通知するが、後続の自動修正（auto-fix）は続行する
+2. **マージ直前の再チェック（判定用）**: auto-fix が禁止ファイルの変更を消す可能性があるため、マージ判定前に再実行し、fresh な結果で条件6を判定する
 
 ### 4. unresolved threads カウント
 
