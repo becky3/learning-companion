@@ -22,13 +22,12 @@ argument-hint: "[番号]"
 ### A. トピック候補表示（引数なし）
 
 1. **抽出対象のスキャン**
-   - `$MEMORY_DIR/journal/*.md` — ジャーナル（primary）
-   - `docs/retro/*.md` — レトロスペクティブ（歴史的資料）
+   - `$MEMORY_DIR/journal/*.md` — ジャーナル（primary、レトロ変換ファイル含む）
    - `~/.claude/projects/*/memory/MEMORY.md` — Claude Code開発知見
 
 2. **トピック抽出ルール**
    - ジャーナル形式: `- **気づき**:` / `- **判断**:` / `- **教訓**:` を検出しトピック候補として抽出
-   - レトロ形式（歴史的資料用）: `## 改善点` `## ハマったこと` セクションを検出し、配下の `###` 見出しをトピック候補として抽出
+   - レトロ形式（`retro-` プレフィックス付きジャーナルファイル用）: `## 改善点` `## ハマったこと` セクションを検出し、配下の `###` 見出しをトピック候補として抽出
    - 「教訓」「対応」キーワードがあれば優先度UP
    - **自動除外はしない**（過去に記事化したトピックも候補に表示）
 
@@ -39,7 +38,7 @@ argument-hint: "[番号]"
 
    1. [★★] RSS 1.0形式での日付取得失敗（memory/journal/20260215-xxx.md）
    2. [★★] skip-summary実装時のコード重複（memory/journal/20260214-xxx.md）
-   3. [★] Bot重複起動問題（docs/retro/f2.md#6）
+   3. [★] Bot重複起動問題（memory/journal/20260208-072735-retro-f2-feed-collection.md#6）
    ...
 
    👉 記事化するには: /topic <番号>
@@ -127,7 +126,7 @@ published: false
 例:
 
 - ジャーナル: `memory/journal/20260217-xxx.md`
-- レトロ（歴史的資料）: `docs/retro/f2.md#3`（f2.md の3番目の `###` 見出し）
+- レトロ変換ファイル: `memory/journal/20260208-072735-retro-f2-feed-collection.md#3`（3番目の `###` 見出し）
 
 ## エラーハンドリング
 

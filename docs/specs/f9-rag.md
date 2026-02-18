@@ -1121,7 +1121,7 @@ class Settings(BaseSettings):
 ## 関連ドキュメント
 
 - ガイド: [docs/guides/rag-overview.md](../guides/rag-overview.md) — RAGシステムの概要（初心者向け）
-- レトロ: [docs/retro/f9-rag.md](../retro/f9-rag.md)
+- ジャーナル（レトロ変換）: `memory/journal/20260217-062709-retro-f9-rag.md`
 
 ## 変更履歴
 
