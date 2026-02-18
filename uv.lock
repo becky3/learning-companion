@@ -15,6 +15,7 @@ dependencies = [
     { name = "aiosqlite" },
     { name = "anthropic" },
     { name = "beautifulsoup4" },
+    { name = "bm25s" },
     { name = "certifi" },
     { name = "charset-normalizer" },
     { name = "chromadb" },
@@ -26,7 +27,6 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "rank-bm25" },
     { name = "slack-bolt" },
     { name = "sqlalchemy" },
     { name = "tzdata" },
@@ -59,6 +59,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20,<1" },
     { name = "anthropic", specifier = ">=0.18,<1" },
     { name = "beautifulsoup4", specifier = ">=4.12,<5" },
+    { name = "bm25s", specifier = ">=0.3,<1" },
     { name = "certifi", specifier = ">=2026.1.4" },
     { name = "charset-normalizer", specifier = ">=3.0,<4" },
     { name = "chromadb", specifier = ">=0.5,<1" },
@@ -74,7 +75,6 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0,<6" },
     { name = "python-dotenv", specifier = ">=1.0,<2" },
     { name = "pyyaml", specifier = ">=6.0,<7" },
-    { name = "rank-bm25", specifier = ">=0.2,<1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.2" },
     { name = "shellcheck-py", marker = "extra == 'dev'", specifier = ">=0.10" },
     { name = "slack-bolt", specifier = ">=1.18,<2" },
@@ -385,6 +385,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c3/b0/1c6a16426d389813b48d95e26898aff79abbde42ad353958ad95cc8c9b21/beautifulsoup4-4.14.3.tar.gz", hash = "sha256:6292b1c5186d356bba669ef9f7f051757099565ad9ada5dd630bd9de5fa7fb86", size = 627737, upload-time = "2025-11-30T15:08:26.084Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1a/39/47f9197bdd44df24d67ac8893641e16f386c984a0619ef2ee4c51fbbc019/beautifulsoup4-4.14.3-py3-none-any.whl", hash = "sha256:0918bfe44902e6ad8d57732ba310582e98da931428d231a5ecb9e7c703a735bb", size = 107721, upload-time = "2025-11-30T15:08:24.087Z" },
+]
+
+[[package]]
+name = "bm25s"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/90/30/0a3f0772101750613ad4662ceb599fee007d2027e52ac917b7eedec6649b/bm25s-0.3.0.tar.gz", hash = "sha256:591aa454d03763bdbc89961823f03fde0016467ceb5a1438363ef1ec3f0a09c9", size = 73998, upload-time = "2026-02-17T19:38:57.214Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0e/90/bc786debc06d7dce2f8385fbe7f8da8c52ca9b7a1f72516a11888c1af150/bm25s-0.3.0-py3-none-any.whl", hash = "sha256:ef515019afafdc5bc181af71097dab78928b76601a1f2745b5761c9bccb6e6dd", size = 69068, upload-time = "2026-02-17T19:38:55.902Z" },
 ]
 
 [[package]]
@@ -2630,18 +2642,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/92/1446574745d74df0c92e6aa4a7b0b3130706a4142b2d1a5869f2eaa423c6/pyyaml-6.0.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16249ee61e95f858e83976573de0f5b2893b3677ba71c9dd36b9cf8be9ac6d65", size = 829923, upload-time = "2025-09-25T21:32:54.537Z" },
     { url = "https://files.pythonhosted.org/packages/f0/7a/1c7270340330e575b92f397352af856a8c06f230aa3e76f86b39d01b416a/pyyaml-6.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4ad1906908f2f5ae4e5a8ddfce73c320c2a1429ec52eafd27138b7f1cbe341c9", size = 174062, upload-time = "2025-09-25T21:32:55.767Z" },
     { url = "https://files.pythonhosted.org/packages/f1/12/de94a39c2ef588c7e6455cfbe7343d3b2dc9d6b6b2f40c4c6565744c873d/pyyaml-6.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:ebc55a14a21cb14062aa4162f906cd962b28e2e9ea38f9b4391244cd8de4ae0b", size = 149341, upload-time = "2025-09-25T21:32:56.828Z" },
-]
-
-[[package]]
-name = "rank-bm25"
-version = "0.2.2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/fc/0a/f9579384aa017d8b4c15613f86954b92a95a93d641cc849182467cf0bb3b/rank_bm25-0.2.2.tar.gz", hash = "sha256:096ccef76f8188563419aaf384a02f0ea459503fdf77901378d4fd9d87e5e51d", size = 8347, upload-time = "2022-02-16T12:10:52.196Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2a/21/f691fb2613100a62b3fa91e9988c991e9ca5b89ea31c0d3152a3210344f9/rank_bm25-0.2.2-py3-none-any.whl", hash = "sha256:7bd4a95571adadfc271746fa146a4bcfd89c0cf731e49c3d1ad863290adbe8ae", size = 8584, upload-time = "2022-02-16T12:10:50.626Z" },
 ]
 
 [[package]]

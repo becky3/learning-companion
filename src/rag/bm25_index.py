@@ -12,8 +12,8 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import bm25s
     import fugashi
-    import rank_bm25
 
 logger = logging.getLogger(__name__)
 
@@ -79,9 +79,8 @@ class BM25Index:
         self._doc_source_map: dict[str, str] = {}  # id -> source_url
 
         # BM25インデックス（遅延初期化）
-        self._bm25: "rank_bm25.BM25Okapi | None" = None
+        self._bm25: "bm25s.BM25 | None" = None
         self._doc_ids: list[str] = []  # インデックス順序を保持
-        self._tokenized_corpus: list[list[str]] = []
 
         # 再構築フラグ
         self._needs_rebuild = True
@@ -150,17 +149,21 @@ class BM25Index:
         if not query_tokens:
             return []
 
-        # BM25検索
-        scores = self._bm25.get_scores(query_tokens)
+        # BM25検索（k は corpus サイズ以下に制限）
+        k = min(n_results, len(self._doc_ids))
+        if k == 0:
+            return []
 
-        # スコアでソートして上位n_results件を取得
-        scored_docs = [
-            (self._doc_ids[i], score) for i, score in enumerate(scores) if score > 0
-        ]
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
+        doc_indices, scores = self._bm25.retrieve(
+            [query_tokens], k=k, show_progress=False
+        )
 
+        # スコア > 0 の結果のみ抽出
         results: list[BM25Result] = []
-        for doc_id, score in scored_docs[:n_results]:
+        for idx, score in zip(doc_indices[0], scores[0]):
+            if score <= 0:
+                continue
+            doc_id = self._doc_ids[int(idx)]
             results.append(
                 BM25Result(
                     doc_id=doc_id,
@@ -218,20 +221,21 @@ class BM25Index:
     def _rebuild_index(self) -> None:
         """BM25インデックスを再構築する."""
         try:
-            from rank_bm25 import BM25Okapi
+            import bm25s
         except ImportError:
-            logger.warning("rank-bm25 not installed, BM25 search disabled")
+            logger.warning("bm25s not installed, BM25 search disabled")
             self._bm25 = None
             self._needs_rebuild = False
             return
 
         self._doc_ids = list(self._documents.keys())
-        self._tokenized_corpus = [
+        tokenized_corpus = [
             tokenize_japanese(self._documents[doc_id]) for doc_id in self._doc_ids
         ]
 
-        if self._tokenized_corpus:
-            self._bm25 = BM25Okapi(self._tokenized_corpus, k1=self._k1, b=self._b)
+        if tokenized_corpus:
+            self._bm25 = bm25s.BM25(k1=self._k1, b=self._b)
+            self._bm25.index(tokenized_corpus, show_progress=False)
         else:
             self._bm25 = None
 

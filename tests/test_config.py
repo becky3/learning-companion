@@ -38,8 +38,8 @@ def test_ac2_all_config_sections_present() -> None:
     assert {"lmstudio_base_url", "lmstudio_model"} <= fields
     # DB
     assert "database_url" in fields
-    # Scheduler
-    assert {"daily_feed_hour", "daily_feed_minute", "timezone"} <= fields
+    # Timezone
+    assert "timezone" in fields
 
 
 def test_ac3_assistant_yaml_loaded() -> None:

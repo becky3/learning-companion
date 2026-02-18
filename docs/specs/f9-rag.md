@@ -190,7 +190,7 @@ bot: エラー: ページの取り込みに失敗しました。
 dependencies = [
     "chromadb>=0.5,<1",
     "beautifulsoup4>=4.12,<5",
-    "rank-bm25>=0.2,<1",
+    "bm25s>=0.3,<1",
     "fugashi>=1.3,<2",
     "unidic-lite>=1.0,<2",
 ]
@@ -1127,6 +1127,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-18 | BM25ライブラリを rank-bm25 から bm25s に差し替え（#329） |
 | 2026-02-17 | robots.txt 解析・遵守機能を追加（#160） |
 | 2026-02-12 | 4つの仕様書を統合・整理（旧: f9-rag-knowledge.md, f9-rag-evaluation.md, f9-rag-chunking-hybrid.md, f9-rag-auto-evaluation.md） |
 | 2026-02-11 | クロール進捗フィードバック機能を追加（#158） |
