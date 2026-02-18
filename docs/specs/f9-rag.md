@@ -948,7 +948,7 @@ class Settings(BaseSettings):
     rag_similarity_threshold: float | None = None
 
     # デバッグ・可視化
-    rag_debug_log_enabled: bool = True
+    rag_debug_log_enabled: bool = False  # 本番ではPII漏洩リスクのためデフォルト無効
     rag_show_sources: bool = False
 ```
 

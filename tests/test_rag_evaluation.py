@@ -16,6 +16,8 @@ from src.rag.evaluation import (
     EvaluationReport,
     PrecisionRecallResult,
     QueryEvaluationResult,
+    calculate_ndcg,
+    calculate_mrr,
     calculate_precision_recall,
     check_negative_sources,
     evaluate_retrieval,
@@ -171,6 +173,147 @@ class TestCalculatePrecisionRecall:
         assert result.recall == 1.0
         # F1 = 2 * (0.4 * 1.0) / (0.4 + 1.0) = 0.8 / 1.4
         assert result.f1 == pytest.approx(0.8 / 1.4)
+
+
+class TestCalculateNdcg:
+    """calculate_ndcg() のテスト."""
+
+    def test_perfect_ranking(self) -> None:
+        """全正解が上位に来た場合、NDCG=1.0."""
+        retrieved = ["https://a.com", "https://b.com", "https://c.com"]
+        expected = ["https://a.com", "https://b.com"]
+
+        result = calculate_ndcg(retrieved, expected)
+
+        assert result == pytest.approx(1.0)
+
+    def test_worst_ranking(self) -> None:
+        """正解が下位に来た場合、NDCG < 1.0."""
+        retrieved = ["https://x.com", "https://y.com", "https://a.com"]
+        expected = ["https://a.com"]
+
+        result = calculate_ndcg(retrieved, expected)
+
+        # 正解が3位 → DCG = 1/log2(4), IDCG = 1/log2(2)
+        assert result < 1.0
+        assert result > 0.0
+
+    def test_partial_match(self) -> None:
+        """一部のみ正解の場合."""
+        retrieved = ["https://a.com", "https://x.com", "https://b.com"]
+        expected = ["https://a.com", "https://b.com"]
+
+        result = calculate_ndcg(retrieved, expected)
+
+        # a.comは1位、b.comは3位 → 理想は1位と2位
+        assert 0.0 < result < 1.0
+
+    def test_no_relevant_results(self) -> None:
+        """正解が一つもない場合、NDCG=0.0."""
+        retrieved = ["https://x.com", "https://y.com"]
+        expected = ["https://a.com"]
+
+        result = calculate_ndcg(retrieved, expected)
+
+        assert result == 0.0
+
+    def test_empty_retrieved(self) -> None:
+        """取得結果が空の場合."""
+        retrieved: list[str] = []
+        expected = ["https://a.com"]
+
+        result = calculate_ndcg(retrieved, expected)
+
+        assert result == 0.0
+
+    def test_empty_expected(self) -> None:
+        """期待結果が空の場合."""
+        retrieved = ["https://a.com"]
+        expected: list[str] = []
+
+        result = calculate_ndcg(retrieved, expected)
+
+        assert result == 0.0
+
+    def test_both_empty(self) -> None:
+        """両方空の場合、完璧."""
+        retrieved: list[str] = []
+        expected: list[str] = []
+
+        result = calculate_ndcg(retrieved, expected)
+
+        assert result == 1.0
+
+    def test_k_parameter(self) -> None:
+        """kパラメータで上位k件に制限される."""
+        retrieved = ["https://x.com", "https://a.com", "https://b.com"]
+        expected = ["https://a.com", "https://b.com"]
+
+        # k=1: 上位1件のみ → xは不正解なのでNDCG低い
+        result_k1 = calculate_ndcg(retrieved, expected, k=1)
+        # k=3: 上位3件 → aとbが含まれる
+        result_k3 = calculate_ndcg(retrieved, expected, k=3)
+
+        assert result_k1 == 0.0
+        assert result_k3 > result_k1
+
+
+class TestCalculateMrr:
+    """calculate_mrr() のテスト."""
+
+    def test_first_result_is_relevant(self) -> None:
+        """最初の結果が正解の場合、MRR=1.0."""
+        retrieved = ["https://a.com", "https://b.com"]
+        expected = ["https://a.com"]
+
+        result = calculate_mrr(retrieved, expected)
+
+        assert result == 1.0
+
+    def test_second_result_is_relevant(self) -> None:
+        """2番目の結果が正解の場合、MRR=0.5."""
+        retrieved = ["https://x.com", "https://a.com"]
+        expected = ["https://a.com"]
+
+        result = calculate_mrr(retrieved, expected)
+
+        assert result == pytest.approx(0.5)
+
+    def test_no_relevant_results(self) -> None:
+        """正解がない場合、MRR=0.0."""
+        retrieved = ["https://x.com", "https://y.com"]
+        expected = ["https://a.com"]
+
+        result = calculate_mrr(retrieved, expected)
+
+        assert result == 0.0
+
+    def test_empty_retrieved(self) -> None:
+        """取得結果が空の場合、MRR=0.0."""
+        retrieved: list[str] = []
+        expected = ["https://a.com"]
+
+        result = calculate_mrr(retrieved, expected)
+
+        assert result == 0.0
+
+    def test_empty_expected(self) -> None:
+        """期待結果が空で取得ありの場合、MRR=0.0."""
+        retrieved = ["https://a.com"]
+        expected: list[str] = []
+
+        result = calculate_mrr(retrieved, expected)
+
+        assert result == 0.0
+
+    def test_both_empty(self) -> None:
+        """両方空の場合、完璧."""
+        retrieved: list[str] = []
+        expected: list[str] = []
+
+        result = calculate_mrr(retrieved, expected)
+
+        assert result == 1.0
 
 
 class TestCheckNegativeSources:
@@ -452,6 +595,8 @@ class TestEvaluateRetrieval:
         assert report.average_precision == 0.0
         assert report.average_recall == 0.0
         assert report.average_f1 == 0.0
+        assert report.average_ndcg == 0.0
+        assert report.average_mrr == 0.0
         assert report.negative_source_violations == []
         mock_rag_service.retrieve.assert_not_called()
 
@@ -467,6 +612,8 @@ class TestEvaluationReportDataclass:
             precision=0.8,
             recall=0.6,
             f1=0.685,
+            ndcg=0.9,
+            mrr=1.0,
             retrieved_sources=["https://a.com"],
             expected_sources=["https://a.com", "https://b.com"],
             negative_violations=[],
@@ -476,6 +623,8 @@ class TestEvaluationReportDataclass:
             average_precision=0.8,
             average_recall=0.6,
             average_f1=0.685,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[query_result],
         )
@@ -484,6 +633,8 @@ class TestEvaluationReportDataclass:
         assert report.average_precision == 0.8
         assert report.average_recall == 0.6
         assert report.average_f1 == 0.685
+        assert report.average_ndcg == 0.9
+        assert report.average_mrr == 1.0
         assert len(report.query_results) == 1
 
 

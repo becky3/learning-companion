@@ -82,7 +82,6 @@ def rag_service_hybrid(
     # 設定をモック
     mock_settings = MagicMock()
     mock_settings.rag_vector_weight = 0.5
-    mock_settings.rag_rrf_k = 60
     mock_settings.rag_similarity_threshold = None
     mock_settings.rag_debug_log_enabled = False
 
@@ -407,7 +406,6 @@ class TestHybridSearchEngineInitialization:
         """AC9: hybrid_search_enabled=Trueの場合、HybridSearchEngineが初期化されること."""
         mock_settings = MagicMock()
         mock_settings.rag_vector_weight = 0.5
-        mock_settings.rag_rrf_k = 60
 
         with patch("src.config.settings.get_settings", return_value=mock_settings):
             service = RAGKnowledgeService(
@@ -445,7 +443,6 @@ class TestHybridSearchEngineInitialization:
         """AC9: bm25_indexがNoneの場合、hybrid_enabled=Trueでも初期化されないこと."""
         mock_settings = MagicMock()
         mock_settings.rag_vector_weight = 0.5
-        mock_settings.rag_rrf_k = 60
 
         with patch("src.config.settings.get_settings", return_value=mock_settings):
             service = RAGKnowledgeService(

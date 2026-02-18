@@ -88,6 +88,8 @@ class TestWriteJsonReport:
             average_precision=0.75,
             average_recall=0.8,
             average_f1=0.77,
+            average_ndcg=0.85,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[
                 QueryEvaluationResult(
@@ -96,6 +98,8 @@ class TestWriteJsonReport:
                     precision=0.8,
                     recall=0.9,
                     f1=0.85,
+                    ndcg=0.9,
+                    mrr=1.0,
                     retrieved_sources=["https://example.com/a"],
                     expected_sources=["https://example.com/a"],
                     negative_violations=[],
@@ -106,6 +110,8 @@ class TestWriteJsonReport:
                     precision=0.7,
                     recall=0.7,
                     f1=0.7,
+                    ndcg=0.8,
+                    mrr=1.0,
                     retrieved_sources=["https://example.com/b"],
                     expected_sources=["https://example.com/b"],
                     negative_violations=[],
@@ -149,6 +155,8 @@ class TestWriteMarkdownReport:
             average_precision=0.8,
             average_recall=0.9,
             average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[
                 QueryEvaluationResult(
@@ -157,6 +165,8 @@ class TestWriteMarkdownReport:
                     precision=0.8,
                     recall=0.9,
                     f1=0.85,
+                    ndcg=0.9,
+                    mrr=1.0,
                     retrieved_sources=["https://example.com/a"],
                     expected_sources=["https://example.com/a"],
                     negative_violations=[],
@@ -188,6 +198,8 @@ class TestRegressionInfo:
             average_precision=0.5,
             average_recall=0.5,
             average_f1=0.5,
+            average_ndcg=0.5,
+            average_mrr=0.5,
             negative_source_violations=[],
             query_results=[],
         )
@@ -228,6 +240,8 @@ class TestSaveBaseline:
             average_precision=0.75,
             average_recall=0.8,
             average_f1=0.77,
+            average_ndcg=0.85,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[],
         )
@@ -260,6 +274,8 @@ class TestCLIEvaluate:
             average_precision=0.8,
             average_recall=0.9,
             average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[
                 QueryEvaluationResult(
@@ -268,6 +284,8 @@ class TestCLIEvaluate:
                     precision=0.8,
                     recall=0.9,
                     f1=0.85,
+                    ndcg=0.9,
+                    mrr=1.0,
                     retrieved_sources=["https://example.com/a"],
                     expected_sources=["https://example.com/a"],
                     negative_violations=[],
@@ -327,6 +345,8 @@ class TestCLIEvaluate:
             average_precision=0.8,
             average_recall=0.9,
             average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[],
         )
@@ -373,6 +393,8 @@ class TestCLIEvaluate:
             average_precision=0.8,
             average_recall=0.9,
             average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[],
         )
@@ -420,6 +442,8 @@ class TestCLIEvaluate:
             average_precision=0.3,
             average_recall=0.4,
             average_f1=0.35,  # ベースラインより大幅に低い
+            average_ndcg=0.3,
+            average_mrr=0.5,
             negative_source_violations=[],
             query_results=[],
         )
@@ -471,6 +495,8 @@ class TestCLIEvaluate:
             average_precision=0.8,
             average_recall=0.9,
             average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[],
         )
@@ -518,6 +544,8 @@ class TestCLIEvaluate:
             average_precision=0.8,
             average_recall=0.9,
             average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[],
         )
@@ -565,6 +593,8 @@ class TestCLIEvaluate:
             average_precision=0.8,
             average_recall=0.9,
             average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
             negative_source_violations=[],
             query_results=[],
         )
