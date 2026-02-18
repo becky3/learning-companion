@@ -1,5 +1,5 @@
 ---
-name: resume
+name: restore
 description: セッション復帰時のジャーナル確認・前回作業の把握
 user-invocable: true
 allowed-tools: Bash, Read, Glob
