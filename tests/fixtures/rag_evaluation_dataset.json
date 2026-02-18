@@ -1,6 +1,6 @@
 {
   "description": "RAG評価用テストデータセット - 架空RPG「勇者の冒険」攻略情報",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "queries": [
     {
       "id": "q1",
@@ -233,6 +233,26 @@
       "expected_keywords": ["聖剣エクスカリア", "勇者"],
       "negative_sources": [],
       "notes": "固有名詞の完全一致でBM25が正確にヒットすることを検証"
+    },
+    {
+      "id": "q19",
+      "query": "こんにちわ",
+      "description": "BM25トークンマッチによるノイズヒットのテスト。感動詞がRPGコンテンツにトークンマッチする可能性。",
+      "category": "noise_rejection",
+      "expected_sources": [],
+      "expected_keywords": [],
+      "negative_sources": [],
+      "notes": "BM25-only ヒットが similarity_threshold 設定時に除外されることを検証（#499）"
+    },
+    {
+      "id": "q20",
+      "query": "名前 攻撃 一覧",
+      "description": "RPGテーブルの頻出語だが意味的に無関係なクエリ。BM25がテーブルデータにマッチする可能性。",
+      "category": "noise_rejection",
+      "expected_sources": [],
+      "expected_keywords": [],
+      "negative_sources": [],
+      "notes": "汎用的なキーワードによるBM25ノイズヒットが品質ゲートで除外されることを検証（#499）"
     }
   ],
   "metadata": {
@@ -253,7 +273,8 @@
       "negative_sources: 検索結果に含まれてはいけないソースURL（ハルシネーション検出用）",
       "expected_keywords: 回答に含まれるべきキーワード（将来の回答品質評価用）",
       "v1.1.0: 著作権問題回避のため架空RPG「勇者の冒険」に変更",
-      "v2.0.0: 8→18件に拡充（CC移行評価用）、カテゴリ分類追加"
+      "v2.0.0: 8→18件に拡充（CC移行評価用）、カテゴリ分類追加",
+      "v2.1.0: BM25ノイズヒット検出用クエリ追加（q19, q20）（#499）"
     ]
   }
 }

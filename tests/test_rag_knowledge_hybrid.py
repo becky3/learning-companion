@@ -253,10 +253,10 @@ class TestTableDataSearch:
         mock_vector_store: MagicMock,
         mock_bm25_index: MagicMock,
     ) -> None:
-        """AC12: 「りゅうおう」クエリでテーブル内のデータが検索できること.
+        """AC12/AC82: similarity_threshold設定時、ベクトル閾値超過のドキュメントはBM25ヒットでも除外.
 
-        ベクトル検索では閾値を超えてしまうケースでも、
-        BM25検索でキーワードマッチにより検索できる。
+        BM25は品質ゲート通過済みドキュメントの「ブースト」のみ。
+        キーワード検索を優先したい場合はthreshold=Noneに設定する。
         """
         # Arrange: ベクトル検索は閾値超過（距離が大きい）
         mock_vector_store.search.return_value = [
@@ -286,7 +286,49 @@ class TestTableDataSearch:
         with patch("src.config.settings.get_settings", return_value=mock_settings):
             result = await rag_service_hybrid.retrieve("りゅうおう", n_results=5)
 
-        # Assert: BM25のおかげで結果が返る
+        # Assert: ベクトル品質ゲート未通過のため結果は空
+        assert isinstance(result, RAGRetrievalResult)
+        assert result.context == ""
+
+    async def test_ac12_table_data_search_ryuuou_no_threshold(
+        self,
+        rag_service_hybrid: RAGKnowledgeService,
+        mock_vector_store: MagicMock,
+        mock_bm25_index: MagicMock,
+    ) -> None:
+        """AC12: threshold=Noneの場合、BM25レスキューによりテーブル内データが検索できること.
+
+        キーワード検索を優先する運用ではthreshold=Noneに設定する。
+        """
+        # Arrange: ベクトル検索は距離が大きい（threshold=Noneなのでフィルタされない）
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="名前: りゅうおう\nHP: 200, MP: 100, 攻撃力: 140",
+                metadata={"source_url": "https://example.com/monsters", "chunk_index": 0},
+                distance=0.7,
+            ),
+        ]
+
+        # BM25検索ではキーワードマッチでヒット
+        import hashlib
+        url_hash = hashlib.sha256(b"https://example.com/monsters").hexdigest()[:16]
+        mock_bm25_index.search.return_value = [
+            BM25Result(
+                doc_id=f"{url_hash}_0",
+                score=8.5,
+                text="名前: りゅうおう\nHP: 200, MP: 100, 攻撃力: 140",
+            ),
+        ]
+
+        mock_settings = MagicMock()
+        mock_settings.rag_similarity_threshold = None
+        mock_settings.rag_debug_log_enabled = False
+
+        # Act
+        with patch("src.config.settings.get_settings", return_value=mock_settings):
+            result = await rag_service_hybrid.retrieve("りゅうおう", n_results=5)
+
+        # Assert: threshold=NoneなのでBM25レスキューが機能する
         assert isinstance(result, RAGRetrievalResult)
         assert "りゅうおう" in result.context
         assert "HP: 200" in result.context

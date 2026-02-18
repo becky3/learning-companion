@@ -252,6 +252,16 @@ class HybridSearchEngine:
             if score <= 0.0:
                 continue
 
+            # similarity_threshold 設定時: ベクトル品質ゲート未通過ドキュメントを除外
+            # BM25-only ドキュメント、または閾値超過で similarity=0 のドキュメントが対象（#499）
+            if similarity_threshold is not None and doc_id not in norm_vector_scores:
+                logger.debug(
+                    "Excluded doc %s: not in vector quality gate (threshold=%.2f)",
+                    doc_id,
+                    similarity_threshold,
+                )
+                continue
+
             # テキストとメタデータの取得（ベクトル検索結果を優先）
             if doc_id in vector_doc_data:
                 _, text, metadata, distance = vector_doc_data[doc_id]

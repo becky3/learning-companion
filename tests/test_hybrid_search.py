@@ -352,6 +352,211 @@ class TestHybridSearchEngine:
         assert results[0].text == "閾値内"
 
     @pytest.mark.asyncio
+    async def test_ac82_bm25_only_excluded_when_threshold_set(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC82: BM25-onlyヒットはsimilarity_threshold設定時に除外される."""
+        # ベクトル検索では結果なし
+        mock_vector_store.search.return_value = []
+
+        # BM25のみでヒット
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id="bm25_only_doc", score=8.5, text="BM25でのみヒット"),
+        ]
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=0.5)
+
+        # BM25-onlyドキュメントは除外される
+        assert len(results) == 0
+
+    @pytest.mark.asyncio
+    async def test_ac82_threshold_failed_doc_excluded_despite_bm25(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC82: vector閾値超過ドキュメントはBM25ヒットがあっても除外される."""
+        import hashlib
+
+        url_hash = hashlib.sha256(b"http://example.com/bad").hexdigest()[:16]
+
+        # ベクトル検索で閾値超過（distance=0.8 > threshold=0.5）
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="閾値超過だがBM25ヒット",
+                metadata={"source_url": "http://example.com/bad", "chunk_index": 0},
+                distance=0.8,
+            ),
+        ]
+
+        # BM25でもヒット（同じdoc_id）
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id=f"{url_hash}_0", score=10.0, text="閾値超過だがBM25ヒット"),
+        ]
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=0.5)
+
+        # ベクトル品質ゲート未通過のため除外
+        assert len(results) == 0
+
+    @pytest.mark.asyncio
+    async def test_ac82_threshold_passed_doc_boosted_by_bm25(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC82: vector閾値通過+BM25ヒットのドキュメントはブーストされて返却される."""
+        import hashlib
+
+        url_hash = hashlib.sha256(b"http://example.com/good").hexdigest()[:16]
+
+        # ベクトル検索で閾値通過（distance=0.3 < threshold=0.5）
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="閾値通過でBM25もヒット",
+                metadata={"source_url": "http://example.com/good", "chunk_index": 0},
+                distance=0.3,
+            ),
+        ]
+
+        # BM25でもヒット
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id=f"{url_hash}_0", score=5.0, text="閾値通過でBM25もヒット"),
+        ]
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=0.5)
+
+        # 閾値通過 + BM25ブーストで返却される
+        assert len(results) == 1
+        assert results[0].text == "閾値通過でBM25もヒット"
+        assert results[0].bm25_score == 5.0
+
+    @pytest.mark.asyncio
+    async def test_ac82_noise_query_empty_when_all_exceed_threshold(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC82: 全vector結果が閾値超過+BM25マッチのノイズクエリは空結果になる."""
+        import hashlib
+
+        url_hash = hashlib.sha256(b"http://example.com/rpg").hexdigest()[:16]
+
+        # ベクトル検索は全て閾値超過
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="RPGテーブルデータ",
+                metadata={"source_url": "http://example.com/rpg", "chunk_index": 0},
+                distance=0.9,
+            ),
+        ]
+
+        # BM25でトークンマッチ
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id=f"{url_hash}_0", score=3.0, text="RPGテーブルデータ"),
+        ]
+
+        results = await engine.search("こんにちわ", n_results=5, similarity_threshold=0.5)
+
+        # ノイズクエリは全て除外
+        assert len(results) == 0
+
+    @pytest.mark.asyncio
+    async def test_ac82_threshold_passed_doc_returned_without_bm25(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC82: vector閾値通過+BM25なしのドキュメントはvectorスコアのみで返却される."""
+        # ベクトル検索で閾値通過（distance=0.3 < threshold=0.5）
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="閾値通過でBM25ヒットなし",
+                metadata={"source_url": "http://example.com/vec-only", "chunk_index": 0},
+                distance=0.3,
+            ),
+        ]
+
+        # BM25では結果なし
+        mock_bm25_index.search.return_value = []
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=0.5)
+
+        # 閾値通過しているのでvectorスコアのみで返却
+        assert len(results) == 1
+        assert results[0].text == "閾値通過でBM25ヒットなし"
+        assert results[0].bm25_score is None
+
+    @pytest.mark.asyncio
+    async def test_threshold_passed_with_bm25_no_threshold(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """threshold=None時、vector通過+BM25ありのドキュメントは通常通り返却される."""
+        import hashlib
+
+        url_hash = hashlib.sha256(b"http://example.com/both").hexdigest()[:16]
+
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="両方ヒット",
+                metadata={"source_url": "http://example.com/both", "chunk_index": 0},
+                distance=0.3,
+            ),
+        ]
+
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id=f"{url_hash}_0", score=5.0, text="両方ヒット"),
+        ]
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=None)
+
+        # threshold=Noneなので通常のCC統合で返却
+        assert len(results) == 1
+        assert results[0].bm25_score == 5.0
+        assert results[0].vector_distance == 0.3
+
+    @pytest.mark.asyncio
+    async def test_threshold_failed_rescued_by_bm25_no_threshold(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """threshold=None時、vector距離が大きくてもBM25レスキューで返却される."""
+        import hashlib
+
+        url_hash = hashlib.sha256(b"http://example.com/rescued").hexdigest()[:16]
+
+        # ベクトル検索で距離が大きい（threshold=Noneなのでフィルタされない）
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="距離大だがBM25でレスキュー",
+                metadata={"source_url": "http://example.com/rescued", "chunk_index": 0},
+                distance=0.8,
+            ),
+        ]
+
+        # BM25でヒット
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id=f"{url_hash}_0", score=10.0, text="距離大だがBM25でレスキュー"),
+        ]
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=None)
+
+        # threshold=NoneなのでBM25レスキューが機能
+        assert len(results) == 1
+        assert results[0].text == "距離大だがBM25でレスキュー"
+        assert results[0].bm25_score == 10.0
+
+    @pytest.mark.asyncio
+    async def test_bm25_only_allowed_when_no_threshold(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """similarity_threshold=None時はBM25-onlyドキュメントも返却される（従来動作維持）."""
+        # ベクトル検索では結果なし
+        mock_vector_store.search.return_value = []
+
+        # BM25のみでヒット
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id="bm25_only_doc", score=8.5, text="BM25でのみヒット"),
+        ]
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=None)
+
+        # threshold=Noneなので従来通り返却
+        assert len(results) == 1
+        assert results[0].text == "BM25でのみヒット"
+
+    @pytest.mark.asyncio
     async def test_fetch_count_minimum_30(
         self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
