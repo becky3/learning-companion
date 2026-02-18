@@ -525,8 +525,8 @@ bm25_index/
 
 **動作**:
 
-- `persist_dir` 指定時: `__init__` でディスクからロード、`add_documents()` / `delete_by_source()` 後に自動保存
-- `persist_dir=None`（デフォルト）: 従来のインメモリ動作（テスト・評価CLI用）
+- `persist_dir` 指定時: `__init__` でディスクからロード、`add_documents()` / `delete_by_source()` 後に自動保存（本番は `BM25_PERSIST_DIR` 設定値を使用、デフォルト: `./bm25_index`）
+- `persist_dir=None` 明示時: 従来のインメモリ動作（テスト・評価CLI用）
 - **アトミック書き込み**: 一時ディレクトリ → リネームで書き込み中の破損を防止
 - **フェイルセーフ**: データ破損・バージョン不一致時は空インデックスで起動（警告ログ出力）
 
