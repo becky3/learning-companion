@@ -485,6 +485,7 @@ class BM25Index:
         self,
         k1: float = 1.5,  # 用語頻度の飽和パラメータ
         b: float = 0.75,  # 文書長の正規化パラメータ
+        persist_dir: str | None = None,  # 永続化ディレクトリ（Noneでインメモリ）
     ) -> None: ...
 
     def add_documents(
@@ -503,6 +504,31 @@ class BM25Index:
     def delete_by_source(self, source_url: str) -> int:
         """ソースURL指定でドキュメントを削除する."""
 ```
+
+#### 永続化
+
+Bot再起動時にBM25インデックスを復元するため、ディスクへの自動保存/ロード機能を提供する。
+
+**設定**:
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `BM25_PERSIST_DIR` | str | `./bm25_index` | BM25インデックスの永続化ディレクトリ |
+
+**ディレクトリ構造**:
+
+```
+bm25_index/
+├── metadata.json          # doc_ids, documents, doc_source_map, version
+└── bm25s/                 # bm25s ネイティブファイル
+```
+
+**動作**:
+
+- `persist_dir` 指定時: `__init__` でディスクからロード、`add_documents()` / `delete_by_source()` 後に自動保存
+- `persist_dir=None`（デフォルト）: 従来のインメモリ動作（テスト・評価CLI用）
+- **アトミック書き込み**: 一時ディレクトリ → リネームで書き込み中の破損を防止
+- **フェイルセーフ**: データ破損・バージョン不一致時は空インデックスで起動（警告ログ出力）
 
 **日本語トークナイザ**:
 
@@ -943,6 +969,7 @@ class Settings(BaseSettings):
     rag_vector_weight: float = 0.5
     rag_bm25_k1: float = 1.5
     rag_bm25_b: float = 0.75
+    bm25_persist_dir: str = "./bm25_index"
 
     # 類似度閾値
     rag_similarity_threshold: float | None = None
@@ -1087,6 +1114,12 @@ class Settings(BaseSettings):
 - [ ] **AC74**: robots.txt の取得に失敗した場合、フェイルオープンでクロールを許可すること
 - [ ] **AC75**: robots.txt がドメイン単位でキャッシュされ、TTL 内は再取得されないこと
 
+### BM25インデックス永続化
+
+- [ ] **AC79**: `persist_dir` 指定時、`add_documents()` / `delete_by_source()` 後にインデックスがディスクに保存され、新インスタンスで復元できること
+- [ ] **AC80**: `persist_dir=None` の場合、従来のインメモリ動作と同一であること
+- [ ] **AC81**: 破損データやバージョン不一致時に空インデックスで起動し、エラーで停止しないこと
+
 ### テストケース
 
 - [ ] **AC68**: テストページを使ったローカル評価ができること
@@ -1205,6 +1238,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-18 | BM25インデックスの永続化機能を追加（#497） |
 | 2026-02-18 | ハイブリッド検索の統合手法を RRF → CC（Convex Combination）+ min-max 正規化に変更、NDCG/MRR 評価指標を追加（#501） |
 | 2026-02-18 | BM25ライブラリを rank-bm25 から bm25s に差し替え（#329） |
 | 2026-02-17 | robots.txt 解析・遵守機能を追加（#160） |

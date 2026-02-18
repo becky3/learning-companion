@@ -19,6 +19,7 @@ ENV/
 *.db
 *.sqlite3
 chroma_db/
+bm25_index/
 
 # IDE
 .vscode/
