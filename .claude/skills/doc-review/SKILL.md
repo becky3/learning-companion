@@ -1,6 +1,6 @@
 ---
 name: doc-review
-description: 仕様書・README.md・レトロの品質レビュー。仕様駆動開発の観点から不足・過剰な情報を検出し、改善提案を行う。
+description: 仕様書・README.md の品質レビュー。仕様駆動開発の観点から不足・過剰な情報を検出し、改善提案を行う。
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash
 argument-hint: "[diff|full] [file-path]"
@@ -68,7 +68,6 @@ argument-hint: "[diff|full] [file-path]"
 
 - **仕様書** (`docs/specs/*.md`): AC の具体性、関連ファイルの網羅性、フロー図の有無
 - **README.md**: セットアップ手順の完全性、プロジェクト構造の正確性
-- **レトロスペクティブ** (`docs/retro/*.md`): 振り返り項目の具体性、次に活かすことの実用性
 - **CLAUDE.md**: 開発ルールの一貫性、セクション構造
 
 ### 7. レビュー実施

@@ -124,11 +124,10 @@
    - **スキップ基準**: 誤字脱字のみの修正はスキップ可
    - **差分レビュー推奨**: PRレビュー指摘対応、軽微な補足追加は「差分レビュー」を使用
    - **フルレビュー必須**: 新規仕様書作成、大幅改訂時
-5. **レトロスペクティブ**: 機能実装のPRの場合、`/doc-gen retro <feature-name>` でレトロを生成・更新する（PRに含めて自動レビュー対象にするため、コミット前に作成する）
-6. **変更のステージング**: `git status` で変更を確認し、`git add` で全てステージング
-7. **コミット**: 変更内容を明確に記述したコミットメッセージでコミット
-8. **プッシュ**: `git push origin <ブランチ名>` でリモートにプッシュ
-9. **PR作成**: `gh pr create` コマンドで実際にPRを作成（手動リンクではなく実際に作成）
+5. **変更のステージング**: `git status` で変更を確認し、`git add` で全てステージング
+6. **コミット**: 変更内容を明確に記述したコミットメッセージでコミット
+7. **プッシュ**: `git push origin <ブランチ名>` でリモートにプッシュ
+8. **PR作成**: `gh pr create` コマンドで実際にPRを作成（手動リンクではなく実際に作成）
 
    PR body は `.github/pull_request_template.md` の形式に従うこと（仕様: `docs/specs/pr-body-template.md`）。
 
@@ -176,7 +175,7 @@
 
    **PR bodyの注意事項**: 設計書の先行更新（実装は後続フェーズ）のPRでは、Change type で `docs(pre-impl)` を選択すること（prt 自動レビューの誤検知防止）。
 
-10. **作成確認**: `gh pr view` でPRが正しく作成されたことを確認し、URLをユーザーに提示
+9. **作成確認**: `gh pr view` でPRが正しく作成されたことを確認し、URLをユーザーに提示
 
 ### レビュー指摘対応
 
@@ -209,16 +208,6 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 - **理由**: `@copilot` のようなメンションは Copilot SWE Agent 等の自動化ツールがトリガーとして検知し、意図しないPR作成やActions minutesの浪費を引き起こす。人間ユーザーへの不要な通知も発生する
 - **対処法**: レビュアー名を記載する場合は `@` プレフィックスを外し、ユーザー名のみを記載する（例: `(copilot)` / `(becky3)`）
 - **適用範囲**: `gh pr comment`、`gh issue comment`、PR body 等、GitHub 上に投稿する全てのテキスト
-
-### レトロスペクティブ
-
-- **機能実装のPRでは、コミット前に `/doc-gen retro <feature-name>` でレトロを生成・更新する**（PRに含めて自動レビュー対象にするため）
-- **PRマージ後は `/merged <PR番号>` を実行する**。develop同期・ブランチ削除・ジャーナル記録が一括で行われる。機能PR（feat）の場合にレトロが未作成であれば補完生成される
-- 運用テストで問題が見つかった場合も、修正完了後にレトロを更新する
-- **ファイル命名**: 機能番号がある場合は `docs/retro/f{N}-{機能名}.md`、ない場合は `docs/retro/{機能名}.md`
-- **記載内容**: 実装の概要、うまくいったこと、ハマったこと・改善点、次に活かすこと
-- 既存レトロがある場合は追記・更新する（新規作成ではなく）
-- 新機能の仕様策定時は、関連する既存レトロの「次に活かすこと」を参照する
 
 ## 自動進行ルール（auto-progress）
 
@@ -367,7 +356,7 @@ commitが成功していない状態でpushしないこと。
 
 | スキル | 用途 | 使用例 |
 |--------|------|--------|
-| `/doc-gen` | ドキュメント新規作成（仕様書・レトロ） | `/doc-gen spec feed-collection` |
+| `/doc-gen` | ドキュメント新規作成（仕様書） | `/doc-gen spec feed-collection` |
 | `/doc-edit` | 既存ドキュメントの更新・修正 | `/doc-edit docs/specs/f2-feed-collection.md` |
 | `/check-pr` | PRの内容確認・レビュー指摘対応・実装継続 | `/check-pr 123` |
 | `/topic` | 学びトピックの自動抽出・Zenn記事生成 | `/topic`, `/topic 3` |
@@ -375,7 +364,7 @@ commitが成功していない状態でpushしないこと。
 | `/code-review` | コードレビュー（code-reviewer相当） | `/code-review` |
 | `/doc-review` | ドキュメントレビュー（doc-reviewer相当） | `/doc-review docs/specs/f1-chat.md` |
 | `/auto-finalize` | 品質チェック後のcommit/push/PR作成/Issue完了コメント | `/auto-finalize 272` |
-| `/merged` | PRマージ後処理（develop同期・ブランチ削除・ジャーナル・レトロ） | `/merged 482` |
+| `/merged` | PRマージ後処理（develop同期・ブランチ削除・ジャーナル） | `/merged 482` |
 | `/handoff` | セッション引き継ぎ（MEMORY.md更新・ジャーナル記録） | `/handoff`, `/handoff "次はCopilotフロー"` |
 | `/restore` | セッション復帰（ジャーナル確認・前回作業把握） | `/restore`, `/restore 3` |
 | `/check-review-batch` | 自動マージIssueの全PRチェック・レポート | `/check-review-batch`, `/check-review-batch 375` |
@@ -529,4 +518,3 @@ GitHub Actions で `anthropics/claude-code-action` を使用する場合の制�
 - コマンド: `gh issue comment <Issue番号> --body "対応が完了しました。PR #<PR番号> をご確認ください。"`
 
 **設定ファイル**: `.github/workflows/claude.yml`
-**レトロスペクティブ**: `docs/retro/claude-code-action.md`

@@ -2,7 +2,7 @@
 
 ## 概要
 
-プロジェクトドキュメント（仕様書・レトロスペクティブ）の新規作成と既存ドキュメントの編集をClaude Codeスキルとして実装する。
+プロジェクトドキュメント（仕様書）の新規作成と既存ドキュメントの編集をClaude Codeスキルとして実装する。
 
 ## 背景
 
@@ -18,7 +18,6 @@
 ### doc-gen スキル
 
 - 開発者として、`/doc-gen spec <feature-name>` で機能仕様書を自動生成したい
-- 開発者として、`/doc-gen retro <feature-name>` で実装完了後のレトロスペクティブを生成したい
 
 ### doc-edit スキル
 
@@ -33,20 +32,19 @@
 
 ```yaml
 name: doc-gen
-description: プロジェクトドキュメント（仕様書・レトロ）の新規作成
+description: プロジェクトドキュメント（仕様書）の新規作成
 user-invocable: true
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
-argument-hint: [spec|retro] [feature-name]
+argument-hint: spec [feature-name]
 ```
 
 **引数パターン:**
 
 - `spec <feature-name>`: 仕様書を `docs/specs/f{N}-{feature-name}.md` に生成
-- `retro <feature-name>`: レトロを `docs/retro/f{N}-{feature-name}.md` に生成
 
 **処理フロー:**
 
-1. 引数から生成対象を判定（spec/retro）
+1. 引数から生成対象を判定
 2. 既存ドキュメントを参照してフォーマットを理解
 3. 関連するIssue/PR/コミット履歴を調査
 4. テンプレートに従ってドキュメントを生成
@@ -66,17 +64,6 @@ argument-hint: [spec|retro] [feature-name]
    - 技術仕様
    - 受け入れ条件 (AC)
    - 関連ファイル
-
-**レトロ生成の詳細:**
-
-1. 該当機能のPR・コミット履歴を調査
-2. Issue・PR内の議論を確認
-3. 実装時の判断・学びを抽出
-4. 以下のセクションを含むレトロを生成:
-   - 何を実装したか
-   - うまくいったこと
-   - 改善点
-   - 次に活かすこと
 
 ### doc-edit スキル
 
@@ -127,16 +114,15 @@ argument-hint: <file-path> [update-reason]
 
 - [ ] AC1: `/doc-gen spec test-feature` で仕様書が正しく生成される
 - [ ] AC2: 生成される仕様書が既存の仕様書と同じフォーマットを持つ
-- [ ] AC3: `/doc-gen retro test-feature` でレトロが正しく生成される
-- [ ] AC4: 既存ファイルがある場合に上書き警告が表示される
-- [ ] AC5: Issue/PR/コミット履歴から関連情報を自動収集できる
+- [ ] AC3: 既存ファイルがある場合に上書き警告が表示される
+- [ ] AC4: Issue/PR/コミット履歴から関連情報を自動収集できる
 
 ### doc-edit スキル
 
-- [ ] AC8: `/doc-edit docs/specs/f1-chat.md` で既存仕様書を更新できる
-- [ ] AC9: 存在しないファイルパスの場合にエラーメッセージが表示される
-- [ ] AC10: 編集後にファイルの構造が保持されている
-- [ ] AC11: 編集前後の差分が明確に表示される
+- [ ] AC5: `/doc-edit docs/specs/f1-chat.md` で既存仕様書を更新できる
+- [ ] AC6: 存在しないファイルパスの場合にエラーメッセージが表示される
+- [ ] AC7: 編集後にファイルの構造が保持されている
+- [ ] AC8: 編集前後の差分が明確に表示される
 
 ## 関連ファイル
 
@@ -145,7 +131,6 @@ argument-hint: <file-path> [update-reason]
 | `.claude/skills/doc-gen/SKILL.md` | doc-genスキル定義 |
 | `.claude/skills/doc-edit/SKILL.md` | doc-editスキル定義 |
 | `docs/specs/*.md` | 既存仕様書（参照用） |
-| `docs/retro/*.md` | 既存レトロ（参照用） |
 | `CLAUDE.md` | 命名規則・テンプレート定義 |
 
 ## テスト方針
