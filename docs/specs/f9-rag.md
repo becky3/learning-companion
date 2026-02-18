@@ -88,9 +88,10 @@ flowchart TB
         QUERY["クエリ"] --> HYBRID["HybridSearchEngine"]
         HYBRID --> VECTOR_SEARCH["VectorStore.search()"]
         HYBRID --> BM25_SEARCH["BM25Index.search()"]
-        VECTOR_SEARCH --> RRF["RRF統合"]
-        BM25_SEARCH --> RRF
-        RRF --> RESULTS["検索結果"]
+        VECTOR_SEARCH --> NORM["min-max正規化"]
+        BM25_SEARCH --> NORM
+        NORM --> CC["CC統合<br/>(Convex Combination)"]
+        CC --> RESULTS["検索結果"]
     end
 ```
 
@@ -517,6 +518,22 @@ def tokenize_japanese(text: str) -> list[str]:
 
 ### ハイブリッド検索 (`src/rag/hybrid_search.py`)
 
+#### データ型
+
+```python
+@dataclass
+class HybridSearchResult:
+    """ハイブリッド検索結果."""
+    doc_id: str
+    text: str
+    metadata: dict[str, str | int]
+    vector_distance: float | None  # ベクトル検索での距離（Noneの場合はBM25のみでヒット）
+    bm25_score: float | None       # BM25スコア（Noneの場合はベクトル検索のみでヒット）
+    combined_score: float          # CC で統合されたスコア
+```
+
+#### HybridSearchEngineクラス
+
 ```python
 class HybridSearchEngine:
     """ベクトル検索とBM25を組み合わせたハイブリッド検索.
@@ -529,7 +546,6 @@ class HybridSearchEngine:
         vector_store: VectorStore,
         bm25_index: BM25Index,
         vector_weight: float = 0.5,
-        rrf_k: int = 60,
     ) -> None: ...
 
     async def search(
@@ -540,25 +556,51 @@ class HybridSearchEngine:
     ) -> list[HybridSearchResult]:
         """ハイブリッド検索を実行する.
 
-        1. ベクトル検索で候補を取得
-        2. BM25検索で候補を取得
-        3. RRF（Reciprocal Rank Fusion）でスコアを統合
-        4. 統合スコアでソート
+        1. ベクトル検索で候補を取得（fetch_count件）
+        2. BM25検索で候補を取得（fetch_count件）
+        3. 各スコアをmin-max正規化（0〜1に変換）
+        4. Convex Combination（CC）で重み付き加算
+        5. 統合スコアでソート
         """
 ```
 
-**Reciprocal Rank Fusion (RRF)**:
+**Convex Combination (CC) + min-max 正規化**:
 
 ```python
-def reciprocal_rank_fusion(
-    rankings: list[list[str]],
-    k: int = 60,
-) -> dict[str, float]:
-    """RRFでスコアを統合する.
+def min_max_normalize(scores: list[float]) -> list[float]:
+    """スコアをmin-max正規化する（0〜1に変換）.
 
-    RRF_score(d) = Σ 1 / (k + rank(d))
+    - 全スコアが同値の場合は全て1.0を返す
+    - 空リストの場合は空リストを返す
+    """
+
+def convex_combination(
+    norm_vector_scores: dict[str, float],
+    norm_bm25_scores: dict[str, float],
+    vector_weight: float = 0.5,
+) -> dict[str, float]:
+    """正規化済みスコアをCCで統合する.
+
+    combined_score(d) = α * norm_vector(d) + (1 - α) * norm_bm25(d)
+
+    - α: vector_weight（デフォルト: 0.5）
+    - 片方の手法にしか出現しないドキュメントは、出現しない側のスコアを0として計算
+    - BM25ゼロヒット時: combined_score = α * norm_vector（自然にα倍に減衰）
     """
 ```
+
+**RRFからCCに変更した理由**:
+
+- RRFは順位のみで統合し、スコアの大きさ（基数情報）を捨てる。0.99と0.51の差も同順位なら同じ扱い
+- CCは正規化スコアの重み付き加算で、スコアの大きさを保持する
+- Bruch et al. (arXiv:2210.11934) でCCがRRFより優れることが実証済み
+- プロダクション実績: Weaviate v1.24（デフォルト変更、6%改善）、Elasticsearch 8.18+（Linear Retriever追加）、OpenSearch（min-max + 算術平均が最良と検証）
+
+**BM25ゼロヒット時の挙動**:
+
+CCの構造により、BM25がゼロヒットの場合は `combined_score = α * norm_vector + 0` となり、最大スコアが α に制限される。α=0.5 なら最大0.5で、最終スコア閾値と組み合わせることで無関係な結果を排除できる。追加のペナルティパラメータは導入しない。
+
+**fetch_count**: 正規化の安定性のため、`max(n_results * 3, 30)` で下限を30に設定。ベクトル検索単体の閾値フィルタリング（最低20件）より多いのは、min-max正規化で外れ値の影響を緩和するために十分なサンプル数が必要なため。
 
 ### Webクローラー (`src/services/web_crawler.py`)
 
@@ -720,7 +762,7 @@ class RAGKnowledgeService:
     async def retrieve(self, query: str, n_results: int = 5) -> RAGRetrievalResult:
         """関連知識を検索し、結果を返す.
 
-        ハイブリッド検索有効時は BM25 + ベクトル検索を RRF で統合。
+        ハイブリッド検索有効時は BM25 + ベクトル検索を CC（Convex Combination）で統合。
         無効時はベクトル検索のみ。
         """
 
@@ -786,6 +828,29 @@ def calculate_precision_recall(
     expected_sources: list[str],
 ) -> PrecisionRecallResult:
     """Precision/Recall を計算する."""
+
+def calculate_ndcg(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+    k: int | None = None,
+) -> float:
+    """NDCG@K（Normalized Discounted Cumulative Gain）を計算する.
+
+    ランキング順序の品質を評価する指標。上位に正解が来るほど高スコア。
+    - k未指定時は全件で計算
+    - 正解が全て上位に来ていれば1.0
+    """
+
+def calculate_mrr(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+) -> float:
+    """MRR（Mean Reciprocal Rank）を計算する.
+
+    最初の正解が何位に来るかの逆数。
+    - 1位に正解があれば1.0、2位なら0.5、3位なら0.333...
+    - 正解がなければ0.0
+    """
 
 async def evaluate_retrieval(
     rag_service: RAGKnowledgeService,
@@ -878,7 +943,6 @@ class Settings(BaseSettings):
     rag_vector_weight: float = 0.5
     rag_bm25_k1: float = 1.5
     rag_bm25_b: float = 0.75
-    rag_rrf_k: int = 60
 
     # 類似度閾値
     rag_similarity_threshold: float | None = None
@@ -988,10 +1052,10 @@ class Settings(BaseSettings):
 
 - [ ] **AC52**: BM25インデックスの追加・検索・削除ができること
 - [ ] **AC53**: 日本語テキストのトークナイズができること
-- [ ] **AC54**: RRFによるスコア統合ができること
+- [ ] **AC54**: Convex Combination（CC）+ min-max正規化によるスコア統合ができること
 - [ ] **AC55**: `RAG_HYBRID_SEARCH_ENABLED=false` 時は従来のベクトル検索のみ動作すること
-- [ ] **AC56**: 重み設定でベクトル検索とBM25の比率を調整できること
-- [ ] **AC57**: `HybridSearchResult` がベクトル検索スコア、BM25スコア、RRFスコアを保持できること
+- [ ] **AC56**: `vector_weight`（α）でベクトル検索とBM25の比率を調整できること
+- [ ] **AC57**: `HybridSearchResult` がベクトル検索スコア、BM25スコア、統合スコア（`combined_score`）を保持できること
 
 ### デバッグ・可視化
 
@@ -1000,6 +1064,12 @@ class Settings(BaseSettings):
 - [ ] **AC60**: `RAG_SHOW_SOURCES=true` の場合、Slack回答末尾にソースURLリストが表示されること
 - [ ] **AC61**: ソースURLは重複なく表示されること
 - [ ] **AC62**: `RAG_SHOW_SOURCES=false` の場合、ソース情報が表示されないこと
+
+### 評価メトリクス（NDCG/MRR）
+
+- [ ] **AC76**: NDCG@K（Normalized Discounted Cumulative Gain）が計算できること
+- [ ] **AC77**: MRR（Mean Reciprocal Rank）が計算できること
+- [ ] **AC78**: 評価レポートにNDCG@K・MRRが含まれること
 
 ### 評価CLIツール
 
@@ -1085,7 +1155,7 @@ class Settings(BaseSettings):
 1. コンテンツタイプ検出
 2. テーブルチャンキング・見出しチャンキング
 3. BM25インデックス
-4. ハイブリッド検索（RRF統合）
+4. ハイブリッド検索（スコア統合）
 5. RAGKnowledgeServiceへの統合
 
 ### Phase 3: 自動評価パイプライン (#177)
@@ -1094,6 +1164,14 @@ class Settings(BaseSettings):
 2. リグレッション検出
 3. テスト用ChromaDB初期化
 4. test-runnerサブエージェントでの自動実行
+
+### Phase 4: ハイブリッド検索統合手法の改善 (#501)
+
+1. 評価テスト拡充（テストケース 8→17〜18件、NDCG/MRR 計算ロジック追加）
+2. RRF でベースライン取得
+3. CC（Convex Combination）+ min-max 正規化への移行（`hybrid_search.py` 全面書き換え）
+4. Before/After 評価
+5. パラメータスイープ（α の最適値探索）
 
 ---
 
@@ -1127,6 +1205,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-18 | ハイブリッド検索の統合手法を RRF → CC（Convex Combination）+ min-max 正規化に変更、NDCG/MRR 評価指標を追加（#501） |
 | 2026-02-18 | BM25ライブラリを rank-bm25 から bm25s に差し替え（#329） |
 | 2026-02-17 | robots.txt 解析・遵守機能を追加（#160） |
 | 2026-02-12 | 4つの仕様書を統合・整理（旧: f9-rag-knowledge.md, f9-rag-evaluation.md, f9-rag-chunking-hybrid.md, f9-rag-auto-evaluation.md） |
