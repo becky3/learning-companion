@@ -11,58 +11,100 @@ from src.rag.bm25_index import BM25Result
 from src.rag.hybrid_search import (
     HybridSearchEngine,
     HybridSearchResult,
-    reciprocal_rank_fusion,
+    convex_combination,
+    min_max_normalize,
 )
 from src.rag.vector_store import RetrievalResult
 
 
-class TestReciprocalRankFusion:
-    """reciprocal_rank_fusion関数のテスト."""
+class TestMinMaxNormalize:
+    """min_max_normalize関数のテスト."""
 
-    def test_ac8_single_ranking(self) -> None:
-        """単一のランキングでRRFスコアが計算される."""
-        rankings = [["doc1", "doc2", "doc3"]]
-        scores = reciprocal_rank_fusion(rankings, k=60)
+    def test_normal_values(self) -> None:
+        """通常の値が[0, 1]に正規化される."""
+        scores = [1.0, 3.0, 5.0]
+        result = min_max_normalize(scores)
 
-        # 順位が高いほどスコアが高い
-        assert scores["doc1"] > scores["doc2"]
-        assert scores["doc2"] > scores["doc3"]
+        assert result == [0.0, 0.5, 1.0]
 
-    def test_ac8_multiple_rankings_merged(self) -> None:
-        """複数のランキングがマージされる."""
-        rankings = [
-            ["doc1", "doc2", "doc3"],  # ランキング1
-            ["doc2", "doc1", "doc3"],  # ランキング2
-        ]
-        scores = reciprocal_rank_fusion(rankings, k=60)
+    def test_all_same_values(self) -> None:
+        """全て同じ値の場合、全て1.0になる."""
+        scores = [3.0, 3.0, 3.0]
+        result = min_max_normalize(scores)
 
-        # doc1とdoc2は両方で上位なので高スコア
-        assert scores["doc1"] > scores["doc3"]
-        assert scores["doc2"] > scores["doc3"]
+        assert result == [1.0, 1.0, 1.0]
 
-    def test_ac8_document_in_one_ranking_only(self) -> None:
-        """片方のランキングにのみ存在するドキュメント."""
-        rankings = [
-            ["doc1", "doc2"],
-            ["doc3", "doc4"],
-        ]
-        scores = reciprocal_rank_fusion(rankings, k=60)
+    def test_empty_list(self) -> None:
+        """空リストの場合、空リストを返す."""
+        result = min_max_normalize([])
 
-        # すべてのドキュメントがスコアを持つ
-        assert "doc1" in scores
-        assert "doc3" in scores
+        assert result == []
 
-    def test_ac8_rrf_k_parameter_affects_scores(self) -> None:
-        """AC8: kパラメータがスコアに影響する."""
-        rankings = [["doc1", "doc2"]]
+    def test_single_element(self) -> None:
+        """単一要素の場合、1.0を返す."""
+        result = min_max_normalize([5.0])
 
-        scores_k60 = reciprocal_rank_fusion(rankings, k=60)
-        scores_k10 = reciprocal_rank_fusion(rankings, k=10)
+        assert result == [1.0]
 
-        # kが小さいほどスコアの差が大きくなる
-        diff_k60 = scores_k60["doc1"] - scores_k60["doc2"]
-        diff_k10 = scores_k10["doc1"] - scores_k10["doc2"]
-        assert diff_k10 > diff_k60
+    def test_negative_values(self) -> None:
+        """負の値を含む場合も正しく正規化される."""
+        scores = [-2.0, 0.0, 2.0]
+        result = min_max_normalize(scores)
+
+        assert result == [0.0, 0.5, 1.0]
+
+    def test_two_values(self) -> None:
+        """2要素の場合."""
+        scores = [10.0, 20.0]
+        result = min_max_normalize(scores)
+
+        assert result == [0.0, 1.0]
+
+
+class TestConvexCombination:
+    """convex_combination関数のテスト."""
+
+    def test_both_scores(self) -> None:
+        """両方のスコアがある場合のCC計算."""
+        norm_vector = {"doc1": 1.0, "doc2": 0.5}
+        norm_bm25 = {"doc1": 0.5, "doc2": 1.0}
+
+        scores = convex_combination(norm_vector, norm_bm25, vector_weight=0.5)
+
+        # doc1: 0.5*1.0 + 0.5*0.5 = 0.75
+        # doc2: 0.5*0.5 + 0.5*1.0 = 0.75
+        assert scores["doc1"] == pytest.approx(0.75)
+        assert scores["doc2"] == pytest.approx(0.75)
+
+    def test_vector_only_doc(self) -> None:
+        """片方のみにあるドキュメントは他方を0として計算."""
+        norm_vector = {"doc1": 1.0}
+        norm_bm25 = {"doc2": 1.0}
+
+        scores = convex_combination(norm_vector, norm_bm25, vector_weight=0.5)
+
+        # doc1: 0.5*1.0 + 0.5*0.0 = 0.5
+        # doc2: 0.5*0.0 + 0.5*1.0 = 0.5
+        assert scores["doc1"] == pytest.approx(0.5)
+        assert scores["doc2"] == pytest.approx(0.5)
+
+    def test_weight_affects_scores(self) -> None:
+        """重みが結果に影響する."""
+        norm_vector = {"doc1": 1.0}
+        norm_bm25: dict[str, float] = {}
+
+        # vector_weight=0.8 → doc1: 0.8*1.0 + 0.2*0.0 = 0.8
+        scores_high = convex_combination(norm_vector, norm_bm25, vector_weight=0.8)
+        # vector_weight=0.2 → doc1: 0.2*1.0 + 0.8*0.0 = 0.2
+        scores_low = convex_combination(norm_vector, norm_bm25, vector_weight=0.2)
+
+        assert scores_high["doc1"] > scores_low["doc1"]
+
+    def test_empty_inputs(self) -> None:
+        """両方空の場合、空の結果を返す."""
+        scores = convex_combination({}, {}, vector_weight=0.5)
+
+        assert scores == {}
 
 
 class TestHybridSearchResult:
@@ -76,12 +118,12 @@ class TestHybridSearchResult:
             metadata={"source_url": "http://example.com"},
             vector_distance=0.3,
             bm25_score=5.0,
-            rrf_score=0.1,
+            combined_score=0.75,
         )
 
         assert result.vector_distance == 0.3
         assert result.bm25_score == 5.0
-        assert result.rrf_score == 0.1
+        assert result.combined_score == 0.75
 
     def test_ac14_result_with_vector_only(self) -> None:
         """AC14: ベクトル検索のみの結果."""
@@ -91,7 +133,7 @@ class TestHybridSearchResult:
             metadata={},
             vector_distance=0.3,
             bm25_score=None,
-            rrf_score=0.05,
+            combined_score=0.5,
         )
 
         assert result.vector_distance == 0.3
@@ -105,7 +147,7 @@ class TestHybridSearchResult:
             metadata={},
             vector_distance=None,
             bm25_score=5.0,
-            rrf_score=0.05,
+            combined_score=0.5,
         )
 
         assert result.vector_distance is None
@@ -138,14 +180,13 @@ class TestHybridSearchEngine:
             vector_store=mock_vector_store,
             bm25_index=mock_bm25_index,
             vector_weight=0.5,
-            rrf_k=60,
         )
 
     @pytest.mark.asyncio
     async def test_ac8_search_merges_vector_and_bm25_results(
         self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
-        """ベクトル検索とBM25検索の結果がRRFでマージされる."""
+        """ベクトル検索とBM25検索の結果がCCでマージされる."""
         # VectorStoreの結果を設定
         mock_vector_store.search.return_value = [
             RetrievalResult(
@@ -179,9 +220,9 @@ class TestHybridSearchEngine:
         # 結果が返されることを確認
         assert len(results) == 2
 
-        # RRFスコアが計算されていることを確認
+        # CCスコアが計算されていることを確認
         for result in results:
-            assert result.rrf_score > 0
+            assert result.combined_score > 0
 
     @pytest.mark.asyncio
     async def test_ac8_search_returns_empty_when_no_results(
@@ -232,10 +273,10 @@ class TestHybridSearchEngine:
         assert results[0].bm25_score == 8.5
 
     @pytest.mark.asyncio
-    async def test_ac10_vector_weight_affects_rrf_scores(
+    async def test_ac10_vector_weight_affects_cc_scores(
         self, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
-        """vector_weightパラメータがRRFスコアに影響する."""
+        """vector_weightパラメータがCCスコアに影響する."""
         # VectorStoreの結果
         mock_vector_store.search.return_value = [
             RetrievalResult(
@@ -251,7 +292,6 @@ class TestHybridSearchEngine:
             vector_store=mock_vector_store,
             bm25_index=mock_bm25_index,
             vector_weight=0.8,
-            rrf_k=60,
         )
         results_high = await engine_high.search("テスト", n_results=5)
 
@@ -260,12 +300,11 @@ class TestHybridSearchEngine:
             vector_store=mock_vector_store,
             bm25_index=mock_bm25_index,
             vector_weight=0.2,
-            rrf_k=60,
         )
         results_low = await engine_low.search("テスト", n_results=5)
 
-        # 高い重みの方がRRFスコアが高い
-        assert results_high[0].rrf_score > results_low[0].rrf_score
+        # 高い重みの方がCCスコアが高い
+        assert results_high[0].combined_score > results_low[0].combined_score
 
     @pytest.mark.asyncio
     async def test_ac8_search_respects_n_results_limit(
@@ -286,3 +325,42 @@ class TestHybridSearchEngine:
         results = await engine.search("テスト", n_results=3)
 
         assert len(results) == 3
+
+    @pytest.mark.asyncio
+    async def test_similarity_threshold_filters_vector_scores(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """similarity_threshold超過のベクトル結果はスコアが0になる."""
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="閾値内",
+                metadata={"source_url": "http://example.com/good", "chunk_index": 0},
+                distance=0.3,
+            ),
+            RetrievalResult(
+                text="閾値超過",
+                metadata={"source_url": "http://example.com/bad", "chunk_index": 0},
+                distance=0.8,
+            ),
+        ]
+        mock_bm25_index.search.return_value = []
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=0.5)
+
+        # 閾値超過のドキュメントは除外される（BM25ヒットもないため）
+        assert len(results) == 1
+        assert results[0].text == "閾値内"
+
+    @pytest.mark.asyncio
+    async def test_fetch_count_minimum_30(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """fetch_countの下限が30であること."""
+        mock_vector_store.search.return_value = []
+        mock_bm25_index.search.return_value = []
+
+        await engine.search("テスト", n_results=5)
+
+        # n_results=5 → fetch_count = max(5*3, 30) = 30
+        call_args = mock_vector_store.search.call_args
+        assert call_args[1]["n_results"] == 30

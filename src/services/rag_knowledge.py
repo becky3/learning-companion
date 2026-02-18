@@ -90,7 +90,6 @@ class RAGKnowledgeService:
                 vector_store=vector_store,
                 bm25_index=bm25_index,
                 vector_weight=settings.rag_vector_weight,
-                rrf_k=settings.rag_rrf_k,
             )
             logger.info("Hybrid search engine initialized")
 
@@ -468,9 +467,9 @@ class RAGKnowledgeService:
             for i, result in enumerate(results, start=1):
                 source_url = result.metadata.get("source_url", "不明")
                 logger.info(
-                    "RAG result %d: rrf_score=%.4f vector_dist=%s bm25_score=%s source=%r",
+                    "RAG result %d: combined_score=%.4f vector_dist=%s bm25_score=%s source=%r",
                     i,
-                    result.rrf_score,
+                    result.combined_score,
                     f"{result.vector_distance:.3f}" if result.vector_distance is not None else "N/A",
                     f"{result.bm25_score:.3f}" if result.bm25_score is not None else "N/A",
                     source_url,

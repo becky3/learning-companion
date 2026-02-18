@@ -20,7 +20,8 @@ from src.rag.heading_chunker import HeadingChunk, chunk_by_headings
 from src.rag.hybrid_search import (
     HybridSearchEngine,
     HybridSearchResult,
-    reciprocal_rank_fusion,
+    convex_combination,
+    min_max_normalize,
 )
 from src.rag.table_chunker import TableChunk, chunk_table_data
 
@@ -35,6 +36,8 @@ def __getattr__(name: str) -> object:
         "EvaluationReport",
         "PrecisionRecallResult",
         "QueryEvaluationResult",
+        "calculate_ndcg",
+        "calculate_mrr",
         "calculate_precision_recall",
         "check_negative_sources",
         "evaluate_retrieval",
@@ -69,12 +72,15 @@ __all__ = [
     # Hybrid search
     "HybridSearchEngine",
     "HybridSearchResult",
-    "reciprocal_rank_fusion",
+    "convex_combination",
+    "min_max_normalize",
     # Evaluation
     "PrecisionRecallResult",
     "QueryEvaluationResult",
     "EvaluationReport",
     "EvaluationDatasetQuery",
+    "calculate_ndcg",
+    "calculate_mrr",
     "calculate_precision_recall",
     "check_negative_sources",
     "load_evaluation_dataset",
