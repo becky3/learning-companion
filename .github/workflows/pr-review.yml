@@ -131,7 +131,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           bot_name: "claude[bot]"
           bot_id: "209825114"
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 50 --dangerously-skip-permissions"
+          claude_args: "--model claude-opus-4-6 --max-turns 50 --dangerously-skip-permissions"
           show_full_output: true
           prompt: |
             このPRに対して包括的なコードレビューを実施してください。
