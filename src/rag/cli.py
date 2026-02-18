@@ -25,6 +25,14 @@ if TYPE_CHECKING:
     from src.services.rag_knowledge import RAGKnowledgeService
 
 
+class EvaluationParams(TypedDict):
+    """評価パラメータの型定義."""
+
+    threshold: float | None
+    vector_weight: float | None
+    n_results: int
+
+
 class RegressionInfo(TypedDict):
     """リグレッション検出結果の型定義."""
 
@@ -67,6 +75,11 @@ def main() -> None:
         "--threshold",
         type=float,
         help="類似度閾値",
+    )
+    eval_parser.add_argument(
+        "--vector-weight",
+        type=float,
+        help="ベクトル検索の重み α（0.0〜1.0）。未指定時は RAG_VECTOR_WEIGHT 設定値を使用",
     )
     eval_parser.add_argument(
         "--persist-dir",
@@ -119,6 +132,7 @@ async def create_rag_service(
     threshold: float | None = None,
     persist_dir: str | None = None,
     bm25_index: "BM25Index | None" = None,
+    vector_weight: float | None = None,
 ) -> "RAGKnowledgeService":
     """RAGKnowledgeServiceを生成する.
 
@@ -126,6 +140,7 @@ async def create_rag_service(
         threshold: 類似度閾値（指定時は環境変数を一時上書き）
         persist_dir: ChromaDB永続化ディレクトリ（指定時は設定 chromadb_persist_dir を上書き）
         bm25_index: BM25インデックス（指定時はハイブリッド検索を有効化）
+        vector_weight: ベクトル検索の重み α（指定時は環境変数を一時上書き）
 
     Returns:
         RAGKnowledgeServiceインスタンス
@@ -140,9 +155,13 @@ async def create_rag_service(
 
     # 環境変数を一時上書き（元の値を保持して復元）
     original_threshold = os.environ.get("RAG_SIMILARITY_THRESHOLD")
+    original_vector_weight = os.environ.get("RAG_VECTOR_WEIGHT")
     try:
         if threshold is not None:
             os.environ["RAG_SIMILARITY_THRESHOLD"] = str(threshold)
+        if vector_weight is not None:
+            os.environ["RAG_VECTOR_WEIGHT"] = str(vector_weight)
+        if threshold is not None or vector_weight is not None:
             # lru_cacheをクリアして設定を再読み込み
             get_settings.cache_clear()
 
@@ -172,6 +191,12 @@ async def create_rag_service(
                 os.environ.pop("RAG_SIMILARITY_THRESHOLD", None)
             else:
                 os.environ["RAG_SIMILARITY_THRESHOLD"] = original_threshold
+        if vector_weight is not None:
+            if original_vector_weight is None:
+                os.environ.pop("RAG_VECTOR_WEIGHT", None)
+            else:
+                os.environ["RAG_VECTOR_WEIGHT"] = original_vector_weight
+        if threshold is not None or vector_weight is not None:
             # キャッシュをクリアして次回のget_settings()で新しい設定を読み込む
             get_settings.cache_clear()
 
@@ -225,10 +250,12 @@ async def run_evaluation(args: argparse.Namespace) -> None:
     bm25_index = _build_bm25_index_from_fixture(fixture_path)
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
+    vector_weight: float | None = args.vector_weight
     rag_service = await create_rag_service(
         threshold=args.threshold,
         persist_dir=args.persist_dir,
         bm25_index=bm25_index,
+        vector_weight=vector_weight,
     )
 
     # 評価実行
@@ -270,6 +297,13 @@ async def run_evaluation(args: argparse.Namespace) -> None:
                 regression_info["delta"],
             )
 
+    # 評価パラメータ
+    eval_params = EvaluationParams(
+        threshold=args.threshold,
+        vector_weight=vector_weight,
+        n_results=args.n_results,
+    )
+
     # レポート出力
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -277,14 +311,14 @@ async def run_evaluation(args: argparse.Namespace) -> None:
     json_path = output_dir / "report.json"
     md_path = output_dir / "report.md"
 
-    write_json_report(report, regression_info, json_path, args.dataset)
-    write_markdown_report(report, regression_info, md_path, args.dataset)
+    write_json_report(report, regression_info, json_path, args.dataset, eval_params)
+    write_markdown_report(report, regression_info, md_path, args.dataset, eval_params)
 
     logger.info("Reports written to: %s", output_dir)
 
     if args.save_baseline:
         baseline_path = output_dir / "baseline.json"
-        write_json_report(report, None, baseline_path, args.dataset)
+        write_json_report(report, None, baseline_path, args.dataset, eval_params)
         logger.info("Baseline saved to: %s", baseline_path)
 
     # リグレッション時の終了コード
@@ -337,6 +371,7 @@ def write_json_report(
     regression: RegressionInfo | None,
     output_path: Path,
     dataset_path: str,
+    params: EvaluationParams | None = None,
 ) -> None:
     """JSONレポートを出力する.
 
@@ -345,8 +380,9 @@ def write_json_report(
         regression: リグレッション情報（オプション）
         output_path: 出力パス
         dataset_path: 評価データセットのパス
+        params: 評価パラメータ（オプション）
     """
-    data = {
+    data: dict[str, object] = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "dataset": dataset_path,
         "summary": {
@@ -375,6 +411,8 @@ def write_json_report(
             for qr in report.query_results
         ],
     }
+    if params is not None:
+        data["params"] = dict(params)
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -384,6 +422,7 @@ def write_markdown_report(
     regression: RegressionInfo | None,
     output_path: Path,
     dataset_path: str,
+    params: EvaluationParams | None = None,
 ) -> None:
     """Markdownレポートを出力する.
 
@@ -392,13 +431,20 @@ def write_markdown_report(
         regression: リグレッション情報（オプション）
         output_path: 出力パス
         dataset_path: 評価データセットのパス
+        params: 評価パラメータ（オプション）
     """
     lines = [
         "# RAG評価レポート",
         "",
         f"**実行日時**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')} UTC",
         f"**データセット**: {dataset_path}",
-        "",
+    ]
+    if params is not None:
+        threshold_str = str(params["threshold"]) if params["threshold"] is not None else "None (設定値)"
+        vw_str = str(params["vector_weight"]) if params["vector_weight"] is not None else "None (設定値)"
+        lines.append(f"**パラメータ**: threshold={threshold_str}, vector_weight={vw_str}, n_results={params['n_results']}")
+    lines.append("")
+    lines.extend([
         "## サマリー",
         "",
         "| 指標 | 値 |",
@@ -411,7 +457,7 @@ def write_markdown_report(
         f"| 平均MRR | {report.average_mrr:.3f} |",
         f"| 禁止ソース違反 | {len(report.negative_source_violations)} |",
         "",
-    ]
+    ])
 
     if regression:
         lines.extend([
