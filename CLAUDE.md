@@ -109,13 +109,6 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 
 サブエージェント定義は `.claude/agents/` 配下を参照。
 
-<!-- CLI-BUG: classifyHandoffIfNeeded (anthropics/claude-code#24181) -->
-> **Task ツールの `run_in_background: true` は使用禁止**
->
-> CLI の既知バグによりバックグラウンドモードの結果が正常に返らない。
-> サブエージェントは常にフォアグラウンドで起動すること。
-> **解除条件**: バグ修正確認後、このブロックを削除する。
-
 ### エージェントチーム
 
 チーム機能の仕様は `docs/specs/agent-teams/` 配下を参照。
