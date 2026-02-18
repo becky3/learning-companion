@@ -12,6 +12,9 @@
     "MD041": false,
     "MD060": false
   },
+  "ignores": [
+    "docs/zenn-drafts/**"
+  ],
   "globs": [
     "docs/**/*.md",
     "*.md",
