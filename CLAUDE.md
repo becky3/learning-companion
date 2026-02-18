@@ -6,530 +6,118 @@
 
 - **デフォルト**: 全サービスでローカルLLM（LM Studio）を使用
 - **設定変更**: `.env` で各サービスごとにLLMを変更可能
-  - `CHAT_LLM_PROVIDER` — ChatService用
-  - `PROFILER_LLM_PROVIDER` — UserProfiler用
-  - `TOPIC_LLM_PROVIDER` — TopicRecommender用
-  - `SUMMARIZER_LLM_PROVIDER` — Summarizer用
-- 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
-
-### MCP設定
-
-- `MCP_ENABLED` — MCP機能の有効/無効（`true` / `false`、デフォルト: `false`）
-- `MCP_SERVERS_CONFIG` — MCPサーバー設定ファイルのパス（デフォルト: `config/mcp_servers.json`）
-- MCPサーバーの追加・変更は `config/mcp_servers.json` で行う
-- MCPサーバー（`mcp-servers/` 配下）は `src/` のモジュールを import しないこと（将来のリポジトリ分離制約）
-
-### RAG設定
-
-- `RAG_ENABLED` — RAG機能の有効/無効（`true` / `false`、デフォルト: `false`）
-- `EMBEDDING_PROVIDER` — Embeddingプロバイダー（`"local"` / `"online"`、デフォルト: `"local"`）
-- 詳細設定は `docs/specs/f9-rag.md` を参照
+  - `CHAT_LLM_PROVIDER` / `PROFILER_LLM_PROVIDER` / `TOPIC_LLM_PROVIDER` / `SUMMARIZER_LLM_PROVIDER`
+  - 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
+- `MCP_ENABLED` — MCP機能の有効/無効（デフォルト: `false`）。MCPサーバー（`mcp-servers/` 配下）は `src/` のモジュールを import しないこと
+- `RAG_ENABLED` — RAG機能の有効/無効（デフォルト: `false`）。詳細は `docs/specs/f9-rag.md` 参照
 
 ## 開発ルール
-
-### 判断の裏付け義務
-
-- **推測で判断を確定させない**。技術的な判断（「〜の可能性が高い」「〜だろう」）を下す前に、以下の裏付けを取ること:
-  - 公式ドキュメントの確認（Web検索・WebFetch）
-  - 実際のデータによる検証（API呼び出し、ログ確認、再現テスト）
-  - ソースコード・設定ファイルの直接確認
-- 裏付けが取れない場合は「未検証の仮説」と明示し、検証方法を提案する
-- 特に外部サービス（GitHub API、CI/CD、サードパーティツール）の挙動は推測が外れやすい。**必ず公式ドキュメントか実データで確認する**
 
 ### 仕様駆動開発
 
 - **実装前に必ず `docs/specs/` の仕様書を読むこと**。仕様書が実装の根拠。
 - **実装前に既存コードを必ず読むこと**。仕様書の「関連ファイル」に記載された実装ファイルを確認し、既存の構造・パターン・抽象化を把握してから設計する。
-- **既存コードの拡張を優先する**。新しいメソッドやクラスを作る前に、既存のメソッドにパラメータ（フラグ）を追加して対応できないか検討する。やむを得ず類似ロジックが重複する場合は、その理由と設計判断を仕様書に記載する。
-- 仕様書にない機能追加・リファクタリングは別Issueに切り出す。ただし、**作業中に気づいた問題は素通りさせない**:
-  - **軽微な修正**（typo、不正確なコメント、既存の lint エラー等）はその場で修正する（Issue化不要）
-  - **大きな問題**（設計変更が必要、影響範囲が広い等）は Issue に切り出して報告する
+- **既存コードの拡張を優先する**。新しいメソッドやクラスを作る前に、既存のメソッドにパラメータ追加で対応できないか検討する。
+- 仕様書にない機能追加・リファクタリングは別Issueに切り出す。ただし **軽微な修正**（typo、lint エラー等）はその場で修正、**大きな問題** は Issue に切り出す。
 - 仕様変更が必要な場合は、先に仕様書を更新してから実装する。
+- 外部サービス（GitHub API、CI/CD等）の挙動は仕様書か公式ドキュメントで確認する。
 
 ### コーディング規約
 
-- 各サービスクラスのdocstringに対応する仕様書パスを記載する:
-
-  ```python
-  class FeedCollector:
-      """RSS/Webからの情報収集サービス
-      仕様: docs/specs/f2-feed-collection.md
-      """
-  ```
-
-- テスト名は仕様書の受け入れ条件(AC)番号と対応させる:
-
-  ```python
-  def test_ac1_rss_feed_is_fetched_and_parsed():
-  def test_ac2_articles_are_summarized_by_local_llm():
-  ```
-
+- 各サービスクラスのdocstringに仕様書パスを記載: `仕様: docs/specs/f2-feed-collection.md`
+- テスト名は仕様書の受け入れ条件(AC)番号と対応: `test_ac1_rss_feed_is_fetched_and_parsed()`
 - ruff でリント、mypy (strict) で型チェック
-- markdownlint でMarkdownチェック（`npx markdownlint-cli2@0.20.0` を使用、Node.js環境が必要）
-- shellcheck でシェルスクリプトチェック（`.github/scripts/` 配下が対象、`uv run shellcheck` を使用、dev依存に含む）
-  - suppress コメントはディレクティブ行と説明行を分ける（ディレクティブ行に `--` 等でインラインコメントを付けるとパースエラーになる）:
+- markdownlint（`npx markdownlint-cli2@0.20.0`）でMarkdownチェック
+- shellcheck（`uv run shellcheck`）でシェルスクリプトチェック（`.github/scripts/` 配下）
+  - suppress コメントはディレクティブ行と説明行を分ける:
 
     ```bash
-    # Good: 説明を別行に
     # Reason for suppression
     # shellcheck disable=SC2016
-
-    # Bad: ディレクティブ行にインラインコメント（パースエラー）
-    # shellcheck disable=SC2016 -- reason here
     ```
 
-- ドキュメント内の図表（フローチャート、シーケンス図、ER図等）はmermaid形式を使用する
-  - ASCII図表は使用しない
-  - 参考: <https://mermaid.js.org/>
+- ドキュメント内の図表は mermaid 形式を使用（ASCII図表は不可）
 
 ### 作業開始時の手順
 
-1. **Issue・Milestoneの確認**: 作業前に必ず現状を把握する
-
-   ```bash
-   gh milestone list                  # Milestone一覧と進捗確認
-   gh issue list --milestone "Step N: ..."  # 該当Stepのissue一覧
-   gh issue list --state open         # 未着手Issue一覧
-   gh issue view <番号>               # Issue詳細の確認
-   ```
-
-2. **対象Issueの仕様書を読む**: Issueに記載された仕様書パスを確認し、`docs/specs/` の該当ファイルを読む
-3. **既存実装コードの確認**: 仕様書の「関連ファイル」セクションに記載されたソースファイルを読み、既存の処理フロー・メソッド構成・抽象化パターンを把握する。**新規メソッド作成前に、既存メソッドのパラメータ追加で対応できないか必ず検討する**
-4. **ブランチ作成→実装→PR** の流れで進める
+1. Issue・Milestoneの確認: `gh milestone list` / `gh issue list --state open` / `gh issue view <番号>`
+2. 対象Issueの仕様書を読む（`docs/specs/` の該当ファイル）
+3. 既存実装コードの確認（仕様書の「関連ファイル」セクション）
+4. ブランチ作成 → 実装 → PR の流れで進める
 
 ### Git運用（git-flow）
 
-本プロジェクトは git-flow ベースのブランチ戦略を採用している。詳細は `docs/specs/git-flow.md` を参照。
+詳細は `docs/specs/git-flow.md` を参照。
 
 - **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
-- **作業ブランチ**:
-  - `feature/f{N}-{機能名}-#{Issue番号}` — 新機能開発（`develop` から分岐 → `develop` にマージ）
-  - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` から分岐 → `develop` にマージ）
-  - `release/v{X.Y.Z}` — リリース準備（`develop` から分岐 → `main` に squash マージ）
-  - `hotfix/{修正内容}-#{Issue番号}` — 本番緊急修正（`main` から分岐 → `main` + `develop` にマージ）
-  - `claude/issue-{N}-{date}-{id}` — Claude Code Action 自動生成（命名はシステム依存）
+- **作業ブランチ**: `feature/f{N}-{機能名}-#{Issue番号}` / `bugfix/{修正内容}-#{Issue番号}` / `release/v{X.Y.Z}` / `hotfix/{修正内容}-#{Issue番号}`
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
 - PR作成時に `Closes #{Issue番号}` で紐付け
-- **PRのbaseブランチ**: 通常は `develop`、リリースは `main`、hotfix は `main`
-- **マージ方式**: feature/bugfix → develop は通常マージ（`--merge`）、release → main は squash マージ（`--squash`）。リリース後は `main` → `develop` に差分反映（通常マージ）。詳細は `docs/specs/git-flow.md` の「マージ方式」セクション参照
-- GitHub Milestones で Step 単位の進捗管理
-- `gh` コマンドで Issue/PR を操作
+- **PRのbaseブランチ**: 通常は `develop`、リリース/hotfix は `main`
+- **マージ方式**: feature/bugfix → develop は通常マージ、release → main は squash マージ
+- **サブIssue作成**: `gh` CLI は未サポートのため GraphQL API を使用（`gh api graphql` の `addSubIssue` mutation）。親・子の Node ID は `gh issue view <番号> --json id --jq '.id'` で取得し、直接埋め込む
 
-**サブIssueの作成**:
+### 実装完了時の必須手順
 
-`gh` CLI にはサブIssue作成のネイティブサポートがないため、GraphQL API を使用する。
-Issue作成時にサブIssue関係の指示がある場合は、Issue作成後にこの手順で紐付けること。
-
-```bash
-# 1. 親・子IssueのNode IDを取得
-gh issue view <親Issue番号> --json id --jq '.id'
-gh issue view <子Issue番号> --json id --jq '.id'
-
-# 2. サブIssue関係を作成（IDは直接埋め込む）
-gh api graphql -H "GraphQL-Features:sub_issues" \
-  -f query='mutation { addSubIssue(input: { issueId: "<親のNode ID>", subIssueId: "<子のNode ID>" }) { issue { title number } subIssue { title number } } }'
-```
-
-**Claudeによる実装完了時の必須手順**:
-
-1. **ファイル作成の確認**: 作成したと報告したファイルが実際に存在するか `ls -la` で確認
-2. **テスト実行**: **test-runner サブエージェント** または `/test-run` スキルで全テスト（pytest / mypy / ruff / markdownlint）が通過することを確認
-3. **コードレビュー**: **code-reviewer サブエージェント** または `/code-review` スキルで変更コードのセルフレビューを実施する。分類（Critical/Warning/Suggestion）は参考情報であり、判断に誤りが含まれる場合もある。各指摘については、対応すべきかそれぞれ判断し、判断に迷う場合はユーザーに確認する
-4. **ドキュメントレビュー**: ドキュメント（`docs/specs/`、`README.md`、`CLAUDE.md` 等）に変更がある場合、**doc-reviewer サブエージェント** または `/doc-review` スキルで品質レビューを実施し、指摘があれば修正する。実装のみのPRでも、対応する仕様書との整合性チェックのため実施すること。
-   - **スキップ基準**: 誤字脱字のみの修正はスキップ可
-   - **差分レビュー推奨**: PRレビュー指摘対応、軽微な補足追加は「差分レビュー」を使用
-   - **フルレビュー必須**: 新規仕様書作成、大幅改訂時
-5. **変更のステージング**: `git status` で変更を確認し、`git add` で全てステージング
-6. **コミット**: 変更内容を明確に記述したコミットメッセージでコミット
-7. **プッシュ**: `git push origin <ブランチ名>` でリモートにプッシュ
-8. **PR作成**: `gh pr create` コマンドで実際にPRを作成（手動リンクではなく実際に作成）
-
-   PR body は `.github/pull_request_template.md` の形式に従うこと（仕様: `docs/specs/pr-body-template.md`）。
-
-   ```bash
-   # 通常開発（feature/bugfix → develop）
-   gh pr create --title "タイトル" --body "$(cat <<'EOF'
-   ## Change type
-
-   - [x] feat: 新機能実装
-
-   ## Summary
-
-   - 変更内容
-
-   ## Test plan
-
-   - [ ] テスト項目
-
-   ## Related issues
-
-   Closes #Issue番号
-   EOF
-   )" --base develop
-
-   # hotfix（hotfix → main）
-   gh pr create --title "タイトル" --body "$(cat <<'EOF'
-   ## Change type
-
-   - [x] fix: バグ修正
-
-   ## Summary
-
-   - 修正内容
-
-   ## Test plan
-
-   - [ ] テスト項目
-
-   ## Related issues
-
-   Closes #Issue番号
-   EOF
-   )" --base main
-   ```
-
-   **PR bodyの注意事項**: 設計書の先行更新（実装は後続フェーズ）のPRでは、Change type で `docs(pre-impl)` を選択すること（prt 自動レビューの誤検知防止）。
-
-9. **作成確認**: `gh pr view` でPRが正しく作成されたことを確認し、URLをユーザーに提示
+1. **ファイル確認**: 作成したファイルが実際に存在するか `ls -la` で確認
+2. **テスト実行**: `/test-run` スキルで全テスト通過を確認
+3. **コードレビュー**: `/code-review` スキルでセルフレビュー。各指摘は対応すべきかそれぞれ判断
+4. **ドキュメントレビュー**: `docs/specs/` 等に変更がある場合、`/doc-review` で品質レビュー。実装のみのPRでも対応する仕様書との整合性チェックを実施すること
+   - スキップ基準: 誤字脱字のみの修正
+   - 差分レビュー推奨: PRレビュー指摘対応、軽微な補足追加
+5. **ステージング・コミット・プッシュ・PR作成**
+   - PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/pr-body-template.md`）
+   - 設計書の先行更新PRでは Change type で `docs(pre-impl)` を選択
+6. **PR確認**: `gh pr view` で確認し、URLをユーザーに提示
 
 ### レビュー指摘対応
 
-PRに対するレビュー指摘（自動レビューツール、人間問わず）への対応は `/check-pr` スキルを使用する。
-ユーザーが以下のような表現でレビュー対応を依頼した場合、自律的に `/check-pr` スキルを呼び出すこと:
-
-- 「指摘をチェックして」「レビューを確認して」「レビュー指摘に対応して」
-- 「コメントを修正して」「レビューコメントを直して」
-- 「レビューの指摘を見て」「PRのフィードバックに対応して」
-
-手動対応する場合は以下を確認すること:
-
-1. **コード修正**: 指摘に対する修正を実施
-2. **テスト実行**: **test-runner サブエージェント** で**差分テスト**を実行（`test-runnerサブエージェントで差分テストを実行してください`）
-3. **ドキュメント整合性チェック**: 修正内容が以下のドキュメントに影響しないか確認し、必要なら更新する
-   - `docs/specs/` — 仕様・受け入れ条件に影響する変更の場合
-   - `CLAUDE.md` — 開発ルール・プロジェクト構造に影響する場合
-4. **ドキュメントレビュー**: ドキュメント（`docs/specs/`、`README.md`、`CLAUDE.md` 等）に変更がある場合、**doc-reviewer サブエージェント** で**差分レビュー**を実施（軽微な修正のためフルレビューは不要）
-5. **対応コメント投稿**: PRに対応状況を説明するコメントを投稿する（`gh pr comment`）
-   - 各指摘に対して「対応済み ✅」「別Issue化 ⏸️」「対応不要（理由）❌」を明記
-   - 対応内容の簡潔な説明を含める
-   - レビュアーが再確認しやすいよう、変更箇所や判断理由を記載
-6. **スレッドの resolve**: 判断済みスレッド（✅ 対応済み、❌ 対応不要、⏸️ 別Issue化）を `gh api graphql` の `resolveReviewThread` mutation で resolve する。未検討のスレッドは resolve しない
-7. **コミット**: `fix: レビュー指摘対応 (PR #番号)` の形式でコミット
+レビュー指摘への対応は `/check-pr` スキルを使用する。
+「指摘をチェックして」「レビューを確認して」等のユーザー依頼時に自律的に呼び出すこと。
 
 ### PR・Issue コメントでのメンション回避
 
 PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメンションを使用しないこと。
 
-- **理由**: `@copilot` のようなメンションは Copilot SWE Agent 等の自動化ツールがトリガーとして検知し、意図しないPR作成やActions minutesの浪費を引き起こす。人間ユーザーへの不要な通知も発生する
-- **対処法**: レビュアー名を記載する場合は `@` プレフィックスを外し、ユーザー名のみを記載する（例: `(copilot)` / `(becky3)`）
+- **理由**: `@copilot` のようなメンションは自動化ツールがトリガーとして検知し、意図しないPR作成やActions minutesの浪費を引き起こす
+- **対処法**: `@` プレフィックスを外し、ユーザー名のみを記載する（例: `(copilot)` / `(becky3)`）
 - **適用範囲**: `gh pr comment`、`gh issue comment`、PR body 等、GitHub 上に投稿する全てのテキスト
 
 ## 自動進行ルール（auto-progress）
 
-**重要**: `auto-implement` ラベルは**ユーザーが明示的に指示した場合のみ**付与すること。Issue作成時に勝手に付けてはならない。自動ワークフロー（GitHub Actions）のトリガーとなり、コスト発生や意図しない実行のリスクがある。
+**重要**: `auto-implement` ラベルは**ユーザーが明示的に指示した場合のみ**付与すること。Issue作成時に勝手に付けてはならない（自動ワークフローのトリガーとなり、コスト発生のリスクがある）。
 
-`auto-implement` ラベルによりIssueが自動実装トリガーされた場合、
-以下のルールに従って実装を進める。
-仕様: docs/specs/auto-progress.md
-
-### 起動時の判断フロー
-
-1. Issueの内容を読む（タイトル、本文、全コメント）
-2. 仕様書の存在確認（`docs/specs/` に対応する仕様書があるか）
-   - あり + AC定義済み: 仕様書に従って実装を開始
-   - あり + AC未定義: ACを追加してから実装を開始
-   - なし + Issue具体的: `/doc-gen spec` で仕様書を自動生成し、そのまま実装（事後拒否権モデル）
-   - なし + Issue曖昧: `auto:failed` 付与、不明点をIssueにコメントして停止
-3. 通常の開発ルール（仕様駆動開発）に従って実装
-4. 実装完了後、通常の手順でPR作成まで行う（ベースブランチは `develop`）
-5. ラベル更新:
-   - 実装開始時: `auto-implement` ラベルを除去
-   - 失敗時: `auto:failed` 付与
-
-### Git運用（auto-progress）
-
-- PRのベースブランチは `develop`（`gh pr create --base develop`）
-- `main` への直接PRは作成しない（リリースPR以外）
-- ブランチ命名規則は既存ルールを踏襲
-
-### Issue具体性の判定
-
-具体的と見なす: 入出力例あり、具体的な変更指示、バグ再現手順あり
-曖昧と見なす: 「検討」「改善」のみ、複数要求混在、外部仕様未確定
-
-### `auto:failed` ラベル
-
-`auto:failed` ラベルが付いたIssue/PRは自動処理を一切行わない。
-自動処理の失敗時に自動付与されるほか、管理者が手動で付与して緊急停止にも使う。
-再開するには `auto:failed` を除去し、`auto-implement` を再付与する。
-
-### 品質チェック（GitHub Actions 環境）
-
-GitHub Actions 環境では Skill ツールを使用しない。以下の4ステップを順番に全て実行すること。
-途中で停止しないこと。全ステップ完了まで続けること。
-
-#### ステップ 1/4: テスト実行
-
-```bash
-# CRLF → LF 自動変換（Windows 環境の shellcheck SC1017 防止）
-for f in .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh; do [ -f "$f" ] || continue; if grep -q $'\r' "$f" 2>/dev/null; then tmp=$(mktemp) && tr -d '\r' < "$f" > "$tmp" && mv "$tmp" "$f" && echo "[fix] CRLF→LF: $f"; fi; done
-
-uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdownlint-cli2@0.20.0 "CLAUDE.md" "docs/**/*.md" "*.md" ".claude/**/*.md" && uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh
-```
-
-- Markdown のみの変更の場合、pytest / ruff / mypy / shellcheck はスキップ可（markdownlint のみ実行）
-- 失敗があれば修正して再実行。全て通過してから次へ進む
-
-#### ステップ 2/4: コードレビュー
-
-`git diff` で変更差分を確認し、以下の観点でセルフレビュー:
-
-- テスト名と実装の整合性
-- エラーハンドリング（except pass の有無）
-- バリデーション漏れ（境界値: 0, 負数, 空文字列）
-- セキュリティ（コマンドインジェクション、XSS等）
-
-分類（Critical/Warning/Suggestion）は参考情報であり、判断に誤りが含まれる場合もある。各指摘について対応すべきかそれぞれ判断し、修正する。
-
-#### ステップ 3/4: ドキュメントレビュー
-
-`docs/` や `CLAUDE.md` に変更がある場合、仕様書との整合性を確認する。
-ドキュメント変更がなければスキップ可。
-
-**ここで停止しないこと。次のステップ4を必ず実行すること。**
-
-#### ステップ 4/4: 完了処理（commit / push / PR作成 / Issue完了コメント）
-
-1. `git status --porcelain` で変更確認（空なら停止）
-2. `git add -A`
-3. `git diff --cached --stat` で差分サマリ表示
-4. 変更内容からコミットメッセージ自動生成（優先順位: fix > feat > docs > ci）
-5. `git commit -m "生成したメッセージ"`
-6. `BRANCH=$(git branch --show-current) && git push origin "$BRANCH"`
-7. PR body は `.github/pull_request_template.md` の形式に従い、PR を作成する:
-
-   ```bash
-   gh pr create --base develop --title "タイトル" --body "$(cat <<'EOF'
-   ## Change type
-
-   - [x] feat: 新機能実装
-
-   ## Summary
-
-   - 変更内容
-
-   ## Test plan
-
-   - [ ] テスト項目
-
-   ## Related issues
-
-   Closes #Issue番号
-   EOF
-   )"
-   ```
-
-8. `gh issue comment <Issue番号> --body "対応が完了しました。PR #<PR番号> をご確認ください。"`
-
-エラー時: ステップ1-7は失敗で停止。ステップ8は警告して続行（PRは作成済み）。
-commitが成功していない状態でpushしないこと。
-
-## Bot プロセスガード
-
-- Bot起動時に `bot.pid` ファイルで重複起動を検知する（仕様: `docs/specs/bot-process-guard.md`）
-- 既に起動中の場合は警告メッセージを表示して `sys.exit(1)` で終了する（自動killはしない）
-- シャットダウン時に子プロセス（MCPサーバー等）をクリーンアップする
-- プラットフォーム分岐: Windows は `tasklist`/`wmic`/`taskkill`、Unix は `os.kill`/`pgrep`/`SIGTERM`
+自動実装の詳細ルール・品質チェック手順・GA環境の制約は `.claude/CLAUDE-auto-progress.md` を参照。
 
 ## Claude Code 拡張機能
 
 ### Hooks
 
-プロジェクトには Claude Code の hooks 機能を使った通知・ガードシステムが設定されています。
-
 - **仕様**: `docs/specs/claude-code-hooks.md`
-- **設定ファイル**: `.claude/settings.json`
-- **通知スクリプト**: `.claude/scripts/notify.sh`
-- **破壊コマンドガード**: `.claude/scripts/destructive-command-guard.sh`
-  - PreToolUse フック（Bash）で `gh issue delete` / `gh repo delete` / `gh release delete` / `gh label delete` をブロック
-  - 取り消し不能な破壊コマンドの誤実行を防止（Issue #444 消失を受けた再発防止策）
-  - 本当に実行が必要な場合はターミナルから直接実行する
-
-**Windows環境での注意点**:
-
+- **破壊コマンドガード**: `gh issue delete` / `gh repo delete` 等をフックでブロック。実行が必要な場合はターミナルから直接実行する
 - シェルスクリプト（`.sh`）は **LF 改行コード** で保存すること（CRLF だとエラー）
-- **test-run スキル / GA環境テスト実行時に shellcheck 前の CRLF → LF 自動変換が走る**（手動変換は不要）
-- 手動変換が必要な場合: `cat file.sh | tr -d '\r' > file_tmp.sh && mv file_tmp.sh file.sh`
-- **出力の破棄には必ず `/dev/null` を使うこと。`> nul` は禁止。**
-  - Git Bash 環境では `> nul` と書くと `nul` という名前のファイルが作成されてしまう（Windows の予約デバイス名が正しく解釈されない）
-  - 正: `command > /dev/null 2>&1`
-  - 誤: `command > nul 2>&1`
+- **出力の破棄には必ず `/dev/null` を使うこと。`> nul` は禁止**（Git Bash では `nul` ファイルが生成される）
 
-### スキル（ユーザー実行コマンド）
+### スキル自律呼び出しルール
 
-スキルは `/スキル名` 形式でユーザーが直接呼び出すコマンドです。
+以下のユーザー表現に対して、対応するスキルを自律的に呼び出すこと:
 
-| スキル | 用途 | 使用例 |
-|--------|------|--------|
-| `/doc-gen` | ドキュメント新規作成（仕様書） | `/doc-gen spec feed-collection` |
-| `/doc-edit` | 既存ドキュメントの更新・修正 | `/doc-edit docs/specs/f2-feed-collection.md` |
-| `/check-pr` | PRの内容確認・レビュー指摘対応・実装継続 | `/check-pr 123` |
-| `/topic` | 学びトピックの自動抽出・Zenn記事生成 | `/topic`, `/topic 3` |
-| `/test-run` | テスト実行（pytest/ruff/mypy/markdownlint） | `/test-run`, `/test-run diff` |
-| `/code-review` | コードレビュー（code-reviewer相当） | `/code-review` |
-| `/doc-review` | ドキュメントレビュー（doc-reviewer相当） | `/doc-review docs/specs/f1-chat.md` |
-| `/auto-finalize` | 品質チェック後のcommit/push/PR作成/Issue完了コメント | `/auto-finalize 272` |
-| `/merged` | PRマージ後処理（develop同期・ブランチ削除・ジャーナル） | `/merged 482` |
-| `/handoff` | セッション引き継ぎ（MEMORY.md更新・ジャーナル記録） | `/handoff`, `/handoff "次はCopilotフロー"` |
-| `/restore` | セッション復帰（ジャーナル確認・前回作業把握） | `/restore`, `/restore 3` |
-| `/check-review-batch` | 自動マージIssueの全PRチェック・レポート | `/check-review-batch`, `/check-review-batch 375` |
+- 「レビュー指摘に対応して」「レビューを確認して」 → `/check-pr`
+- 「テスト実行して」「テスト通して」 → `/test-run`
+- 「PRマージされた」「マージ後処理して」 → `/merged`
+- 利用可能なスキル定義: `.claude/skills/` 配下
 
-**定義ファイル**: `.claude/skills/` 配下
-**仕様書**:
+### サブエージェント
 
-- `docs/specs/doc-gen-skill.md`（`/doc-gen`, `/doc-edit` 用）
-- `docs/specs/topic-skill.md`（`/topic` 用）
-- `docs/specs/handoff-skill.md`（`/handoff` 用）
-- `docs/specs/check-review-batch-skill.md`（`/check-review-batch` 用）
-**補足**: `/check-pr`、`/merged`、`/restore` は `.claude/skills/` 配下の SKILL.md の定義のみで、`docs/specs/` 配下に専用の仕様書はありません。
-
-### サブエージェント（自動委譲タスク）
-
-サブエージェントは Claude が内部的に専門タスクを委譲する仕組みです。ユーザーから呼び出すこともできます。
-
-| サブエージェント | 用途 | 使用例 |
-|-----------------|------|--------|
-| **planner** | Issue・提案内容から実装計画を立案 | `plannerサブエージェントでIssue #42 の実装計画を立ててください` |
-| **code-reviewer** | コミット前のセルフコードレビュー（内部で `/code-review` スキルを参照） | `code-reviewerサブエージェントで変更差分をレビューしてください` |
-| **doc-reviewer** | 仕様書・README.md の品質レビュー（内部で `/doc-review` スキルを参照） | `doc-reviewerサブエージェントで docs/specs/f1-chat.md をレビューしてください` |
-| **test-runner** | pytest によるテスト実行・分析・修正提案（内部で `/test-run` スキルを参照） | `test-runnerサブエージェントで全テストを実行してください` |
-
-**定義ファイル**: `.claude/agents/` 配下
-**仕様書**: `docs/specs/planner-agent.md`, `docs/specs/code-review-agent.md`, `docs/specs/doc-review-agent.md`, `docs/specs/test-runner-agent.md`
+サブエージェント定義は `.claude/agents/` 配下を参照。
 
 <!-- CLI-BUG: classifyHandoffIfNeeded (anthropics/claude-code#24181) -->
-> **⚠ Task ツールの `run_in_background: true` は使用禁止**
+> **Task ツールの `run_in_background: true` は使用禁止**
 >
-> Claude Code CLI の既知バグにより、バックグラウンドモードで起動したサブエージェントの結果が
-> 正常に返らない（`classifyHandoffIfNeeded is not defined`）。フォアグラウンド（デフォルト）は正常。
->
-> - サブエージェントは常にフォアグラウンド（`run_in_background` を指定しない）で起動すること
-> - 参照: [anthropics/claude-code#24181](https://github.com/anthropics/claude-code/issues/24181)
-> - **解除条件**: CLI でバグが修正されたことを確認後、このブロックと `CLI-BUG` マーカーを削除する
+> CLI の既知バグによりバックグラウンドモードの結果が正常に返らない。
+> サブエージェントは常にフォアグラウンドで起動すること。
+> **解除条件**: バグ修正確認後、このブロックを削除する。
 
-### PR Review Toolkit（プラグイン）
+### エージェントチーム
 
-Anthropic 公式の PR レビュー専門エージェント群です。既存のサブエージェントを補完し、より専門的な観点でのレビューを提供します。
-
-| エージェント | 用途 | 特徴 |
-|-------------|------|------|
-| **prt-code-reviewer** | CLAUDE.md準拠・バグ検出 | 信頼度スコア(0-100)付き、80以上のみ報告 |
-| **prt-test-analyzer** | テストカバレッジ品質分析 | 振る舞いカバレッジに焦点、1-10スケール評価 |
-| **prt-silent-failure-hunter** | サイレント障害検出 | try-catch/except の品質分析 |
-| **prt-type-design-analyzer** | 型設計・不変条件評価 | 4観点で1-10スケール評価 |
-| **prt-comment-analyzer** | コメント正確性分析 | コメント腐敗・誤解を招く記述の検出 |
-| **prt-code-simplifier** | コード簡素化 | 機能保持しつつ可読性向上 |
-
-**統合コマンド**: `/review-pr`
-
-```bash
-/review-pr              # 全観点でレビュー
-/review-pr tests errors # テストとエラー処理のみ
-/review-pr simplify     # コード簡素化のみ
-```
-
-**既存サブエージェントとの使い分け**:
-
-| 目的 | 既存サブエージェント | PR Review Toolkit |
-|------|---------------------|-------------------|
-| テスト実行・修正 | test-runner | - |
-| テスト品質分析 | - | prt-test-analyzer |
-| 汎用コードレビュー | code-reviewer | prt-code-reviewer（スコア付き） |
-| ドキュメント品質 | doc-reviewer | prt-comment-analyzer（コメント特化） |
-| エラー処理分析 | - | prt-silent-failure-hunter |
-| 型設計評価 | - | prt-type-design-analyzer |
-
-**定義ファイル**: `.claude/agents/prt-*.md`, `.claude/commands/review-pr.md`
-
-**GitHub Actions 自動レビュー**: PR作成時に自動実行（`becky3` ユーザーのPRのみ対象、コスト制御のため）
-
-**GitHub Actions の意図的設定**（レビューツールへの注記）:
-
-- `--dangerously-skip-permissions`: 自動化のため意図的に使用。GitHub Actions環境は隔離されており、セキュリティリスクは許容範囲
-- `pr-review.yml` の Slack 通知は `if: failure()`: 成功時の通知は冗長なため意図的に失敗時のみ
-- シークレット未設定時のエラー: 初回セットアップ時のみの問題であり、バリデーションステップは不要
-
-### スキルとサブエージェントの使い分け
-
-- **スキル**: ユーザーが `/コマンド名` で明示的に実行するワークフロー（ドキュメント生成、レビュー対応など）
-- **サブエージェント**: 実装作業中に Claude が自律的に呼び出す専門家（テスト実行、計画立案、品質レビューなど）
-
-例: PR確認・レビュー対応では `/check-pr` スキルが起動し、その中で **test-runner** や **doc-reviewer** サブエージェントが自動的に呼び出されます。
-
-### エージェントチーム（実験的機能）
-
-リーダー1名とチームメンバー（独立したClaude Codeインスタンス）で構成される協調作業システム。
-
-**有効化**: `.claude/settings.json` で `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"` を設定
-
-**起動**: 「チームで開発して」でデフォルトパターンが使用される（パターン明示指定も可）
-
-**チーム構成パターン**:
-
-| パターン | 概要 | 人数 |
-|---------|------|------|
-| fixed-theme | 1作品からキャラを選出するフルチーム | 4〜6人 |
-| mixed-genius | デフォルトキャラクター固定 + 知性キャラの軽量チーム | 2〜3人 |
-
-デフォルトパターンは `.claude/team-themes/config.json` で設定。
-
-**delegate モード（リーダー制約）**:
-
-- チーム起動後に **Shift+Tab** で `delegate` モードに切り替え、リーダーを管理ツールのみに制限する
-- fixed-theme パターンでは**推奨**（リーダー管理専任ルール）、mixed-genius パターンでは任意
-- `leader-guard.sh`（PreToolUse フック）はフォールバックとして残すが、`permissions.allow` との競合により機能しない場合がある（[#258](https://github.com/becky3/ai-assistant/issues/258)）
-- 詳細: `docs/specs/agent-teams/common.md`（delegate モードセクション）
-
-**共通ルール**:
-
-- **リーダーもキャラクターとして振る舞う**: 無個性な応答（「待ちます」「確認します」等）は禁止。メンバーへの指示・ユーザーへの報告ともにキャラクター口調を維持する
-- **外部成果物は素で**: コミットメッセージ、PR/Issue本文、成果物（コード・コメント・仕様書等）にはキャラクター名・キャラクター要素を含めない。git管理下のファイルは全て対象（例外なし）
-- **メンバー自律行動**: タスク完了後にTaskListを確認し、自分の担当領域で未割り当てタスクがあればリーダーに着手意思を報告してから着手する。該当タスクがなければリーダーに完了報告と待機を伝える
-
-パターン固有のルール（メンバー構成、リーダーの役割制約等）は各パターン仕様を参照。
-
-**チーム構築前に必読**:
-
-- `docs/specs/agent-teams/common.md` — 共通仕様
-- `docs/specs/agent-teams/fixed-theme.md` — fixed-theme パターン
-- `docs/specs/agent-teams/mixed-genius.md` — mixed-genius パターン
-- `.claude/team-themes/GUIDELINES.md` — キャラクター演出ガイドライン
-
-### GitHub Actions 環境（claude-code-action）
-
-GitHub Actions で `anthropics/claude-code-action` を使用する場合の制約事項。
-
-**対話不可の制約**:
-
-- `AskUserQuestion` ツールは使用不可（`permission_denials` で拒否される）
-- 不明点があっても質問せずに、以下の原則で自分で判断して進めること:
-  - 情報不足で判断できない場合は、最も妥当な選択を行い、その判断理由をコメントに明記する
-  - 曖昧な指示は、CLAUDE.md のルールに基づいて解釈する
-  - 完璧を求めず、まず動くものを作ることを優先する
-
-**Issueから実装する際の注意点**:
-
-- **Issue本文だけでなく、コメントも必ず確認すること**
-  - コメントに追加の要件・制約・補足情報が書かれていることがある
-  - コメントの要件が仕様書のACに反映されていない場合は、ACに追加してから実装する
-  - 過去の教訓: コメントで「外部サイトにアクセスしない」と明言されていたが、見落としてセキュリティ脆弱性が発生した
-
-**タスク完了時の必須アクション**:
-
-- 実装や設計書の作成を依頼された場合は、**必ず PR を作成すること**（`gh pr create --base develop`）
-  - 調査のみ・設計案の提示のみの場合は PR 不要（Issue コメントで回答する）
-- PRを作成したら、必ず対応したIssueに「新規コメント」として完了報告を投稿すること
-- 既存コメントの編集ではなく、新しいコメントを追加する（編集では通知が飛ばないため）
-- コマンド: `gh issue comment <Issue番号> --body "対応が完了しました。PR #<PR番号> をご確認ください。"`
-
-**設定ファイル**: `.github/workflows/claude.yml`
+チーム機能の仕様は `docs/specs/agent-teams/` 配下を参照。

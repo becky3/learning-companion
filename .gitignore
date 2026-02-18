@@ -38,6 +38,7 @@ Thumbs.db
 !.claude/skills/
 !.claude/agents/
 !.claude/team-themes/
+!.claude/CLAUDE-auto-progress.md
 
 # Process guard
 bot.pid
