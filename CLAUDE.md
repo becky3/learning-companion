@@ -212,12 +212,12 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 
 ### レトロスペクティブ
 
-- **機能の実装完了時（PRマージ後）に必ず** `/doc-gen retro <feature-name>` でレトロを生成する
+- **機能実装のPRでは、コミット前に `/doc-gen retro <feature-name>` でレトロを生成・更新する**（PRに含めて自動レビュー対象にするため）
+- **PRマージ後は `/merged <PR番号>` を実行する**。develop同期・ブランチ削除・ジャーナル記録が一括で行われる。レトロが未作成の場合は補完生成される
 - 運用テストで問題が見つかった場合も、修正完了後にレトロを更新する
 - **ファイル命名**: 機能番号がある場合は `docs/retro/f{N}-{機能名}.md`、ない場合は `docs/retro/{機能名}.md`
 - **記載内容**: 実装の概要、うまくいったこと、ハマったこと・改善点、次に活かすこと
 - 既存レトロがある場合は追記・更新する（新規作成ではなく）
-- テンプレート・運用ルール自体の改善も行う
 - 新機能の仕様策定時は、関連する既存レトロの「次に活かすこと」を参照する
 
 ## 自動進行ルール（auto-progress）
@@ -375,6 +375,7 @@ commitが成功していない状態でpushしないこと。
 | `/code-review` | コードレビュー（code-reviewer相当） | `/code-review` |
 | `/doc-review` | ドキュメントレビュー（doc-reviewer相当） | `/doc-review docs/specs/f1-chat.md` |
 | `/auto-finalize` | 品質チェック後のcommit/push/PR作成/Issue完了コメント | `/auto-finalize 272` |
+| `/merged` | PRマージ後処理（develop同期・ブランチ削除・ジャーナル・レトロ） | `/merged 482` |
 | `/handoff` | セッション引き継ぎ（MEMORY.md更新・ジャーナル記録） | `/handoff`, `/handoff "次はCopilotフロー"` |
 | `/resume` | セッション復帰（ジャーナル確認・前回作業把握） | `/resume`, `/resume 3` |
 | `/check-review-batch` | 自動マージIssueの全PRチェック・レポート | `/check-review-batch`, `/check-review-batch 375` |
@@ -386,7 +387,7 @@ commitが成功していない状態でpushしないこと。
 - `docs/specs/topic-skill.md`（`/topic` 用）
 - `docs/specs/handoff-skill.md`（`/handoff` 用）
 - `docs/specs/check-review-batch-skill.md`（`/check-review-batch` 用）
-**補足**: `/check-pr`、`/resume` は `.claude/skills/` 配下の SKILL.md の定義のみで、`docs/specs/` 配下に専用の仕様書はありません。
+**補足**: `/check-pr`、`/merged`、`/resume` は `.claude/skills/` 配下の SKILL.md の定義のみで、`docs/specs/` 配下に専用の仕様書はありません。
 
 ### サブエージェント（自動委譲タスク）
 
