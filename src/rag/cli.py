@@ -76,9 +76,17 @@ def main() -> None:
         type=float,
         help="類似度閾値",
     )
+    def _validate_vector_weight(value: str) -> float:
+        f = float(value)
+        if not 0.0 <= f <= 1.0:
+            raise argparse.ArgumentTypeError(
+                f"--vector-weight must be between 0.0 and 1.0 (got {f})"
+            )
+        return f
+
     eval_parser.add_argument(
         "--vector-weight",
-        type=float,
+        type=_validate_vector_weight,
         help="ベクトル検索の重み α（0.0〜1.0）。未指定時は RAG_VECTOR_WEIGHT 設定値を使用",
     )
     eval_parser.add_argument(

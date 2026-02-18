@@ -589,8 +589,8 @@ class TestCLIEvaluate:
                 assert call_kwargs[1]["threshold"] == custom_threshold
 
     @pytest.mark.asyncio
-    async def test_vector_weight_option(self, tmp_path: Path) -> None:
-        """--vector-weight オプションがcreate_rag_serviceに正しく伝播すること."""
+    async def test_ac8_vector_weight_option(self, tmp_path: Path) -> None:
+        """AC8: --vector-weight オプションがcreate_rag_serviceに正しく伝播すること."""
         from src.rag.cli import run_evaluation
         from argparse import Namespace
 
@@ -637,8 +637,8 @@ class TestCLIEvaluate:
                 assert call_kwargs[1]["vector_weight"] == custom_vector_weight
 
     @pytest.mark.asyncio
-    async def test_vector_weight_none_when_not_specified(self, tmp_path: Path) -> None:
-        """--vector-weight 未指定時はNoneが渡されること."""
+    async def test_ac9_vector_weight_none_when_not_specified(self, tmp_path: Path) -> None:
+        """AC9: --vector-weight 未指定時はNoneが渡されること."""
         from src.rag.cli import run_evaluation
         from argparse import Namespace
 
@@ -684,8 +684,8 @@ class TestCLIEvaluate:
                 assert call_kwargs[1]["vector_weight"] is None
 
     @pytest.mark.asyncio
-    async def test_params_in_json_report(self, tmp_path: Path) -> None:
-        """レポートに評価パラメータが含まれること."""
+    async def test_ac13_params_in_json_report(self, tmp_path: Path) -> None:
+        """AC13: レポートに評価パラメータが含まれること."""
         from src.rag.cli import run_evaluation
         from argparse import Namespace
 
