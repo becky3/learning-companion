@@ -626,6 +626,12 @@ def convex_combination(
 
 CCの構造により、BM25がゼロヒットの場合は `combined_score = α * norm_vector + 0` となり、最大スコアが α に制限される。α=0.5 なら最大0.5で、最終スコア閾値と組み合わせることで無関係な結果を排除できる。追加のペナルティパラメータは導入しない。
 
+**ベクトル検索全滅時の挙動（CC自然減衰の対称性）**:
+
+上記の逆パターンとして、ベクトル検索で全ドキュメントが閾値を超過した場合（similarity_threshold 設定時）やベクトル検索に全くヒットしなかった場合、BM25のみでヒットしたドキュメントは `combined_score = 0 + (1-α) * norm_bm25` となる。α=0.5 なら最大0.5で、BM25ゼロヒット時と対称的に自然減衰する。
+
+この挙動は意図的な設計であり、追加のハードフィルタ（BM25-only ドキュメントの除外等）は導入しない。キーワード検索が有効に機能するケース（固有名詞検索等）をブロックしないためである。ノイズクエリの制御は `vector_weight`（α）の調整で対応する。α を大きくすると BM25-only ヒットの最大スコアが (1-α) に下がり、ノイズが自然に抑制される。
+
 **fetch_count**: 正規化の安定性のため、`max(n_results * 3, 30)` で下限を30に設定。ベクトル検索単体の閾値フィルタリング（最低20件）より多いのは、min-max正規化で外れ値の影響を緩和するために十分なサンプル数が必要なため。
 
 ### Webクローラー (`src/services/web_crawler.py`)
@@ -900,6 +906,7 @@ python -m src.rag.cli evaluate \
   --persist-dir ./test_chroma_db \
   --n-results 5 \
   --threshold 0.5 \
+  --vector-weight 0.7 \
   --fail-on-regression
 
 # テスト用ChromaDB初期化
@@ -917,6 +924,7 @@ python -m src.rag.cli init-test-db \
 | `--baseline-file` | `None` | ベースラインJSONファイルのパス |
 | `--n-results` | `5` | 各クエリで取得する結果数 |
 | `--threshold` | `None` | 類似度閾値 |
+| `--vector-weight` | `None`（設定値を使用） | ベクトル検索の重み α（0.0〜1.0）。未指定時は `RAG_VECTOR_WEIGHT` 設定値 |
 | `--fail-on-regression` | `False` | リグレッション検出時に exit code 1 で終了 |
 | `--regression-threshold` | `0.1` | F1スコアの低下がこの値を超えたらリグレッション判定 |
 | `--save-baseline` | `False` | 現在の結果をベースラインとして保存 |
@@ -1238,6 +1246,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-18 | 評価CLIに `--vector-weight` オプション追加、CC自然減衰の対称性を記述（#509） |
 | 2026-02-18 | BM25インデックスの永続化機能を追加（#497） |
 | 2026-02-18 | ハイブリッド検索の統合手法を RRF → CC（Convex Combination）+ min-max 正規化に変更、NDCG/MRR 評価指標を追加（#501） |
 | 2026-02-18 | BM25ライブラリを rank-bm25 から bm25s に差し替え（#329） |

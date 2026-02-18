@@ -315,6 +315,7 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
+            vector_weight=None,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
@@ -363,6 +364,7 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
+            vector_weight=None,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
@@ -411,6 +413,7 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
+            vector_weight=None,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
@@ -466,6 +469,7 @@ class TestCLIEvaluate:
             baseline_file=str(baseline_file),
             n_results=5,
             threshold=None,
+            vector_weight=None,
             persist_dir=None,
             fail_on_regression=True,
             regression_threshold=0.1,
@@ -514,6 +518,7 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=custom_n_results,
             threshold=None,
+            vector_weight=None,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
@@ -563,6 +568,7 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=custom_threshold,
+            vector_weight=None,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
@@ -581,6 +587,153 @@ class TestCLIEvaluate:
                 mock_create_service.assert_called_once()
                 call_kwargs = mock_create_service.call_args
                 assert call_kwargs[1]["threshold"] == custom_threshold
+
+    @pytest.mark.asyncio
+    async def test_ac8_vector_weight_option(self, tmp_path: Path) -> None:
+        """AC8: --vector-weight オプションがcreate_rag_serviceに正しく伝播すること."""
+        from src.rag.cli import run_evaluation
+        from argparse import Namespace
+
+        mock_report = EvaluationReport(
+            queries_evaluated=1,
+            average_precision=0.8,
+            average_recall=0.9,
+            average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
+            negative_source_violations=[],
+            query_results=[],
+        )
+
+        dataset = tmp_path / "dataset.json"
+        dataset.write_text(json.dumps({"queries": []}), encoding="utf-8")
+        output_dir = tmp_path / "output"
+
+        custom_vector_weight = 0.7
+
+        args = Namespace(
+            dataset=str(dataset),
+            output_dir=str(output_dir),
+            baseline_file=None,
+            n_results=5,
+            threshold=None,
+            vector_weight=custom_vector_weight,
+            persist_dir=None,
+            fail_on_regression=False,
+            regression_threshold=0.1,
+            save_baseline=False,
+        )
+
+        mock_eval = AsyncMock(return_value=mock_report)
+        with patch("src.rag.cli.create_rag_service") as mock_create_service:
+            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                mock_service = AsyncMock()
+                mock_create_service.return_value = mock_service
+
+                await run_evaluation(args)
+
+                mock_create_service.assert_called_once()
+                call_kwargs = mock_create_service.call_args
+                assert call_kwargs[1]["vector_weight"] == custom_vector_weight
+
+    @pytest.mark.asyncio
+    async def test_ac9_vector_weight_none_when_not_specified(self, tmp_path: Path) -> None:
+        """AC9: --vector-weight 未指定時はNoneが渡されること."""
+        from src.rag.cli import run_evaluation
+        from argparse import Namespace
+
+        mock_report = EvaluationReport(
+            queries_evaluated=1,
+            average_precision=0.8,
+            average_recall=0.9,
+            average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
+            negative_source_violations=[],
+            query_results=[],
+        )
+
+        dataset = tmp_path / "dataset.json"
+        dataset.write_text(json.dumps({"queries": []}), encoding="utf-8")
+        output_dir = tmp_path / "output"
+
+        # argparse は未指定時 vector_weight=None を設定する
+        args = Namespace(
+            dataset=str(dataset),
+            output_dir=str(output_dir),
+            baseline_file=None,
+            n_results=5,
+            threshold=None,
+            vector_weight=None,
+            persist_dir=None,
+            fail_on_regression=False,
+            regression_threshold=0.1,
+            save_baseline=False,
+        )
+
+        mock_eval = AsyncMock(return_value=mock_report)
+        with patch("src.rag.cli.create_rag_service") as mock_create_service:
+            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                mock_service = AsyncMock()
+                mock_create_service.return_value = mock_service
+
+                await run_evaluation(args)
+
+                mock_create_service.assert_called_once()
+                call_kwargs = mock_create_service.call_args
+                assert call_kwargs[1]["vector_weight"] is None
+
+    @pytest.mark.asyncio
+    async def test_ac13_params_in_json_report(self, tmp_path: Path) -> None:
+        """AC13: レポートに評価パラメータが含まれること."""
+        from src.rag.cli import run_evaluation
+        from argparse import Namespace
+
+        mock_report = EvaluationReport(
+            queries_evaluated=1,
+            average_precision=0.8,
+            average_recall=0.9,
+            average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
+            negative_source_violations=[],
+            query_results=[],
+        )
+
+        dataset = tmp_path / "dataset.json"
+        dataset.write_text(json.dumps({"queries": []}), encoding="utf-8")
+        output_dir = tmp_path / "output"
+
+        args = Namespace(
+            dataset=str(dataset),
+            output_dir=str(output_dir),
+            baseline_file=None,
+            n_results=5,
+            threshold=0.6,
+            vector_weight=0.7,
+            persist_dir=None,
+            fail_on_regression=False,
+            regression_threshold=0.1,
+            save_baseline=False,
+        )
+
+        mock_eval = AsyncMock(return_value=mock_report)
+        with patch("src.rag.cli.create_rag_service") as mock_create_service:
+            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                mock_service = AsyncMock()
+                mock_create_service.return_value = mock_service
+
+                await run_evaluation(args)
+
+        # JSONレポートにパラメータが含まれるか確認
+        json_path = output_dir / "report.json"
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+
+        assert "params" in data
+        assert data["params"]["threshold"] == 0.6
+        assert data["params"]["vector_weight"] == 0.7
+        assert data["params"]["n_results"] == 5
 
     @pytest.mark.asyncio
     async def test_ac6_persist_dir_option(self, tmp_path: Path) -> None:
@@ -612,6 +765,7 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
+            vector_weight=None,
             persist_dir=custom_persist_dir,
             fail_on_regression=False,
             regression_threshold=0.1,
