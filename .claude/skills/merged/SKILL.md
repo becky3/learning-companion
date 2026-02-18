@@ -8,7 +8,7 @@ argument-hint: "<PR番号>"
 
 ## タスク
 
-PRマージ後の定型処理を一括実行する。develop への同期、マージ済みブランチの削除、ジャーナル記録、レトロ生成を行う。
+PRマージ後の定型処理を一括実行する。マージ先ブランチへの同期、マージ済みブランチの削除、ジャーナル記録、レトロ補完を行う。
 
 ## 引数
 
@@ -33,19 +33,26 @@ gh pr view $PR_NUMBER --json title,headRefName,baseRefName,state,mergedAt
 - `state` が `MERGED` でない場合: 「PR #N はまだマージされていません」と表示して終了
 - PR情報（タイトル、ブランチ名、マージ日時）を記録する
 
-### ステップ2: develop への同期
+### ステップ2: マージ先ブランチへの同期
+
+ステップ1で取得した `baseRefName` に同期する（通常は `develop`、release/hotfix の場合は `main`）。
 
 ```bash
-git checkout develop
-git pull origin develop
+git checkout "$BASE_REF_NAME"
+git pull origin "$BASE_REF_NAME"
 ```
+
+この操作が失敗した場合は、以降の git 操作（ブランチ削除等）を中断し、ジャーナル記録のみ続行する。
 
 ### ステップ3: マージ済みブランチの削除
 
-PRのブランチ（`headRefName`）がローカルに存在する場合、削除する。
+ステップ1で取得した `headRefName` のブランチがローカルに存在する場合、削除する。
 
 ```bash
-git branch -d <branch-name>
+# ブランチ名はダブルクォートで囲み、-- で引数の終わりを明示する
+if git show-ref --verify --quiet "refs/heads/$HEAD_REF_NAME"; then
+  git branch -d -- "$HEAD_REF_NAME"
+fi
 ```
 
 - ブランチが存在しない場合はスキップ
@@ -53,7 +60,7 @@ git branch -d <branch-name>
 
 ### ステップ4: ジャーナル記録
 
-`$MEMORY_DIR/journal/` に新規ファイルを作成する。
+`$MEMORY_DIR/journal/` に新規ファイルを作成する（ディレクトリが存在しない場合は作成する）。
 
 `$MEMORY_DIR/journal-guidelines.md` のフォーマットに従い、PRの内容を振り返るエントリを書く:
 
@@ -74,7 +81,7 @@ git branch -d <branch-name>
 
 PRが機能実装（`feat`）の場合、レトロスペクティブの存在を確認する。
 
-**判定基準**: コミットメッセージやPRタイトルに `feat` を含む場合が対象。`fix`、`docs`、`ci` のみの場合はスキップ。
+**判定基準**: PRタイトルまたはコミットメッセージが Conventional Commits の `feat` プレフィックス（`feat: ...` / `feat(scope): ...`）で始まる場合を対象とする。`fix`、`docs`、`ci` のみの場合はスキップ。
 
 **確認方法**: `docs/retro/` に対応するレトロファイルが存在するか確認する。
 
@@ -102,4 +109,5 @@ PRが機能実装（`feat`）の場合、レトロスペクティブの存在を
 
 - PR番号が未指定の場合: 「PR番号を指定してください（例: `/merged 482`）」と表示
 - PRが MERGED でない場合: 「PR #N はまだマージされていません」と表示
-- git 操作に失敗した場合: エラーメッセージを表示し、残りの処理は続行
+- `git checkout` / `git pull` に失敗した場合: エラーメッセージを表示し、以降の git 操作（ブランチ削除等）は中断する。ジャーナル記録は続行する
+- その他の軽微なエラー: エラーメッセージを表示し、後続処理を続行する
