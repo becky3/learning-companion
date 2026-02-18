@@ -21,6 +21,7 @@ from src.rag.evaluation import (
 )
 
 if TYPE_CHECKING:
+    from src.rag.bm25_index import BM25Index
     from src.services.rag_knowledge import RAGKnowledgeService
 
 
@@ -87,6 +88,11 @@ def main() -> None:
         action="store_true",
         help="現在の結果をベースラインとして保存",
     )
+    eval_parser.add_argument(
+        "--fixture",
+        default="tests/fixtures/rag_test_documents.json",
+        help="BM25インデックス構築用のテストドキュメントフィクスチャ",
+    )
 
     # init-test-db サブコマンド
     init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
@@ -112,12 +118,14 @@ def main() -> None:
 async def create_rag_service(
     threshold: float | None = None,
     persist_dir: str | None = None,
+    bm25_index: "BM25Index | None" = None,
 ) -> "RAGKnowledgeService":
     """RAGKnowledgeServiceを生成する.
 
     Args:
         threshold: 類似度閾値（指定時は環境変数を一時上書き）
         persist_dir: ChromaDB永続化ディレクトリ（指定時は設定 chromadb_persist_dir を上書き）
+        bm25_index: BM25インデックス（指定時はハイブリッド検索を有効化）
 
     Returns:
         RAGKnowledgeServiceインスタンス
@@ -154,6 +162,8 @@ async def create_rag_service(
         return RAGKnowledgeService(
             vector_store=vector_store,
             web_crawler=web_crawler,
+            bm25_index=bm25_index,
+            hybrid_search_enabled=bm25_index is not None,
         )
     finally:
         # 環境変数を復元
@@ -164,6 +174,38 @@ async def create_rag_service(
                 os.environ["RAG_SIMILARITY_THRESHOLD"] = original_threshold
             # キャッシュをクリアして次回のget_settings()で新しい設定を読み込む
             get_settings.cache_clear()
+
+
+def _build_bm25_index_from_fixture(
+    fixture_path: str,
+) -> "BM25Index":
+    """テストドキュメントフィクスチャからBM25インデックスを構築する.
+
+    Args:
+        fixture_path: フィクスチャファイルのパス
+
+    Returns:
+        構築済みBM25Indexインスタンス
+    """
+    from src.rag.bm25_index import BM25Index
+
+    with open(fixture_path, encoding="utf-8") as f:
+        fixture_data = json.load(f)
+
+    bm25_index = BM25Index()
+    documents: list[tuple[str, str, str]] = []
+    for doc in fixture_data.get("documents", []):
+        source_url = doc.get("source_url", "")
+        content = doc.get("content", "")
+        if not source_url or not content:
+            continue
+        url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
+        doc_id = f"{url_hash}_0"
+        documents.append((doc_id, content, source_url))
+
+    added = bm25_index.add_documents(documents)
+    logger.info("BM25 index built with %d documents", added)
+    return bm25_index
 
 
 async def run_evaluation(args: argparse.Namespace) -> None:
@@ -178,10 +220,15 @@ async def run_evaluation(args: argparse.Namespace) -> None:
         logger.error("Dataset file not found: %s", args.dataset)
         sys.exit(1)
 
-    # RAGサービス初期化
+    # BM25インデックスをテストドキュメントから構築（ハイブリッド検索用）
+    fixture_path = getattr(args, "fixture", "tests/fixtures/rag_test_documents.json")
+    bm25_index = _build_bm25_index_from_fixture(fixture_path)
+
+    # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
     rag_service = await create_rag_service(
         threshold=args.threshold,
         persist_dir=args.persist_dir,
+        bm25_index=bm25_index,
     )
 
     # 評価実行
