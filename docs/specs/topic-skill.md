@@ -77,14 +77,13 @@ DBは使用せず、ファイルベースでシンプルに管理する。
 
 **抽出対象:**
 
-- `$MEMORY_DIR/journal/*.md` — ジャーナル（primary）
-- `docs/retro/*.md` — レトロスペクティブ（歴史的資料）
+- `$MEMORY_DIR/journal/*.md` — ジャーナル（primary、レトロ変換ファイル含む）
 - `~/.claude/projects/*/memory/MEMORY.md` — Claude Code開発知見
 
 **抽出ルール:**
 
 1. ジャーナル形式: `- **気づき**:` / `- **判断**:` / `- **教訓**:` を検出しトピック候補として抽出
-2. レトロ形式（歴史的資料用）: `## 改善点` `## ハマったこと` セクションを検出し、配下の `###` 見出しをトピック候補として抽出
+2. レトロ形式（`retro-` プレフィックス付きジャーナルファイル用）: `## 改善点` `## ハマったこと` セクションを検出し、配下の `###` 見出しをトピック候補として抽出
 3. 優先度スコアリング（下表参照）
 4. 候補一覧の後に `published.txt` の内容を「過去の記事化履歴」として表示（参考情報）
 
@@ -106,7 +105,7 @@ DBは使用せず、ファイルベースでシンプルに管理する。
 例:
 
 - ジャーナル: `memory/journal/20260217-xxx.md`
-- レトロ（歴史的資料）: `docs/retro/f2.md#3`（f2.md の3番目の `###` 見出し）
+- レトロ変換ファイル: `memory/journal/20260208-072735-retro-f2-feed-collection.md#3`（3番目の `###` 見出し）
 
 ### Zenn記事テンプレート
 
@@ -216,7 +215,7 @@ published: false
 
 ### 候補表示（`/topic`）
 
-- [ ] AC1: `$MEMORY_DIR/journal/*.md` および `docs/retro/*.md`（歴史的資料）からトピック候補が抽出される
+- [ ] AC1: `$MEMORY_DIR/journal/*.md`（レトロ変換ファイル含む）からトピック候補が抽出される
 - [ ] AC2: 優先度に基づいてソートされた一覧が表示される
 - [ ] AC3: 過去の記事化履歴が参考情報として末尾に表示される
 
@@ -235,7 +234,7 @@ published: false
 |---------|------|
 | `.claude/skills/topic/SKILL.md` | topicスキル定義 |
 | `$MEMORY_DIR/journal/*.md` | 抽出元（ジャーナル、primary） |
-| `docs/retro/*.md` | 抽出元（レトロスペクティブ、歴史的資料） |
+| `$MEMORY_DIR/journal/*-retro-*.md` | 抽出元（レトロ変換ファイル、ジャーナルに統合済み） |
 | `docs/zenn-drafts/` | 記事出力ディレクトリ |
 | `docs/zenn-drafts/published.txt` | 記事化済みトピック管理 |
 | `CLAUDE.md` | スキル一覧への登録 |
