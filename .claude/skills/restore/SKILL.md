@@ -2,7 +2,7 @@
 name: restore
 description: セッション復帰時のジャーナル確認・前回作業の把握
 user-invocable: true
-allowed-tools: Bash, Read, Glob
+allowed-tools: Bash, Read
 argument-hint: "[件数]"
 ---
 
@@ -33,7 +33,13 @@ Claude Code のシステムプロンプトに `You have a persistent auto memory
 
 **件数の決定**: `$ARGUMENTS` が数値ならその値、未指定または非数値なら1件をデフォルトとする。
 
-**取得方法**: Glob ツールで `journal/*.md` を取得し、ファイル名降順で先頭N件を Read ツールで読む。`journal/` ディレクトリが存在しない場合はエラーハンドリングに従う。
+**取得方法**: Bash で `ls -1` を使い、ファイル名降順で先頭N件を取得して Read ツールで読む。
+
+```bash
+ls -1 "$MEMORY_DIR/journal/"*.md 2>/dev/null | sort -r | head -n N
+```
+
+`journal/` ディレクトリが存在しない場合はエラーハンドリングに従う。
 
 ### ステップ3: ユーザーへの報告
 

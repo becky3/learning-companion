@@ -37,7 +37,9 @@ jobs:
           github_token: ${{ secrets.REPO_OWNER_PAT }}
           bot_name: "claude[bot]"
           bot_id: "209825114"
-          claude_args: "--model claude-opus-4-6 --max-turns 100 --dangerously-skip-permissions"
+          claude_args: |
+            --model claude-opus-4-6 --max-turns 100 --dangerously-skip-permissions
+            --append-system-prompt "GA環境専用ルールが .claude/CLAUDE-auto-progress.md にあります。自動実装・品質チェック・完了処理の手順はこのファイルを必ず読んでから作業を開始してください。"
           show_full_output: true
 
   # auto-implement ラベルによる自動実装トリガー
@@ -71,7 +73,9 @@ jobs:
           branch_prefix: "auto/"
           bot_name: "claude[bot]"
           bot_id: "209825114"
-          claude_args: "--model claude-opus-4-6 --max-turns 100 --dangerously-skip-permissions"
+          claude_args: |
+            --model claude-opus-4-6 --max-turns 100 --dangerously-skip-permissions
+            --append-system-prompt "GA環境専用ルールが .claude/CLAUDE-auto-progress.md にあります。自動実装・品質チェック・完了処理の手順はこのファイルを必ず読んでから作業を開始してください。"
           show_full_output: true
           label_trigger: "auto-implement"
 

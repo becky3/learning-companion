@@ -282,7 +282,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           bot_name: "claude[bot]"
           bot_id: "209825114"
-          claude_args: "--model claude-sonnet-4-5-20250929 --max-turns 100 --dangerously-skip-permissions"
+          claude_args: |
+            --model claude-opus-4-6 --max-turns 100 --dangerously-skip-permissions
+            --append-system-prompt "GA環境専用ルールが .claude/CLAUDE-auto-progress.md にあります。品質チェック・完了処理の手順はこのファイルを必ず読んでから作業を開始してください。"
           show_full_output: true
           prompt: |
             ${{ steps.load-prompt.outputs.prompt }}
