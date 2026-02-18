@@ -115,6 +115,21 @@
 - GitHub Milestones で Step 単位の進捗管理
 - `gh` コマンドで Issue/PR を操作
 
+**サブIssueの作成**:
+
+`gh` CLI にはサブIssue作成のネイティブサポートがないため、GraphQL API を使用する。
+Issue作成時にサブIssue関係の指示がある場合は、Issue作成後にこの手順で紐付けること。
+
+```bash
+# 1. 親・子IssueのNode IDを取得
+gh issue view <親Issue番号> --json id --jq '.id'
+gh issue view <子Issue番号> --json id --jq '.id'
+
+# 2. サブIssue関係を作成（IDは直接埋め込む）
+gh api graphql -H "GraphQL-Features:sub_issues" \
+  -f query='mutation { addSubIssue(input: { issueId: "<親のNode ID>", subIssueId: "<子のNode ID>" }) { issue { title number } subIssue { title number } } }'
+```
+
 **Claudeによる実装完了時の必須手順**:
 
 1. **ファイル作成の確認**: 作成したと報告したファイルが実際に存在するか `ls -la` で確認
