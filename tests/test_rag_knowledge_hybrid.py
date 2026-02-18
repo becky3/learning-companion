@@ -256,10 +256,50 @@ class TestTableDataSearch:
     ) -> None:
         """AC12: 「りゅうおう」クエリでテーブル内のデータが検索できること.
 
-        ベクトル検索では閾値を超えてしまうケースでも、
-        BM25検索でキーワードマッチにより検索できる。
+        ベクトル検索で閾値内のドキュメントがBM25でもヒットし、
+        RRFスコアがブーストされて確実に検索できる。
         """
-        # Arrange: ベクトル検索は閾値超過（距離が大きい）
+        # Arrange: ベクトル検索で閾値内
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="名前: りゅうおう\nHP: 200, MP: 100, 攻撃力: 140",
+                metadata={"source_url": "https://example.com/monsters", "chunk_index": 0},
+                distance=0.4,  # 閾値0.5以内
+            ),
+        ]
+
+        # BM25検索でもキーワードマッチでヒット
+        import hashlib
+        url_hash = hashlib.sha256(b"https://example.com/monsters").hexdigest()[:16]
+        mock_bm25_index.search.return_value = [
+            BM25Result(
+                doc_id=f"{url_hash}_0",
+                score=8.5,
+                text="名前: りゅうおう\nHP: 200, MP: 100, 攻撃力: 140",
+            ),
+        ]
+
+        mock_settings = MagicMock()
+        mock_settings.rag_similarity_threshold = 0.5
+        mock_settings.rag_debug_log_enabled = False
+
+        # Act
+        with patch("src.config.settings.get_settings", return_value=mock_settings):
+            result = await rag_service_hybrid.retrieve("りゅうおう", n_results=5)
+
+        # Assert: ベクトル+BM25の両方でヒットし結果が返る
+        assert isinstance(result, RAGRetrievalResult)
+        assert "りゅうおう" in result.context
+        assert "HP: 200" in result.context
+
+    async def test_ac12_threshold_prevents_bm25_bypass(
+        self,
+        rag_service_hybrid: RAGKnowledgeService,
+        mock_vector_store: MagicMock,
+        mock_bm25_index: MagicMock,
+    ) -> None:
+        """AC12: similarity_threshold超過時、BM25のみでは閾値を迂回できない (#499)."""
+        # Arrange: ベクトル検索は閾値超過
         mock_vector_store.search.return_value = [
             RetrievalResult(
                 text="名前: りゅうおう\nHP: 200, MP: 100, 攻撃力: 140",
@@ -287,10 +327,9 @@ class TestTableDataSearch:
         with patch("src.config.settings.get_settings", return_value=mock_settings):
             result = await rag_service_hybrid.retrieve("りゅうおう", n_results=5)
 
-        # Assert: BM25のおかげで結果が返る
+        # Assert: 閾値超過のため結果が返らない（BM25でバイパスしない）
         assert isinstance(result, RAGRetrievalResult)
-        assert "りゅうおう" in result.context
-        assert "HP: 200" in result.context
+        assert result.context == ""
 
 
 class TestKeywordExactMatch:

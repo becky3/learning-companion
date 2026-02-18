@@ -115,6 +115,8 @@ class HybridSearchEngine:
             )
 
         # BM25のみの場合
+        # ベクトル検索はthreshold=Noneで多めに取得するため（L98-102）、
+        # ここに到達するのはDBにドキュメントがないケースのみ
         if not vector_results:
             return self._convert_bm25_only_results(bm25_results, n_results)
 
@@ -279,10 +281,15 @@ class HybridSearchEngine:
             )
             rrf_score = vector_rrf + bm25_rrf
 
-            # 閾値超過かつBM25ヒットなしのドキュメントを除外
-            # vector_rrf == 0 は閾値超過を意味し、bm25_rrf == 0 はBM25ヒットなし
-            # 両方0の場合（両方でヒットしなかった）は結果に含めない
-            if vector_rrf == 0.0 and bm25_rrf == 0.0:
+            # similarity_threshold が設定されている場合:
+            #   ベクトル検索で閾値を満たした（vector_rrf > 0）ドキュメントのみ含める
+            #   BM25のみのヒットでは similarity_threshold を迂回できない
+            # similarity_threshold が未設定の場合:
+            #   両方のスコアが0のドキュメントのみ除外
+            if similarity_threshold is not None:
+                if vector_rrf == 0.0:
+                    continue
+            elif vector_rrf == 0.0 and bm25_rrf == 0.0:
                 continue
 
             # 型安全なキャスト

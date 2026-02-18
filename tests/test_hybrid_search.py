@@ -286,3 +286,100 @@ class TestHybridSearchEngine:
         results = await engine.search("テスト", n_results=3)
 
         assert len(results) == 3
+
+    @pytest.mark.asyncio
+    async def test_ac38_threshold_filters_bm25_bypass_in_rrf(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC38: similarity_threshold設定時、BM25のみのヒットが閾値を迂回しない."""
+        import hashlib
+
+        # ベクトル検索結果: doc1は閾値内、doc2は閾値超過
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="関連ドキュメント",
+                metadata={"source_url": "http://example.com/relevant", "chunk_index": 0},
+                distance=0.3,  # 閾値0.5以内
+            ),
+            RetrievalResult(
+                text="無関係ドキュメント",
+                metadata={"source_url": "http://example.com/irrelevant", "chunk_index": 0},
+                distance=0.8,  # 閾値0.5超過
+            ),
+        ]
+
+        # BM25結果: 両方ともキーワードマッチ
+        url1_hash = hashlib.sha256(b"http://example.com/relevant").hexdigest()[:16]
+        url2_hash = hashlib.sha256(b"http://example.com/irrelevant").hexdigest()[:16]
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id=f"{url2_hash}_0", score=8.0, text="無関係ドキュメント"),
+            BM25Result(doc_id=f"{url1_hash}_0", score=3.0, text="関連ドキュメント"),
+        ]
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=0.5)
+
+        # 閾値内のdoc1のみ返る（doc2はBM25ヒットがあっても閾値超過で除外）
+        assert len(results) == 1
+        assert results[0].text == "関連ドキュメント"
+        assert results[0].vector_distance == 0.3
+        assert results[0].bm25_score == 3.0
+
+    @pytest.mark.asyncio
+    async def test_ac38_threshold_filters_bm25_only_docs_in_rrf(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC38: similarity_threshold設定時、BM25のみでヒットしたドキュメントも除外される."""
+        # ベクトル検索結果: 1件のみ
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="関連ドキュメント",
+                metadata={"source_url": "http://example.com/relevant", "chunk_index": 0},
+                distance=0.3,
+            ),
+        ]
+
+        # BM25結果: ベクトル検索にない新しいドキュメントも含む
+        import hashlib
+
+        url1_hash = hashlib.sha256(b"http://example.com/relevant").hexdigest()[:16]
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id="bm25_only_doc", score=10.0, text="BM25のみヒット"),
+            BM25Result(doc_id=f"{url1_hash}_0", score=3.0, text="関連ドキュメント"),
+        ]
+        mock_bm25_index.get_source_url = MagicMock(return_value="http://example.com/bm25only")
+
+        results = await engine.search("テスト", n_results=5, similarity_threshold=0.5)
+
+        # BM25のみのドキュメントは除外され、閾値内のものだけ返る
+        assert len(results) == 1
+        assert results[0].text == "関連ドキュメント"
+
+    @pytest.mark.asyncio
+    async def test_ac54_no_threshold_allows_bm25_results(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """AC54: similarity_threshold未設定時、BM25のみのヒットも含まれる."""
+        import hashlib
+
+        # ベクトル検索結果
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="ベクトルドキュメント",
+                metadata={"source_url": "http://example.com/vec", "chunk_index": 0},
+                distance=0.3,
+            ),
+        ]
+
+        # BM25結果: ベクトル検索にないドキュメントも含む
+        url_hash = hashlib.sha256(b"http://example.com/vec").hexdigest()[:16]
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id="bm25_only_doc", score=8.0, text="BM25のみヒット"),
+            BM25Result(doc_id=f"{url_hash}_0", score=3.0, text="ベクトルドキュメント"),
+        ]
+        mock_bm25_index.get_source_url = MagicMock(return_value="http://example.com/bm25only")
+
+        # threshold=None（未設定）
+        results = await engine.search("テスト", n_results=5, similarity_threshold=None)
+
+        # BM25のみのドキュメントも含まれる
+        assert len(results) == 2
