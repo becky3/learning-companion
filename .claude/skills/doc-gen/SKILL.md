@@ -1,9 +1,9 @@
 ---
 name: doc-gen
-description: プロジェクトドキュメント（仕様書・レトロ）の新規作成
+description: プロジェクトドキュメント（仕様書）の新規作成
 user-invocable: true
 allowed-tools: Bash, Read, Edit, Write, Grep, Glob
-argument-hint: "[spec|retro] [feature-name]"
+argument-hint: "spec [feature-name]"
 ---
 
 ## タスク
@@ -15,7 +15,6 @@ argument-hint: "[spec|retro] [feature-name]"
 `$ARGUMENTS` の形式:
 
 - `spec <feature-name>`: 仕様書生成（例: `spec feed-collection`）
-- `retro <feature-name>`: レトロスペクティブ生成（例: `retro chat`）
 
 ## 処理手順
 
@@ -25,7 +24,7 @@ argument-hint: "[spec|retro] [feature-name]"
 
    ```bash
    ARGS=($ARGUMENTS)
-   DOC_TYPE="${ARGS[0]}"  # spec, retro
+   DOC_TYPE="${ARGS[0]}"  # spec
    FEATURE_NAME="${ARGS[1]}"  # 機能名
    ```
 
@@ -84,36 +83,6 @@ argument-hint: "[spec|retro] [feature-name]"
 
 **参考**: `docs/specs/f1-chat.md` のフォーマットを踏襲
 
-### B. レトロスペクティブ生成 (`retro <feature-name>`)
-
-**出力先**: `docs/retro/f{N}-{feature-name}.md`
-
-**手順**:
-
-1. 機能番号の決定
-   - 仕様書と同じ番号を使用
-
-2. 実装情報の収集
-
-   ```bash
-   # 該当機能のPR
-   gh pr list --search "in:title $FEATURE_NAME" --state all --json number,title,body
-
-   # 関連コミット
-   gh pr view <pr-number> --json commits
-   ```
-
-3. Issue/PRコメントから学びを抽出
-   - 実装時の議論
-   - 技術的な判断
-   - ハマったポイント
-
-4. レトロ生成（以下のセクションを含む）:
-   - **何を実装したか**: 機能の概要
-   - **うまくいったこと**: 良かったアプローチ、効率的だった点
-   - **改善点**: 時間がかかった部分、難しかった点
-   - **次に活かすこと**: 今後の開発に役立つ知見
-
 ## エラーハンドリング
 
 - 引数が不正な場合:
@@ -122,7 +91,6 @@ argument-hint: "[spec|retro] [feature-name]"
   エラー: 引数が不正です。
   使用方法:
     /doc-gen spec <feature-name>
-    /doc-gen retro <feature-name>
   ```
 
 - 既存ファイルがある場合:
@@ -152,7 +120,6 @@ argument-hint: "[spec|retro] [feature-name]"
 次のステップ:
 1. 仕様書をレビュー
 2. 実装を開始
-3. 完了後に `/doc-gen retro notification` でレトロを作成
 ```
 
 ## 注意事項
