@@ -59,9 +59,7 @@ class Settings(BaseSettings):
     lmstudio_base_url: str = DEFAULT_LMSTUDIO_BASE_URL
     lmstudio_model: str = "local-model"
 
-    # Scheduler
-    daily_feed_hour: int = Field(default=7, ge=0, le=23)
-    daily_feed_minute: int = Field(default=0, ge=0, le=59)
+    # Timezone
     timezone: str = "Asia/Tokyo"
 
     # Feed delivery
