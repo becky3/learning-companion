@@ -377,7 +377,7 @@ commitが成功していない状態でpushしないこと。
 | `/auto-finalize` | 品質チェック後のcommit/push/PR作成/Issue完了コメント | `/auto-finalize 272` |
 | `/merged` | PRマージ後処理（develop同期・ブランチ削除・ジャーナル・レトロ） | `/merged 482` |
 | `/handoff` | セッション引き継ぎ（MEMORY.md更新・ジャーナル記録） | `/handoff`, `/handoff "次はCopilotフロー"` |
-| `/resume` | セッション復帰（ジャーナル確認・前回作業把握） | `/resume`, `/resume 3` |
+| `/restore` | セッション復帰（ジャーナル確認・前回作業把握） | `/restore`, `/restore 3` |
 | `/check-review-batch` | 自動マージIssueの全PRチェック・レポート | `/check-review-batch`, `/check-review-batch 375` |
 
 **定義ファイル**: `.claude/skills/` 配下
@@ -387,7 +387,7 @@ commitが成功していない状態でpushしないこと。
 - `docs/specs/topic-skill.md`（`/topic` 用）
 - `docs/specs/handoff-skill.md`（`/handoff` 用）
 - `docs/specs/check-review-batch-skill.md`（`/check-review-batch` 用）
-**補足**: `/check-pr`、`/merged`、`/resume` は `.claude/skills/` 配下の SKILL.md の定義のみで、`docs/specs/` 配下に専用の仕様書はありません。
+**補足**: `/check-pr`、`/merged`、`/restore` は `.claude/skills/` 配下の SKILL.md の定義のみで、`docs/specs/` 配下に専用の仕様書はありません。
 
 ### サブエージェント（自動委譲タスク）
 
