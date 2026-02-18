@@ -132,6 +132,7 @@ async def main() -> None:
                 bm25_index = BM25Index(
                     k1=settings.rag_bm25_k1,
                     b=settings.rag_bm25_b,
+                    persist_dir=settings.bm25_persist_dir,
                 )
                 logger.info("BM25インデックス初期化完了")
 
