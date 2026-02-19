@@ -57,8 +57,8 @@
 - **作業ブランチ**: `feature/f{N}-{機能名}-#{Issue番号}` / `bugfix/{修正内容}-#{Issue番号}` / `release/v{X.Y.Z}` / `hotfix/{修正内容}-#{Issue番号}`
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
 - PR作成時に `Closes #{Issue番号}` で紐付け
-- **PRのbaseブランチ**: 通常は `develop`、リリース/hotfix は `main`
-- **マージ方式**: feature/bugfix → develop は通常マージ、release → main は squash マージ
+- **PRのbaseブランチ**: 通常は `develop`、リリース/hotfix は `main`、リリース中の bugfix は `release/*`
+- **マージ方式**: feature/bugfix → develop は通常マージ、bugfix → release は通常マージ、release → main は squash マージ
 - **サブIssue作成**: `gh` CLI は未サポートのため GraphQL API を使用（`gh api graphql` の `addSubIssue` mutation）。親・子の Node ID は `gh issue view <番号> --json id --jq '.id'` で取得し、直接埋め込む
 
 ### 実装完了時の必須手順
