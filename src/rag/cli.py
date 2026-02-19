@@ -188,24 +188,24 @@ async def create_rag_service(
     )
 
 
-async def _build_bm25_index_from_fixture(
+def _build_bm25_index_from_fixture(
     fixture_path: str,
-    persist_dir: str | None = None,
 ) -> "BM25Index":
     """テストドキュメントフィクスチャからBM25インデックスを構築する.
 
-    本番と同じ _smart_chunk を適用してチャンク分割してから BM25 に登録する。
+    本番と同じ smart_chunk を適用してチャンク分割してから BM25 に登録する。
 
     Args:
         fixture_path: フィクスチャファイルのパス
-        persist_dir: ChromaDB永続化ディレクトリ（RAGKnowledgeService 生成用）
 
     Returns:
         構築済みBM25Indexインスタンス
     """
+    from src.config.settings import get_settings
     from src.rag.bm25_index import BM25Index
+    from src.services.rag_knowledge import smart_chunk
 
-    rag_service = await create_rag_service(persist_dir=persist_dir)
+    settings = get_settings()
 
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
@@ -217,7 +217,7 @@ async def _build_bm25_index_from_fixture(
         content = doc.get("content", "")
         if not source_url or not content:
             continue
-        chunks = rag_service._smart_chunk(content)
+        chunks = smart_chunk(content, settings.rag_chunk_size, settings.rag_chunk_overlap)
         url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
         for i, chunk in enumerate(chunks):
             documents.append((f"{url_hash}_{i}", chunk, source_url))
@@ -241,7 +241,7 @@ async def run_evaluation(args: argparse.Namespace) -> None:
 
     # BM25インデックスをテストドキュメントから構築（ハイブリッド検索用）
     fixture_path = getattr(args, "fixture", "tests/fixtures/rag_test_documents.json")
-    bm25_index = await _build_bm25_index_from_fixture(fixture_path, persist_dir=args.persist_dir)
+    bm25_index = _build_bm25_index_from_fixture(fixture_path)
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
     vector_weight: float | None = args.vector_weight

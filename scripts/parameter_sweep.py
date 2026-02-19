@@ -92,7 +92,7 @@ async def run_single_evaluation(
     persist_dir: str | None = None,
 ) -> SweepResult:
     """単一パラメータセットで評価を実行."""
-    bm25_index = await _build_bm25_index_from_fixture(fixture_path, persist_dir=persist_dir)
+    bm25_index = _build_bm25_index_from_fixture(fixture_path)
     rag_service = await create_rag_service(
         threshold=threshold,
         bm25_index=bm25_index,

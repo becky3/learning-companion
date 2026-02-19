@@ -322,7 +322,7 @@ class TestCLIEvaluate:
             save_baseline=False,
         )
 
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch(
                     "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
@@ -373,7 +373,7 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
@@ -422,7 +422,7 @@ class TestCLIEvaluate:
             save_baseline=False,
         )
 
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch(
                     "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
@@ -479,7 +479,7 @@ class TestCLIEvaluate:
             save_baseline=False,
         )
 
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch(
                     "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
@@ -530,7 +530,7 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
@@ -581,7 +581,7 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
@@ -631,7 +631,7 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
@@ -679,7 +679,7 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
@@ -726,7 +726,7 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
@@ -782,7 +782,7 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", new=AsyncMock(return_value=MagicMock())):
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
             with patch("src.rag.cli.create_rag_service") as mock_create_service:
                 with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()

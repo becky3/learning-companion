@@ -28,6 +28,44 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def smart_chunk(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    """コンテンツタイプに応じた適切なチャンキング手法を選択する.
+
+    仕様: docs/specs/f9-rag.md
+
+    - TABLE: テーブルデータとして行単位でチャンキング
+    - HEADING/MIXED: 見出し単位でチャンキング
+    - PROSE: 従来の段落ベースチャンキング
+
+    Args:
+        text: チャンキング対象のテキスト
+        chunk_size: チャンクの最大文字数
+        chunk_overlap: チャンク間のオーバーラップ文字数
+
+    Returns:
+        チャンクのリスト
+    """
+    if not text or not text.strip():
+        return []
+
+    content_type = detect_content_type(text)
+    logger.debug("Detected content type: %s", content_type.value)
+
+    if content_type == ContentType.TABLE:
+        table_chunks = chunk_table_data(text)
+        if table_chunks:
+            return [chunk.formatted_text for chunk in table_chunks]
+        logger.debug("Table chunking returned no results, falling back to prose")
+
+    if content_type in (ContentType.HEADING, ContentType.MIXED):
+        heading_chunks = chunk_by_headings(text, max_chunk_size=chunk_size)
+        if heading_chunks:
+            return [chunk.formatted_text for chunk in heading_chunks]
+        logger.debug("Heading chunking returned no results, falling back to prose")
+
+    return chunk_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+
+
 @dataclass
 class RAGRetrievalResult:
     """RAG検索結果.
@@ -249,48 +287,8 @@ class RAGKnowledgeService:
         """コンテンツタイプに応じた適切なチャンキング手法を選択する.
 
         仕様: docs/specs/f9-rag.md
-
-        - TABLE: テーブルデータとして行単位でチャンキング
-        - HEADING/MIXED: 見出し単位でチャンキング
-        - PROSE: 従来の段落ベースチャンキング
-
-        Args:
-            text: チャンキング対象のテキスト
-
-        Returns:
-            チャンクのリスト
         """
-        if not text or not text.strip():
-            return []
-
-        content_type = detect_content_type(text)
-        logger.debug("Detected content type: %s", content_type.value)
-
-        if content_type == ContentType.TABLE:
-            # テーブルデータ: 行単位でチャンキング
-            table_chunks = chunk_table_data(text)
-            if table_chunks:
-                return [chunk.formatted_text for chunk in table_chunks]
-            # テーブルチャンキングに失敗した場合はフォールバック
-            logger.debug("Table chunking returned no results, falling back to prose")
-
-        if content_type in (ContentType.HEADING, ContentType.MIXED):
-            # 見出しあり: 見出し単位でチャンキング
-            heading_chunks = chunk_by_headings(
-                text,
-                max_chunk_size=self._chunk_size,
-            )
-            if heading_chunks:
-                return [chunk.formatted_text for chunk in heading_chunks]
-            # 見出しチャンキングに失敗した場合はフォールバック
-            logger.debug("Heading chunking returned no results, falling back to prose")
-
-        # 通常テキスト: 従来のチャンキング
-        return chunk_text(
-            text,
-            chunk_size=self._chunk_size,
-            chunk_overlap=self._chunk_overlap,
-        )
+        return smart_chunk(text, self._chunk_size, self._chunk_overlap)
 
     async def _ingest_crawled_page(self, page: CrawledPage) -> int:
         """クロール済みページをチャンキングして保存する.
