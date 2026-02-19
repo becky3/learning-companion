@@ -47,7 +47,7 @@ for ((i = 1; i <= MAX_ATTEMPTS; i++)); do
   # REST API でレビュー一覧を取得
   if ! REVIEWS=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/reviews" 2>&1); then
     # 認証/権限エラー（回復不能）→ 即停止
-    if echo "$REVIEWS" | grep -qiE "(401|403|authentication failed|forbidden|resource not accessible)"; then
+    if echo "$REVIEWS" | grep -qiE "(401|403|authentication|forbidden|resource not accessible)"; then
       echo "::error::Permission/authentication error (non-recoverable): $REVIEWS"
       output "copilot_reviewed" "false"
       exit 1
