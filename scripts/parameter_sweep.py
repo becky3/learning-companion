@@ -2,7 +2,7 @@
 
 Phase 1: vector_weight (α) を 0.0〜1.0 で 0.1 刻みにスイープ（threshold=None）
 Phase 2: Phase 1 のベスト α で threshold を 0.4〜0.8 でスイープ
-Phase 3: Phase 2 のベスト α/threshold で n_results を 3〜20 でスイープ
+Phase 3: Phase 2 のベスト α/threshold で n_results を代表値 [3, 5, 7, 10, 15, 20] でスイープ
 
 Usage:
     # テスト用ChromaDBの初期化（初回のみ）
@@ -361,6 +361,7 @@ async def main_async(args: argparse.Namespace) -> None:
     n_results = args.n_results
 
     if args.phase in (1, 0):
+        _validate_alpha_range(args)
         phase1_results = await run_phase1(
             dataset_path, fixture_path,
             chunk_size=chunk_size, chunk_overlap=chunk_overlap,
@@ -425,6 +426,9 @@ async def main_async(args: argparse.Namespace) -> None:
         if args.best_alpha is None:
             print("ERROR: --best-alpha is required for Phase 3")
             sys.exit(1)
+        if args.best_threshold is _THRESHOLD_UNSET:
+            print("ERROR: --best-threshold is required for Phase 3 (use 'none' for no threshold)")
+            sys.exit(1)
         await run_phase3(
             args.best_alpha, args.best_threshold,
             dataset_path, fixture_path,
@@ -438,6 +442,29 @@ def _parse_threshold(value: str) -> float | None:
     if value.lower() == "none":
         return None
     return float(value)
+
+
+def _positive_int(value: str) -> int:
+    """正の整数のみ受け付ける argparse type."""
+    n = int(value)
+    if n < 1:
+        msg = f"1以上の整数を指定してください: {value}"
+        raise argparse.ArgumentTypeError(msg)
+    return n
+
+
+def _validate_alpha_range(args: argparse.Namespace) -> None:
+    """alpha sweep パラメータのバリデーション."""
+    if args.alpha_step <= 0:
+        print("ERROR: --alpha-step must be > 0")
+        sys.exit(1)
+    if args.alpha_min > args.alpha_max:
+        print("ERROR: --alpha-min must be <= --alpha-max")
+        sys.exit(1)
+
+
+# --best-threshold 未指定を検出するための sentinel
+_THRESHOLD_UNSET = object()
 
 
 def main() -> None:
@@ -458,7 +485,8 @@ def main() -> None:
     parser.add_argument(
         "--best-threshold",
         type=_parse_threshold,
-        help="Best threshold from Phase 2 (for --phase 3). Use 'none' for None",
+        default=_THRESHOLD_UNSET,
+        help="Best threshold from Phase 2 (required for --phase 3). Use 'none' for None",
     )
     parser.add_argument(
         "--alpha-min",
@@ -480,7 +508,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--n-results",
-        type=int,
+        type=_positive_int,
         default=5,
         help="各クエリで取得する結果数 (default: 5)",
     )
