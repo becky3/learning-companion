@@ -13,8 +13,12 @@
 # 出力:
 #   copilot_reviewed=true|false（$GITHUB_OUTPUT 経由）
 #
-# 終了コード: 常に 0（タイムアウトは copilot_reviewed=false で呼び出し元が判断）
-# API エラー: warning を出力して次のポーリングへ（一時的障害への耐性）
+# 終了コード:
+#   0 — タイムアウト or 正常検知（copilot_reviewed で呼び出し元が判断）
+#   1 — 回復不能エラー（権限/認証エラー）
+# API エラー:
+#   認証/権限エラー（401/403/forbidden/resource not accessible）→ exit 1（即停止）
+#   一時的障害 → warning を出力して次のポーリングへ（耐性）
 
 set -euo pipefail
 
@@ -42,6 +46,13 @@ for ((i = 1; i <= MAX_ATTEMPTS; i++)); do
 
   # REST API でレビュー一覧を取得
   if ! REVIEWS=$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}/reviews" 2>&1); then
+    # 認証/権限エラー（回復不能）→ 即停止
+    if echo "$REVIEWS" | grep -qiE "(401|403|authentication|forbidden|resource not accessible)"; then
+      echo "::error::Permission/authentication error (non-recoverable): $REVIEWS"
+      output "copilot_reviewed" "false"
+      exit 1
+    fi
+    # 一時的 API 障害 → warning でリトライ
     echo "::warning::Failed to fetch reviews (attempt $i): $REVIEWS"
     sleep "$POLL_INTERVAL"
     continue

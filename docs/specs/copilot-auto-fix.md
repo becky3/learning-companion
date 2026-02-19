@@ -289,8 +289,12 @@ auto-fix が禁止ファイルの変更を取り消す可能性があるため�
 - 環境変数: `PR_NUMBER`（必須）、`GH_TOKEN`（必須）、`GH_REPO`（必須）、`COPILOT_REVIEW_TIMEOUT`（任意、デフォルト600）
 - `_common.sh` を source して `require_env`, `output`, `validate_pr_number` を使用
 - 出力: `copilot_reviewed=true|false`（`$GITHUB_OUTPUT` 経由）
-- 成功時: exit 0、タイムアウト時: exit 0（`copilot_reviewed=false` で呼び出し元が判断）
-- API エラー時: warning を出力して次のポーリングへ（一時的障害への耐性）
+- 終了コード:
+  - exit 0: 正常検知 or タイムアウト（`copilot_reviewed` で呼び出し元が判断）
+  - exit 1: 回復不能エラー（権限/認証エラー。ワークフローの `Handle errors` ステップが `auto:failed` を付与）
+- API エラー分類:
+  - 認証/権限エラー（`401`/`403`/`forbidden`/`resource not accessible`）→ `::error::` + exit 1（即停止）
+  - 一時的障害 → `::warning::` + 次のポーリングへ（耐性）
 - ポーリング間隔: 30 秒固定（スクリプト内ハードコード）
 
 ### 流用する既存スクリプト
