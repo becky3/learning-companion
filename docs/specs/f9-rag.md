@@ -95,6 +95,27 @@ flowchart TB
     end
 ```
 
+### 検索パラメータチューニングガイド
+
+ハイブリッド検索の精度は以下のパラメータの組み合わせで決まる。
+
+| パラメータ | 環境変数 | 型 | 目安値 | 説明 |
+|-----------|---------|---|-------|------|
+| α (vector_weight) | `RAG_VECTOR_WEIGHT` | float | 0.8〜0.95 | ベクトル検索スコアの重み（1−α が BM25 の重み） |
+| n_results | `RAG_RETRIEVAL_COUNT` | int | 3〜5 | 返却結果の最大数。少ないほど精度重視、多いほど再現率重視 |
+| threshold | `RAG_SIMILARITY_THRESHOLD` | float\|None | None / 0.5〜0.7 | cosine 距離の閾値。None で無効 |
+| k1 | `RAG_BM25_K1` | float | 1.5〜3.0 | BM25 の用語頻度飽和パラメータ。大きいほど高頻度語を重視 |
+| b | `RAG_BM25_B` | float | 0.3〜0.75 | BM25 の文書長正規化パラメータ。大きいほど短い文書を優遇 |
+| min_combined_score | `RAG_MIN_COMBINED_SCORE` | float\|None | 0.6〜0.8 | combined_score の下限閾値。None で無効 |
+| chunk_size | `RAG_CHUNK_SIZE` | int | 150〜300 | チャンク最大文字数。小さいほどピンポイント検索向き |
+| chunk_overlap | `RAG_CHUNK_OVERLAP` | int | 20〜50 | チャンク間のオーバーラップ文字数 |
+
+> **パラメータ間の相互作用**:
+>
+> - α を高くすると意味的検索が優勢になるが、固有名詞のような表層一致には BM25（1−α）が有効
+> - n_results を増やすと再現率は上がるが、無関係なチャンクが混入しやすくなる。min_combined_score と併用して低品質結果を除外するのが効果的
+> - chunk_size を小さくすると検索精度は上がりやすいが、文脈が失われる可能性がある
+
 ---
 
 ## 入出力仕様
@@ -610,6 +631,7 @@ class HybridSearchEngine:
         query: str,
         n_results: int = 5,
         similarity_threshold: float | None = None,
+        min_combined_score: float | None = None,
     ) -> list[HybridSearchResult]:
         """ハイブリッド検索を実行する.
 
@@ -618,6 +640,7 @@ class HybridSearchEngine:
         3. 各スコアをmin-max正規化（0〜1に変換）
         4. Convex Combination（CC）で重み付き加算
         5. 統合スコアでソート
+        6. min_combined_score 未満の結果を除外
         """
 ```
 
@@ -807,6 +830,7 @@ class RAGKnowledgeService:
         bm25_index: BM25Index | None = None,
         hybrid_search_enabled: bool = False,
         vector_weight: float = 1.0,
+        min_combined_score: float | None = None,
         debug_log_enabled: bool = False,
     ) -> None: ...
 
@@ -1014,7 +1038,7 @@ class Settings(BaseSettings):
     chromadb_persist_dir: str = "./chroma_db"
     rag_chunk_size: int = 200
     rag_chunk_overlap: int = 30
-    rag_retrieval_count: int = 5
+    rag_retrieval_count: int = 3
     rag_max_crawl_pages: int = 50
     rag_crawl_delay_sec: float = 1.0
     rag_crawl_progress_interval: int = 5
@@ -1025,9 +1049,10 @@ class Settings(BaseSettings):
 
     # ハイブリッド検索
     rag_hybrid_search_enabled: bool = False
-    rag_vector_weight: float = 1.0
-    rag_bm25_k1: float = 1.5
-    rag_bm25_b: float = 0.75
+    rag_vector_weight: float = 0.90
+    rag_bm25_k1: float = 2.5
+    rag_bm25_b: float = 0.50
+    rag_min_combined_score: float | None = 0.75
     bm25_persist_dir: str = "./bm25_index"
 
     # 類似度閾値
@@ -1298,6 +1323,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-19 | スイープ確定パラメータを settings.py デフォルト値に反映（`rag_vector_weight` 1.0→0.90, `rag_bm25_k1` 1.5→2.5, `rag_bm25_b` 0.75→0.50, `rag_retrieval_count` 5→3）、`rag_min_combined_score` 新規追加、検索パラメータチューニングガイドセクション追加（#535） |
 | 2026-02-19 | チャンクサイズ縮小（`rag_chunk_size` 500→200, `rag_chunk_overlap` 50→30）、`RAGKnowledgeService` コンストラクタを必須引数化（`similarity_threshold` / `vector_weight` / `debug_log_enabled` 追加、内部 `get_settings()` 参照廃止）、評価CLI の環境変数ハック廃止、`init_test_db` / BM25インデックス構築を `_ingest_crawled_page` / `_smart_chunk` 経由に統一（#522） |
 | 2026-02-19 | パラメータスイープ再実行（拡充データ101件+プレフィックス有効）で `RAG_VECTOR_WEIGHT` 推奨値を 0.5→1.0 に更新（#518） |
 | 2026-02-19 | Embeddingプレフィックス検証: `embed_documents()` / `embed_query()` メソッド追加、`EMBEDDING_PREFIX_ENABLED` 設定追加（#517） |

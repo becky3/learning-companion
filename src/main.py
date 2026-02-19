@@ -146,6 +146,7 @@ async def main() -> None:
                 bm25_index=bm25_index,
                 hybrid_search_enabled=settings.rag_hybrid_search_enabled,
                 vector_weight=settings.rag_vector_weight,
+                min_combined_score=settings.rag_min_combined_score,
                 debug_log_enabled=settings.rag_debug_log_enabled,
             )
             if settings.rag_hybrid_search_enabled:
