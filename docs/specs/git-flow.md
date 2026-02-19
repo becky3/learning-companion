@@ -59,7 +59,7 @@ gitGraph
 | プレフィックス | 用途 | ベース | マージ先 | 命名規則 |
 |--------------|------|--------|---------|---------|
 | `feature/` | 新機能開発 | `develop` | `develop` | `feature/f{N}-{機能名}-#{Issue番号}` |
-| `bugfix/` | バグ修正 | `develop` or `release/*` | `develop` or `release/*` | `bugfix/{修正内容}-#{Issue番号}` |
+| `bugfix/` | バグ修正 | `develop` または対象 `release/*` | ベースと同一ブランチ | `bugfix/{修正内容}-#{Issue番号}` |
 | `release/` | リリース準備 | `develop` | `main`（squash） | `release/v{X.Y.Z}` |
 | `hotfix/` | 本番緊急修正 | `main` | `main` + `develop` | `hotfix/{修正内容}-#{Issue番号}` |
 | `claude/` | Claude Code自動生成 | `develop`(*) | `develop` | `claude/issue-{N}-{date}-{id}`（自動命名） |
@@ -123,7 +123,7 @@ sequenceDiagram
 リリース準備中に修正が必要な場合、release ブランチに直接コミットせず、bugfix ブランチを経由してPRでマージする。
 
 - **理由**: release PRに修正を直接混ぜると、どの時点で何が修正されたか追跡しづらくなる。PR単位で修正履歴を残すことでトレーサビリティを確保する
-- **ブランチ命名**: `bugfix/{修正内容}` （release ブランチからの分岐）
+- **ブランチ命名**: `bugfix/{修正内容}-#{Issue番号}` （release ブランチからの分岐。Issue がない軽微な修正は番号省略可）
 - **マージ先**: `release/v{X.Y.Z}`
 - **マージ方式**: 通常マージ
 
@@ -131,7 +131,7 @@ sequenceDiagram
 # release ブランチから bugfix ブランチを作成
 git checkout -b bugfix/fix-something release/v0.0.1
 
-# 修正・コミット
+# 修正して push
 git push -u origin bugfix/fix-something
 
 # release ブランチに向けてPR作成
@@ -213,6 +213,7 @@ sequenceDiagram
 
 - PRタイトル例: `fix: 修正内容`
 - `release/v{X.Y.Z}` をbaseとする
+- CIチェック必須
 - リリースPRに直接コミットせず、必ずPR経由でマージする
 
 ### release → main
@@ -286,7 +287,7 @@ sequenceDiagram
 - [x] AC3: `CLAUDE.md` のGit運用セクションが git-flow に対応している
 - [x] AC4: `docs/specs/overview.md` のGit運用セクションが更新されている
 - [x] AC5: `README.md` の開発フロー概要が更新されている
-- [x] AC6: feature/bugfix ブランチは `develop` からの分岐・マージで運用される
+- [x] AC6: feature/bugfix ブランチは `develop` からの分岐・マージで運用される（bugfix は `release/*` からの分岐・マージも可）
 - [x] AC7: GitHub Actions（claude.yml, pr-review.yml）が `develop` ベースで正しく動作する
 - [ ] AC8: `main` への反映は `release/v{X.Y.Z}` ブランチを経由して行われる
 - [ ] AC9: `release/v{X.Y.Z}` → `main` は squash マージで行われる
