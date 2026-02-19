@@ -20,7 +20,6 @@ from src.rag.table_chunker import chunk_table_data
 from src.rag.vector_store import DocumentChunk, VectorStore
 
 if TYPE_CHECKING:
-    from src.config.settings import Settings
     from src.rag.bm25_index import BM25Index
     from src.rag.hybrid_search import HybridSearchEngine
     from src.services.safe_browsing import SafeBrowsingClient
@@ -54,11 +53,16 @@ class RAGKnowledgeService:
         self,
         vector_store: VectorStore,
         web_crawler: WebCrawler,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
+        *,
+        chunk_size: int,
+        chunk_overlap: int,
+        similarity_threshold: float | None,
         safe_browsing_client: SafeBrowsingClient | None = None,
         bm25_index: BM25Index | None = None,
         hybrid_search_enabled: bool = False,
+        vector_weight: float = 1.0,
+        debug_log_enabled: bool = False,
+        show_sources: bool = False,
     ) -> None:
         """RAGKnowledgeServiceを初期化する.
 
@@ -67,29 +71,34 @@ class RAGKnowledgeService:
             web_crawler: Webクローラー
             chunk_size: チャンクの最大文字数
             chunk_overlap: チャンク間のオーバーラップ文字数
+            similarity_threshold: 類似度閾値（Noneで無制限）
             safe_browsing_client: Safe Browsing クライアント（オプション）
             bm25_index: BM25インデックス（オプション、ハイブリッド検索用）
             hybrid_search_enabled: ハイブリッド検索の有効/無効
+            vector_weight: ベクトル検索の重み（ハイブリッド検索用）
+            debug_log_enabled: RAGデバッグログの有効/無効
+            show_sources: ソース情報表示の有効/無効
         """
         self._vector_store = vector_store
         self._web_crawler = web_crawler
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
+        self._similarity_threshold = similarity_threshold
         self._safe_browsing_client = safe_browsing_client
         self._bm25_index = bm25_index
         self._hybrid_search_enabled = hybrid_search_enabled
+        self._debug_log_enabled = debug_log_enabled
+        self._show_sources = show_sources
         self._hybrid_search_engine: HybridSearchEngine | None = None
 
         # ハイブリッド検索エンジンの初期化
         if hybrid_search_enabled and bm25_index is not None:
-            from src.config.settings import get_settings
             from src.rag.hybrid_search import HybridSearchEngine
 
-            settings = get_settings()
             self._hybrid_search_engine = HybridSearchEngine(
                 vector_store=vector_store,
                 bm25_index=bm25_index,
-                vector_weight=settings.rag_vector_weight,
+                vector_weight=vector_weight,
             )
             logger.info("Hybrid search engine initialized")
 
@@ -363,29 +372,23 @@ class RAGKnowledgeService:
         Returns:
             RAGRetrievalResult: コンテキストとソース情報
         """
-        from src.config.settings import get_settings
-
-        settings = get_settings()
-
         # ハイブリッド検索が有効な場合
         if self._hybrid_search_enabled and self._hybrid_search_engine is not None:
-            return await self._retrieve_hybrid(query, n_results, settings)
+            return await self._retrieve_hybrid(query, n_results)
 
         # 従来のベクトル検索のみ
-        return await self._retrieve_vector_only(query, n_results, settings)
+        return await self._retrieve_vector_only(query, n_results)
 
     async def _retrieve_vector_only(
         self,
         query: str,
         n_results: int,
-        settings: "Settings",
     ) -> RAGRetrievalResult:
         """ベクトル検索のみで検索を実行する（従来の動作）.
 
         Args:
             query: 検索クエリ
             n_results: 返却する結果の最大数
-            settings: 設定オブジェクト
 
         Returns:
             RAGRetrievalResult: コンテキストとソース情報
@@ -393,14 +396,14 @@ class RAGKnowledgeService:
         results = await self._vector_store.search(
             query,
             n_results=n_results,
-            similarity_threshold=settings.rag_similarity_threshold,
+            similarity_threshold=self._similarity_threshold,
         )
 
         if not results:
             return RAGRetrievalResult(context="", sources=[])
 
         # デバッグログ出力
-        if settings.rag_debug_log_enabled:
+        if self._debug_log_enabled:
             logger.info("RAG retrieve (vector only): query=%r", query)
             for i, result in enumerate(results, start=1):
                 source_url = result.metadata.get("source_url", "不明")
@@ -436,7 +439,6 @@ class RAGKnowledgeService:
         self,
         query: str,
         n_results: int,
-        settings: "Settings",
     ) -> RAGRetrievalResult:
         """ハイブリッド検索（ベクトル＋BM25）で検索を実行する.
 
@@ -445,7 +447,6 @@ class RAGKnowledgeService:
         Args:
             query: 検索クエリ
             n_results: 返却する結果の最大数
-            settings: 設定オブジェクト
 
         Returns:
             RAGRetrievalResult: コンテキストとソース情報
@@ -455,14 +456,14 @@ class RAGKnowledgeService:
         results = await self._hybrid_search_engine.search(
             query,
             n_results=n_results,
-            similarity_threshold=settings.rag_similarity_threshold,
+            similarity_threshold=self._similarity_threshold,
         )
 
         if not results:
             return RAGRetrievalResult(context="", sources=[])
 
         # デバッグログ出力
-        if settings.rag_debug_log_enabled:
+        if self._debug_log_enabled:
             logger.info("RAG retrieve (hybrid): query=%r", query)
             for i, result in enumerate(results, start=1):
                 source_url = result.metadata.get("source_url", "不明")

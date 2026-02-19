@@ -799,10 +799,16 @@ class RAGKnowledgeService:
         self,
         vector_store: VectorStore,
         web_crawler: WebCrawler,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
+        *,
+        chunk_size: int,
+        chunk_overlap: int,
+        similarity_threshold: float | None,
+        safe_browsing_client: SafeBrowsingClient | None = None,
         bm25_index: BM25Index | None = None,
         hybrid_search_enabled: bool = False,
+        vector_weight: float = 1.0,
+        debug_log_enabled: bool = False,
+        show_sources: bool = False,
     ) -> None: ...
 
     async def ingest_from_index(
@@ -993,8 +999,8 @@ class Settings(BaseSettings):
     embedding_model_online: str = "text-embedding-3-small"
     embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
     chromadb_persist_dir: str = "./chroma_db"
-    rag_chunk_size: int = 500
-    rag_chunk_overlap: int = 50
+    rag_chunk_size: int = 200
+    rag_chunk_overlap: int = 30
     rag_retrieval_count: int = 5
     rag_max_crawl_pages: int = 50
     rag_crawl_delay_sec: float = 1.0
@@ -1279,6 +1285,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-19 | チャンクサイズ縮小（`rag_chunk_size` 500→200, `rag_chunk_overlap` 50→30）、`RAGKnowledgeService` コンストラクタを必須引数化（`similarity_threshold` / `vector_weight` / `debug_log_enabled` / `show_sources` 追加、内部 `get_settings()` 参照廃止）、評価CLI の環境変数ハック廃止、`init_test_db` / BM25インデックス構築を `_ingest_crawled_page` / `_smart_chunk` 経由に統一（#522） |
 | 2026-02-19 | パラメータスイープ再実行（拡充データ101件+プレフィックス有効）で `RAG_VECTOR_WEIGHT` 推奨値を 0.5→1.0 に更新（#518） |
 | 2026-02-19 | Embeddingプレフィックス検証: `embed_documents()` / `embed_query()` メソッド追加、`EMBEDDING_PREFIX_ENABLED` 設定追加（#517） |
 | 2026-02-18 | 評価CLIに `--vector-weight` オプション追加、CC自然減衰の対称性を記述（#509） |

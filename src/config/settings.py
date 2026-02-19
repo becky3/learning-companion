@@ -88,8 +88,8 @@ class Settings(BaseSettings):
     embedding_model_online: str = "text-embedding-3-small"
     embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
     chromadb_persist_dir: str = "./chroma_db"
-    rag_chunk_size: int = Field(default=500, ge=1)
-    rag_chunk_overlap: int = Field(default=50, ge=0)
+    rag_chunk_size: int = Field(default=200, ge=1)
+    rag_chunk_overlap: int = Field(default=30, ge=0)
     rag_retrieval_count: int = Field(default=5, ge=1)
     rag_max_crawl_pages: int = Field(default=50, ge=1)
     rag_crawl_delay_sec: float = Field(default=1.0, ge=0)

@@ -141,9 +141,13 @@ async def main() -> None:
                 web_crawler,
                 chunk_size=settings.rag_chunk_size,
                 chunk_overlap=settings.rag_chunk_overlap,
+                similarity_threshold=settings.rag_similarity_threshold,
                 safe_browsing_client=safe_browsing_client,
                 bm25_index=bm25_index,
                 hybrid_search_enabled=settings.rag_hybrid_search_enabled,
+                vector_weight=settings.rag_vector_weight,
+                debug_log_enabled=settings.rag_debug_log_enabled,
+                show_sources=settings.rag_show_sources,
             )
             if settings.rag_hybrid_search_enabled:
                 logger.info("RAG有効: ハイブリッド検索（ベクトル＋BM25）が利用可能")
