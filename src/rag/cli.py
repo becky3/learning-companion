@@ -128,6 +128,18 @@ def main() -> None:
         required=True,
         help="チャンクオーバーラップ",
     )
+    eval_parser.add_argument(
+        "--bm25-k1",
+        type=float,
+        default=1.5,
+        help="BM25 k1パラメータ（デフォルト: 1.5）",
+    )
+    eval_parser.add_argument(
+        "--bm25-b",
+        type=float,
+        default=0.75,
+        help="BM25 bパラメータ（デフォルト: 0.75）",
+    )
 
     # init-test-db サブコマンド
     init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
@@ -222,6 +234,8 @@ def _build_bm25_index_from_fixture(
     *,
     chunk_size: int,
     chunk_overlap: int,
+    k1: float = 1.5,
+    b: float = 0.75,
 ) -> "BM25Index":
     """テストドキュメントフィクスチャからBM25インデックスを構築する.
 
@@ -231,6 +245,8 @@ def _build_bm25_index_from_fixture(
         fixture_path: フィクスチャファイルのパス
         chunk_size: チャンクサイズ
         chunk_overlap: チャンクオーバーラップ
+        k1: BM25 用語頻度の飽和パラメータ（デフォルト: 1.5）
+        b: BM25 文書長の正規化パラメータ（デフォルト: 0.75）
 
     Returns:
         構築済みBM25Indexインスタンス
@@ -241,7 +257,7 @@ def _build_bm25_index_from_fixture(
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
 
-    bm25_index = BM25Index()
+    bm25_index = BM25Index(k1=k1, b=b)
     documents: list[tuple[str, str, str]] = []
     for doc in fixture_data.get("documents", []):
         source_url = doc.get("source_url", "")
@@ -273,10 +289,14 @@ async def run_evaluation(args: argparse.Namespace) -> None:
 
     # BM25インデックスをテストドキュメントから構築（ハイブリッド検索用）
     fixture_path = getattr(args, "fixture", "tests/fixtures/rag_test_documents.json")
+    bm25_k1: float = getattr(args, "bm25_k1", 1.5)
+    bm25_b: float = getattr(args, "bm25_b", 0.75)
     bm25_index = _build_bm25_index_from_fixture(
         fixture_path,
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
+        k1=bm25_k1,
+        b=bm25_b,
     )
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
