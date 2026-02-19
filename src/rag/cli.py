@@ -14,6 +14,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
+from urllib.parse import urldefrag
 
 from src.rag.evaluation import (
     EvaluationReport,
@@ -248,9 +249,10 @@ def _build_bm25_index_from_fixture(
         if not source_url or not content:
             continue
         chunks = smart_chunk(content, chunk_size, chunk_overlap)
-        url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
+        normalized_url, _ = urldefrag(source_url)
+        url_hash = hashlib.sha256(normalized_url.encode()).hexdigest()[:16]
         for i, chunk in enumerate(chunks):
-            documents.append((f"{url_hash}_{i}", chunk, source_url))
+            documents.append((f"{url_hash}_{i}", chunk, normalized_url))
 
     added = bm25_index.add_documents(documents)
     logger.info("BM25 index built with %d chunks from fixture", added)
