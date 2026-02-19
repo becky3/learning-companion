@@ -95,6 +95,47 @@ permissionMode: default
 - テスト名が `test_ac{N}_...` 形式で AC と対応しているか
 - 仕様書の AC に記載された振る舞いがテストでカバーされているか
 
+#### 9. フォールバック/暗黙のデフォルト値パターンの検出
+
+関数・メソッドが外部設定（settings, env）にフォールバックして値を取得するパターンや、CLI/テストツールで暗黙のデフォルト値を設定するパターンを検出する。
+
+**9a. settings フォールバックの禁止**
+
+- 関数の引数が `None` の場合に settings や環境変数から値を取得するパターンがないか
+- 値の出所が呼び出し元で明示されているか
+
+```python
+# NG: settings フォールバック
+def create_service(chunk_size: int | None = None):
+    settings = get_settings()
+    actual = chunk_size if chunk_size is not None else settings.rag_chunk_size
+
+# OK: 呼び出し元が値を決定
+def create_service(*, chunk_size: int):
+    ...
+```
+
+**9b. 暗黙のデフォルト値の禁止（CLI/テストツール）**
+
+- argparse の `default` で具体値を設定していないか（`required=True` にすべき）
+- 値の出所が隠蔽されていないか
+
+```python
+# NG: 暗黙のデフォルト値
+parser.add_argument("--chunk-size", type=int, default=200)
+
+# OK: 呼び出し元に明示させる
+parser.add_argument("--chunk-size", type=int, required=True)
+```
+
+**適用範囲:**
+
+| 対象 | 適用レベル | 理由 |
+|------|-----------|------|
+| 評価CLI・テストツール・スクリプト | **厳密適用** | 環境非依存であるべき |
+| 本番コード（`main.py`）での settings 参照 | **許容** | 本番は設定ファイルから読むのが正当 |
+| 基盤設定（DB接続先等のインフラ関連） | **許容** | データ処理パラメータとは性質が異なる |
+
 ### 処理フロー
 
 1. **レビュー対象の特定**
@@ -112,7 +153,7 @@ permissionMode: default
    - 実装ファイルの場合、対応するテストファイルも確認
 
 4. **レビュー観点ごとの検査**
-   - 上記のレビュー観点（1〜8）に基づき、問題を検出
+   - 上記のレビュー観点（1〜9）に基づき、問題を検出
    - 各問題に対して優先度を判定（Critical / Warning / Suggestion）
 
 5. **レポート生成**
@@ -190,7 +231,7 @@ code-reviewerサブエージェントで src/services/ と tests/ をレビュ�
 レビュー対象のコードに問題は検出されませんでした。
 
 - レビュー対象: 3ファイル
-- レビュー観点: 8カテゴリ
+- レビュー観点: 9カテゴリ
 ```
 
 ## 使用LLMプロバイダー
