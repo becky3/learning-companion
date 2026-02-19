@@ -33,4 +33,5 @@ def get_embedding_provider(
     return LMStudioEmbedding(
         base_url=settings.lmstudio_base_url,
         model=settings.embedding_model_local,
+        prefix_enabled=settings.embedding_prefix_enabled,
     )

@@ -113,7 +113,7 @@ class VectorStore:
 
         # テキストをEmbeddingに変換
         texts = [chunk.text for chunk in chunks]
-        raw_embeddings = await self._embedding.embed(texts)
+        raw_embeddings = await self._embedding.embed_documents(texts)
         embeddings: Embeddings = cast(Embeddings, raw_embeddings)
 
         # ChromaDBにupsert（同期APIなのでto_threadでラップ）
@@ -148,8 +148,8 @@ class VectorStore:
             検索結果のリスト（類似度の高い順）
         """
         # クエリをEmbeddingに変換
-        raw_query_embedding = await self._embedding.embed([query])
-        query_embeddings: Embeddings = cast(Embeddings, raw_query_embedding)
+        raw_query_embedding = await self._embedding.embed_query(query)
+        query_embeddings: Embeddings = cast(Embeddings, [raw_query_embedding])
 
         # 閾値フィルタリングを行う場合、多めに取得してからフィルタリング
         fetch_count = n_results

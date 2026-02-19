@@ -438,3 +438,53 @@ class TestAC38SimilarityThreshold:
             if "Similarity threshold filtering" in r.message
         ]
         assert len(threshold_logs) > 0, "閾値フィルタリングのログが出力されていない"
+
+
+class TestEmbeddingMethodDispatch:
+    """VectorStore が embed_documents()/embed_query() を呼ぶことの確認 (Issue #517)."""
+
+    @pytest.mark.asyncio
+    async def test_add_documents_calls_embed_documents(
+        self,
+        mock_embedding: MockEmbeddingProvider,
+        ephemeral_store: VectorStore,
+    ) -> None:
+        """add_documents() が embed_documents() を呼ぶこと."""
+        from unittest.mock import AsyncMock
+
+        original_embed_documents = mock_embedding.embed_documents
+        mock_embedding.embed_documents = AsyncMock(side_effect=original_embed_documents)  # type: ignore[method-assign]
+
+        chunk = DocumentChunk(
+            id="doc1_0",
+            text="テスト",
+            metadata={"source_url": "https://example.com", "chunk_index": 0},
+        )
+        await ephemeral_store.add_documents([chunk])
+
+        mock_embedding.embed_documents.assert_awaited_once_with(["テスト"])
+
+    @pytest.mark.asyncio
+    async def test_search_calls_embed_query(
+        self,
+        mock_embedding: MockEmbeddingProvider,
+        ephemeral_store: VectorStore,
+    ) -> None:
+        """search() が embed_query() を呼ぶこと."""
+        from unittest.mock import AsyncMock
+
+        # まずドキュメントを追加
+        chunk = DocumentChunk(
+            id="doc1_0",
+            text="テスト",
+            metadata={"source_url": "https://example.com", "chunk_index": 0},
+        )
+        await ephemeral_store.add_documents([chunk])
+
+        # embed_query をモック化
+        original_embed_query = mock_embedding.embed_query
+        mock_embedding.embed_query = AsyncMock(side_effect=original_embed_query)  # type: ignore[method-assign]
+
+        await ephemeral_store.search("テスト", n_results=1)
+
+        mock_embedding.embed_query.assert_awaited_once_with("テスト")
