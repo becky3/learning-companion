@@ -104,7 +104,7 @@ class Settings(BaseSettings):
 
     # RAGハイブリッド検索 (Phase 2)
     rag_hybrid_search_enabled: bool = False  # ハイブリッド検索の有効/無効
-    rag_vector_weight: float = Field(default=0.5, ge=0.0, le=1.0)  # ベクトル検索の重み
+    rag_vector_weight: float = Field(default=1.0, ge=0.0, le=1.0)  # ベクトル検索の重み
     rag_bm25_k1: float = Field(default=1.5, gt=0.0)  # BM25の用語頻度パラメータ
     rag_bm25_b: float = Field(default=0.75, ge=0.0, le=1.0)  # BM25の文書長正規化パラメータ
     bm25_persist_dir: str = "./bm25_index"

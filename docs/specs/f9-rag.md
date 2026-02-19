@@ -1006,7 +1006,7 @@ class Settings(BaseSettings):
 
     # ハイブリッド検索
     rag_hybrid_search_enabled: bool = False
-    rag_vector_weight: float = 0.5
+    rag_vector_weight: float = 1.0
     rag_bm25_k1: float = 1.5
     rag_bm25_b: float = 0.75
     bm25_persist_dir: str = "./bm25_index"
@@ -1279,6 +1279,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-19 | パラメータスイープ再実行（拡充データ101件+プレフィックス有効）で `RAG_VECTOR_WEIGHT` 推奨値を 0.5→1.0 に更新（#518） |
 | 2026-02-19 | Embeddingプレフィックス検証: `embed_documents()` / `embed_query()` メソッド追加、`EMBEDDING_PREFIX_ENABLED` 設定追加（#517） |
 | 2026-02-18 | 評価CLIに `--vector-weight` オプション追加、CC自然減衰の対称性を記述（#509） |
 | 2026-02-18 | BM25インデックスの永続化機能を追加（#497） |
