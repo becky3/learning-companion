@@ -147,7 +147,6 @@ async def main() -> None:
                 hybrid_search_enabled=settings.rag_hybrid_search_enabled,
                 vector_weight=settings.rag_vector_weight,
                 debug_log_enabled=settings.rag_debug_log_enabled,
-                show_sources=settings.rag_show_sources,
             )
             if settings.rag_hybrid_search_enabled:
                 logger.info("RAG有効: ハイブリッド検索（ベクトル＋BM25）が利用可能")

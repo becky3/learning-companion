@@ -62,7 +62,6 @@ class RAGKnowledgeService:
         hybrid_search_enabled: bool = False,
         vector_weight: float = 1.0,
         debug_log_enabled: bool = False,
-        show_sources: bool = False,
     ) -> None:
         """RAGKnowledgeServiceを初期化する.
 
@@ -77,7 +76,6 @@ class RAGKnowledgeService:
             hybrid_search_enabled: ハイブリッド検索の有効/無効
             vector_weight: ベクトル検索の重み（ハイブリッド検索用）
             debug_log_enabled: RAGデバッグログの有効/無効
-            show_sources: ソース情報表示の有効/無効
         """
         self._vector_store = vector_store
         self._web_crawler = web_crawler
@@ -88,7 +86,6 @@ class RAGKnowledgeService:
         self._bm25_index = bm25_index
         self._hybrid_search_enabled = hybrid_search_enabled
         self._debug_log_enabled = debug_log_enabled
-        self._show_sources = show_sources
         self._hybrid_search_engine: HybridSearchEngine | None = None
 
         # ハイブリッド検索エンジンの初期化
