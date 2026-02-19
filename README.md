@@ -59,13 +59,13 @@ RAG検索精度の評価パイプラインを提供します。
 ```bash
 # テスト用ChromaDBを初期化
 uv run python -m src.rag.cli init-test-db \
-  --persist-dir ./test_chroma_db \
+  --persist-dir .tmp/test_chroma_db \
   --fixture tests/fixtures/rag_test_documents.json
 
 # RAG検索精度を評価
 uv run python -m src.rag.cli evaluate \
-  --persist-dir ./test_chroma_db \
-  --output-dir reports/rag-evaluation
+  --persist-dir .tmp/test_chroma_db \
+  --output-dir .tmp/rag-evaluation
 ```
 
 詳細は [RAGナレッジ機能仕様](docs/specs/f9-rag.md) を参照してください。
