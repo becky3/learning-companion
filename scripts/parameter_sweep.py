@@ -4,6 +4,7 @@ Phase 1: vector_weight (α) を 0.0〜1.0 で 0.1 刻みにスイープ（thresh
 Phase 2: Phase 1 のベスト α で threshold を 0.4〜0.8 でスイープ
 Phase 3: Phase 2 のベスト α/threshold で n_results を代表値 [3, 5, 7, 10, 15, 20] でスイープ
 Phase 4: Phase 3 のベスト n_results で BM25 k1/b をグリッドサーチ
+Phase 5: Phase 4 のベスト k1/b で min_combined_score をスイープ
 
 Usage:
     # テスト用ChromaDBの初期化（初回のみ）
@@ -22,6 +23,9 @@ Usage:
       --chunk-size 200 --chunk-overlap 30
     uv run python scripts/parameter_sweep.py --phase 4 --best-alpha 0.6 --best-threshold none \
       --best-n-results 3 --chunk-size 200 --chunk-overlap 30
+    uv run python scripts/parameter_sweep.py --phase 5 --best-alpha 0.9 --best-threshold none \
+      --best-n-results 3 --best-k1 2.5 --best-b 0.50 \
+      --chunk-size 200 --chunk-overlap 30
 
     # 拡充データでスイープ実行
     uv run python scripts/parameter_sweep.py \
@@ -79,6 +83,7 @@ class SweepResult:
     n_results: int = 5
     k1: float = 1.5
     b: float = 0.75
+    min_combined_score: float | None = None
 
 
 DEFAULT_DATASET = "tests/fixtures/rag_evaluation_dataset.json"
@@ -109,6 +114,7 @@ async def run_single_evaluation(
     persist_dir: str | None = None,
     k1: float = 1.5,
     b: float = 0.75,
+    min_combined_score: float | None = None,
 ) -> SweepResult:
     """単一パラメータセットで評価を実行."""
     bm25_index = _build_bm25_index_from_fixture(
@@ -122,6 +128,7 @@ async def run_single_evaluation(
         bm25_index=bm25_index,
         vector_weight=vector_weight,
         persist_dir=persist_dir,
+        min_combined_score=min_combined_score,
     )
 
     report = await evaluate_retrieval(
@@ -156,6 +163,7 @@ async def run_single_evaluation(
         n_results=n_results,
         k1=k1,
         b=b,
+        min_combined_score=min_combined_score,
     )
 
 
@@ -196,7 +204,7 @@ def print_results_table(results: list[SweepResult], phase: int) -> None:
         )
         print("=" * 110)
         header = f"{'n_res':>5} | {METRIC_HEADER} | {CATEGORY_HEADER}"
-    else:
+    elif phase == 4:
         print("\n" + "=" * 110)
         print(
             f"Phase 4: BM25 k1/b sweep  |  "
@@ -206,6 +214,17 @@ def print_results_table(results: list[SweepResult], phase: int) -> None:
         )
         print("=" * 110)
         header = f"{'k1/b':>9} | {METRIC_HEADER} | {CATEGORY_HEADER}"
+    else:
+        print("\n" + "=" * 110)
+        print(
+            f"Phase 5: min_combined_score sweep  |  "
+            f"α = {results[0].vector_weight}  |  "
+            f"threshold = {results[0].threshold}  |  "
+            f"n_results = {results[0].n_results}  |  "
+            f"k1 = {results[0].k1}  |  b = {results[0].b}",
+        )
+        print("=" * 110)
+        header = f"{'min_sc':>6} | {METRIC_HEADER} | {CATEGORY_HEADER}"
 
     print(header)
     print("-" * len(header))
@@ -220,9 +239,11 @@ def print_results_table(results: list[SweepResult], phase: int) -> None:
             param = f"{r.threshold!s:>6}"
         elif phase == 3:
             param = f"{r.n_results:>5}"
-        else:
+        elif phase == 4:
             param = f"{r.k1:.1f}/{r.b:.2f}"
             param = f"{param:>9}"
+        else:
+            param = f"{r.min_combined_score!s:>6}"
         print(
             f"{param} | {r.avg_f1:>6.3f} | {r.avg_precision:>6.3f} | {r.avg_recall:>6.3f} | "
             f"{r.avg_ndcg:>6.3f} | {r.avg_mrr:>6.3f} | {r.negative_violations:>4} | "
@@ -317,6 +338,7 @@ def _sweep_result_to_dict(r: SweepResult) -> dict[str, object]:
         "n_results": r.n_results,
         "k1": r.k1,
         "b": r.b,
+        "min_combined_score": r.min_combined_score,
         "avg_f1": r.avg_f1,
         "avg_precision": r.avg_precision,
         "avg_recall": r.avg_recall,
@@ -336,6 +358,8 @@ def _build_json_output(
     best3: SweepResult,
     phase4_results: list[SweepResult] | None = None,
     best4: SweepResult | None = None,
+    phase5_results: list[SweepResult] | None = None,
+    best5: SweepResult | None = None,
 ) -> dict[str, object]:
     """全Phase結果のJSON出力を構築."""
     output: dict[str, object] = {
@@ -345,6 +369,8 @@ def _build_json_output(
     }
     if phase4_results is not None:
         output["phase4"] = [_sweep_result_to_dict(r) for r in phase4_results]
+    if phase5_results is not None:
+        output["phase5"] = [_sweep_result_to_dict(r) for r in phase5_results]
     recommendation: dict[str, object] = {
         "vector_weight": best1.vector_weight,
         "threshold": best2.threshold,
@@ -353,6 +379,10 @@ def _build_json_output(
     if best4 is not None:
         recommendation["k1"] = best4.k1
         recommendation["b"] = best4.b
+    if best5 is not None:
+        recommendation["min_combined_score"] = best5.min_combined_score
+        recommendation["expected_f1"] = best5.avg_f1
+    elif best4 is not None:
         recommendation["expected_f1"] = best4.avg_f1
     else:
         recommendation["expected_f1"] = best3.avg_f1
@@ -438,6 +468,49 @@ async def run_phase4(
     return results
 
 
+async def run_phase5(
+    best_alpha: float, best_threshold: float | None,
+    best_n_results: int,
+    best_k1: float, best_b: float,
+    dataset_path: str, fixture_path: str,
+    chunk_size: int, chunk_overlap: int,
+    persist_dir: str | None = None,
+) -> list[SweepResult]:
+    """Phase 5: min_combined_score スイープ."""
+    min_score_values: list[float | None] = [
+        None, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85,
+    ]
+    results: list[SweepResult] = []
+
+    for min_sc in min_score_values:
+        logger.info(
+            "Phase 5: min_combined_score=%s, α=%.2f, threshold=%s, "
+            "n_results=%d, k1=%.1f, b=%.2f ...",
+            min_sc, best_alpha, best_threshold, best_n_results,
+            best_k1, best_b,
+        )
+        result = await run_single_evaluation(
+            vector_weight=best_alpha,
+            threshold=best_threshold,
+            dataset_path=dataset_path,
+            fixture_path=fixture_path,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            n_results=best_n_results,
+            persist_dir=persist_dir,
+            k1=best_k1,
+            b=best_b,
+            min_combined_score=min_sc,
+        )
+        results.append(result)
+
+    print_results_table(results, phase=5)
+
+    best = max(results, key=lambda r: r.avg_f1)
+    print(f"\n>>> Best min_combined_score={best.min_combined_score} (F1 = {best.avg_f1:.3f})")
+    return results
+
+
 async def main_async(args: argparse.Namespace) -> None:
     """メイン処理."""
     dataset_path = args.dataset
@@ -465,7 +538,7 @@ async def main_async(args: argparse.Namespace) -> None:
         )
 
         if args.phase == 0:
-            # 全自動: Phase 1 → 2 → 3 → 4 をチェーン
+            # 全自動: Phase 1 → 2 → 3 → 4 → 5 をチェーン
             best_alpha = max(phase1_results, key=lambda r: r.avg_f1).vector_weight
             phase2_results = await run_phase2(
                 best_alpha, dataset_path, fixture_path,
@@ -494,9 +567,18 @@ async def main_async(args: argparse.Namespace) -> None:
                 persist_dir=persist_dir,
             )
 
+            best4 = max(phase4_results, key=lambda r: r.avg_f1)
+            phase5_results = await run_phase5(
+                best_alpha, best2.threshold, best3.n_results,
+                best4.k1, best4.b,
+                dataset_path, fixture_path,
+                chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+                persist_dir=persist_dir,
+            )
+
             # サマリー出力
             best1 = max(phase1_results, key=lambda r: r.avg_f1)
-            best4 = max(phase4_results, key=lambda r: r.avg_f1)
+            best5 = max(phase5_results, key=lambda r: r.avg_f1)
             print("\n" + "=" * 60)
             print("FINAL SUMMARY")
             print("=" * 60)
@@ -504,6 +586,10 @@ async def main_async(args: argparse.Namespace) -> None:
             print(f"Phase 2 best: threshold={best2.threshold}, F1={best2.avg_f1:.3f}")
             print(f"Phase 3 best: n_results={best3.n_results}, F1={best3.avg_f1:.3f}")
             print(f"Phase 4 best: k1={best4.k1}, b={best4.b}, F1={best4.avg_f1:.3f}")
+            print(
+                f"Phase 5 best: min_combined_score={best5.min_combined_score}, "
+                f"F1={best5.avg_f1:.3f}",
+            )
 
             # JSON出力
             output = _build_json_output(
@@ -511,6 +597,8 @@ async def main_async(args: argparse.Namespace) -> None:
                 best1, best2, best3,
                 phase4_results=phase4_results,
                 best4=best4,
+                phase5_results=phase5_results,
+                best5=best5,
             )
             output_path = OUTPUT_DIR / "sweep_results.json"
             output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -564,6 +652,30 @@ async def main_async(args: argparse.Namespace) -> None:
             persist_dir=persist_dir,
         )
 
+    elif args.phase == 5:
+        if args.best_alpha is None:
+            print("ERROR: --best-alpha is required for Phase 5")
+            sys.exit(1)
+        if args.best_threshold is _THRESHOLD_UNSET:
+            print("ERROR: --best-threshold is required for Phase 5 (use 'none' for no threshold)")
+            sys.exit(1)
+        if args.best_n_results is None:
+            print("ERROR: --best-n-results is required for Phase 5")
+            sys.exit(1)
+        if args.best_k1 is None:
+            print("ERROR: --best-k1 is required for Phase 5")
+            sys.exit(1)
+        if args.best_b is None:
+            print("ERROR: --best-b is required for Phase 5")
+            sys.exit(1)
+        await run_phase5(
+            args.best_alpha, args.best_threshold, args.best_n_results,
+            args.best_k1, args.best_b,
+            dataset_path, fixture_path,
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+            persist_dir=persist_dir,
+        )
+
 
 def _parse_threshold(value: str) -> float | None:
     """CLI引数の threshold をパース. 'none' → None, 数値 → float."""
@@ -602,8 +714,9 @@ def main() -> None:
         "--phase",
         type=int,
         default=0,
-        choices=[0, 1, 2, 3, 4],
-        help="Phase to run: 0=all (default), 1=α only, 2=threshold only, 3=n_results only, 4=BM25 k1/b only",
+        choices=[0, 1, 2, 3, 4, 5],
+        help="Phase to run: 0=all (default), 1=α only, 2=threshold only, "
+             "3=n_results only, 4=BM25 k1/b only, 5=min_combined_score only",
     )
     parser.add_argument(
         "--best-alpha",
@@ -619,7 +732,23 @@ def main() -> None:
     parser.add_argument(
         "--best-n-results",
         type=_positive_int,
-        help="Best n_results from Phase 3 (required for --phase 4)",
+        help="Best n_results from Phase 3 (required for --phase 4/5)",
+    )
+    parser.add_argument(
+        "--best-k1",
+        type=float,
+        help="Best k1 from Phase 4 (required for --phase 5)",
+    )
+    parser.add_argument(
+        "--best-b",
+        type=float,
+        help="Best b from Phase 4 (required for --phase 5)",
+    )
+    parser.add_argument(
+        "--min-combined-score",
+        type=float,
+        default=None,
+        help="combined_scoreの下限閾値（evaluate時のデフォルト: None=フィルタなし）",
     )
     parser.add_argument(
         "--alpha-min",

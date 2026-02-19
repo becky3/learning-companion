@@ -364,3 +364,66 @@ class TestHybridSearchEngine:
         # n_results=5 → fetch_count = max(5*3, 30) = 30
         call_args = mock_vector_store.search.call_args
         assert call_args[1]["n_results"] == 30
+
+    @pytest.mark.asyncio
+    async def test_min_combined_score_filters_low_results(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """min_combined_score指定時に低スコア結果が除外される."""
+        # 高スコアと低スコアの結果を返すように設定
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="高スコアドキュメント",
+                metadata={"source_url": "http://example.com/high", "chunk_index": 0},
+                distance=0.1,
+            ),
+            RetrievalResult(
+                text="低スコアドキュメント",
+                metadata={"source_url": "http://example.com/low", "chunk_index": 0},
+                distance=0.9,
+            ),
+        ]
+        mock_bm25_index.search.return_value = []
+
+        # min_combined_score=0.5 でフィルタリング
+        results = await engine.search(
+            "テスト", n_results=5, min_combined_score=0.5,
+        )
+
+        # 低スコアの結果はフィルタリングされる
+        assert len(results) == 1
+        assert results[0].text == "高スコアドキュメント"
+
+    @pytest.mark.asyncio
+    async def test_min_combined_score_none_returns_all(
+        self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
+    ) -> None:
+        """min_combined_score=None時は従来通り全結果を返す."""
+        import hashlib
+
+        url_a_hash = hashlib.sha256(b"http://example.com/a").hexdigest()[:16]
+        url_b_hash = hashlib.sha256(b"http://example.com/b").hexdigest()[:16]
+
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="ドキュメントA",
+                metadata={"source_url": "http://example.com/a", "chunk_index": 0},
+                distance=0.1,
+            ),
+            RetrievalResult(
+                text="ドキュメントB",
+                metadata={"source_url": "http://example.com/b", "chunk_index": 0},
+                distance=0.3,
+            ),
+        ]
+        # BM25からも結果を返して両方のドキュメントが正のスコアを持つようにする
+        mock_bm25_index.search.return_value = [
+            BM25Result(doc_id=f"{url_a_hash}_0", score=3.0, text="ドキュメントA"),
+            BM25Result(doc_id=f"{url_b_hash}_0", score=5.0, text="ドキュメントB"),
+        ]
+
+        # min_combined_score=None（デフォルト）
+        results = await engine.search("テスト", n_results=5, min_combined_score=None)
+
+        # min_combined_scoreフィルタが適用されず全結果が返される
+        assert len(results) == 2

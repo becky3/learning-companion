@@ -99,6 +99,7 @@ class RAGKnowledgeService:
         bm25_index: BM25Index | None = None,
         hybrid_search_enabled: bool = False,
         vector_weight: float = 1.0,
+        min_combined_score: float | None = None,
         debug_log_enabled: bool = False,
     ) -> None:
         """RAGKnowledgeServiceを初期化する.
@@ -113,6 +114,7 @@ class RAGKnowledgeService:
             bm25_index: BM25インデックス（オプション、ハイブリッド検索用）
             hybrid_search_enabled: ハイブリッド検索の有効/無効
             vector_weight: ベクトル検索の重み（ハイブリッド検索用）
+            min_combined_score: combined_scoreの下限閾値（None=フィルタなし）
             debug_log_enabled: RAGデバッグログの有効/無効
         """
         self._vector_store = vector_store
@@ -123,6 +125,7 @@ class RAGKnowledgeService:
         self._safe_browsing_client = safe_browsing_client
         self._bm25_index = bm25_index
         self._hybrid_search_enabled = hybrid_search_enabled
+        self._min_combined_score = min_combined_score
         self._debug_log_enabled = debug_log_enabled
         self._hybrid_search_engine: HybridSearchEngine | None = None
 
@@ -452,6 +455,7 @@ class RAGKnowledgeService:
             query,
             n_results=n_results,
             similarity_threshold=self._similarity_threshold,
+            min_combined_score=self._min_combined_score,
         )
 
         if not results:

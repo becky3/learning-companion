@@ -128,6 +128,7 @@ class HybridSearchEngine:
         query: str,
         n_results: int = 5,
         similarity_threshold: float | None = None,
+        min_combined_score: float | None = None,
     ) -> list[HybridSearchResult]:
         """ハイブリッド検索を実行する.
 
@@ -138,11 +139,13 @@ class HybridSearchEngine:
         3. 各スコアをmin-max正規化
         4. CC（Convex Combination）でスコアを統合
         5. 統合スコアでソート
+        6. min_combined_score 以下の結果を除外
 
         Args:
             query: 検索クエリ
             n_results: 返却する結果の最大数
             similarity_threshold: ベクトル検索の類似度閾値
+            min_combined_score: combined_scoreの下限閾値（None=フィルタなし）
 
         Returns:
             HybridSearchResultのリスト（統合スコア降順）
@@ -166,9 +169,15 @@ class HybridSearchEngine:
             return []
 
         # CCで統合（片方が空でも正しく処理される）
-        return self._merge_with_cc(
+        results = self._merge_with_cc(
             vector_results, bm25_results, n_results, similarity_threshold
         )
+
+        # combined_score 下限フィルタ
+        if min_combined_score is not None:
+            results = [r for r in results if r.combined_score >= min_combined_score]
+
+        return results
 
     def _merge_with_cc(
         self,
