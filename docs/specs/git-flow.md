@@ -59,7 +59,7 @@ gitGraph
 | プレフィックス | 用途 | ベース | マージ先 | 命名規則 |
 |--------------|------|--------|---------|---------|
 | `feature/` | 新機能開発 | `develop` | `develop` | `feature/f{N}-{機能名}-#{Issue番号}` |
-| `bugfix/` | バグ修正 | `develop` | `develop` | `bugfix/{修正内容}-#{Issue番号}` |
+| `bugfix/` | バグ修正 | `develop` or `release/*` | `develop` or `release/*` | `bugfix/{修正内容}-#{Issue番号}` |
 | `release/` | リリース準備 | `develop` | `main`（squash） | `release/v{X.Y.Z}` |
 | `hotfix/` | 本番緊急修正 | `main` | `main` + `develop` | `hotfix/{修正内容}-#{Issue番号}` |
 | `claude/` | Claude Code自動生成 | `develop`(*) | `develop` | `claude/issue-{N}-{date}-{id}`（自動命名） |
@@ -96,23 +96,47 @@ sequenceDiagram
     participant Dev as 開発者
     participant Develop as develop
     participant Release as release/vX.Y.Z
+    participant Bugfix as bugfix/*
     participant Main as main
 
     Dev->>Develop: 機能がまとまった状態を確認
     Dev->>Release: develop から release/vX.Y.Z を作成
-    Note over Release: リリース準備（必要に応じて修正）
     Dev->>Main: PR作成（release/vX.Y.Z → main）
+    Note over Release: リリース準備中に修正が必要な場合
+    Dev->>Bugfix: release/vX.Y.Z から分岐
+    Dev->>Bugfix: 修正コミット
+    Dev->>Release: PR作成（bugfix → release）・マージ
     Note over Main: CI実行
     Main->>Main: Squash and merge
     Dev->>Develop: main → develop に差分反映
 ```
 
 1. ある程度機能がまとまったタイミングで `develop` から `release/v{X.Y.Z}` ブランチを作成
-2. リリース準備（必要に応じてバージョン番号の更新、軽微な修正等）
-3. `release/v{X.Y.Z}` → `main` に向けてPR作成
+2. `release/v{X.Y.Z}` → `main` に向けてPR作成（リリースPR）
+3. リリース準備中に修正が必要な場合は、bugfix ブランチを `release/*` から作成し、PRで `release/*` にマージする（詳細は下記「release ブランチ上の修正」参照）
 4. マージ方法: **Squash and merge**（リリース単位で1コミットにまとめる。詳細は「マージ方式」セクション参照）
 5. マージ判断は開発者が行う
 6. **main マージ後、`main` → `develop` に差分を反映する**（履歴の整合性を保つため）
+
+#### release ブランチ上の修正
+
+リリース準備中に修正が必要な場合、release ブランチに直接コミットせず、bugfix ブランチを経由してPRでマージする。
+
+- **理由**: release PRに修正を直接混ぜると、どの時点で何が修正されたか追跡しづらくなる。PR単位で修正履歴を残すことでトレーサビリティを確保する
+- **ブランチ命名**: `bugfix/{修正内容}` （release ブランチからの分岐）
+- **マージ先**: `release/v{X.Y.Z}`
+- **マージ方式**: 通常マージ
+
+```bash
+# release ブランチから bugfix ブランチを作成
+git checkout -b bugfix/fix-something release/v0.0.1
+
+# 修正・コミット
+git push -u origin bugfix/fix-something
+
+# release ブランチに向けてPR作成
+gh pr create --base release/v0.0.1 --head bugfix/fix-something
+```
 
 #### main → develop の差分反映
 
@@ -159,6 +183,7 @@ sequenceDiagram
 | マージ先 | 方式 | コマンド | 理由 |
 |---------|------|---------|------|
 | feature/bugfix → develop | 通常マージ | `gh pr merge --merge` | 開発履歴を保持 |
+| bugfix → release（リリース準備中の修正） | 通常マージ | `gh pr merge --merge` | 修正履歴を保持し、トレーサビリティを確保 |
 | release → main（リリース） | squash マージ | `gh pr merge --squash` | リリース単位で1コミットにまとめ、main の履歴をきれいに保つ |
 | main → develop（リリース後同期） | 通常マージ | `git merge main` or `gh pr merge --merge` | main の squash コミットを develop に取り込み、差分を解消する |
 | hotfix → main | 通常マージ | `gh pr merge --merge` | 緊急修正の履歴を保持 |
@@ -183,6 +208,12 @@ sequenceDiagram
 - `Closes #{Issue番号}` で紐付け
 - CIチェック（pytest / mypy / ruff / markdownlint）必須
 - **base ブランチ**: `develop`
+
+### bugfix → release（リリース準備中の修正）
+
+- PRタイトル例: `fix: 修正内容`
+- `release/v{X.Y.Z}` をbaseとする
+- リリースPRに直接コミットせず、必ずPR経由でマージする
 
 ### release → main
 
