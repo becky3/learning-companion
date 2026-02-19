@@ -34,6 +34,7 @@ class EvaluationParams(TypedDict):
     n_results: int
     k1: float
     b: float
+    min_combined_score: float | None
 
 
 class RegressionInfo(TypedDict):
@@ -158,6 +159,12 @@ def main() -> None:
         default=0.75,
         help="BM25 bパラメータ（デフォルト: 0.75）",
     )
+    eval_parser.add_argument(
+        "--min-combined-score",
+        type=float,
+        default=None,
+        help="combined_scoreの下限閾値（デフォルト: None=フィルタなし）",
+    )
 
     # init-test-db サブコマンド
     init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
@@ -200,6 +207,7 @@ async def create_rag_service(
     persist_dir: str | None = None,
     bm25_index: "BM25Index | None" = None,
     vector_weight: float = 0.6,
+    min_combined_score: float | None = None,
 ) -> "RAGKnowledgeService":
     """RAGKnowledgeServiceを生成する.
 
@@ -212,6 +220,7 @@ async def create_rag_service(
         persist_dir: ChromaDB永続化ディレクトリ（未指定時は settings から取得）
         bm25_index: BM25インデックス（指定時はハイブリッド検索を有効化）
         vector_weight: ベクトル検索の重み α
+        min_combined_score: combined_scoreの下限閾値（None=フィルタなし）
 
     Returns:
         RAGKnowledgeServiceインスタンス
@@ -244,6 +253,7 @@ async def create_rag_service(
         bm25_index=bm25_index,
         hybrid_search_enabled=bm25_index is not None,
         vector_weight=vector_weight,
+        min_combined_score=min_combined_score,
     )
 
 
@@ -318,6 +328,7 @@ async def run_evaluation(args: argparse.Namespace) -> None:
     )
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
+    min_combined_score: float | None = getattr(args, "min_combined_score", None)
     rag_service = await create_rag_service(
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
@@ -325,6 +336,7 @@ async def run_evaluation(args: argparse.Namespace) -> None:
         persist_dir=args.persist_dir,
         bm25_index=bm25_index,
         vector_weight=args.vector_weight,
+        min_combined_score=min_combined_score,
     )
 
     # 評価実行
@@ -373,6 +385,7 @@ async def run_evaluation(args: argparse.Namespace) -> None:
         n_results=args.n_results,
         k1=bm25_k1,
         b=bm25_b,
+        min_combined_score=min_combined_score,
     )
 
     # レポート出力
@@ -515,9 +528,11 @@ def write_markdown_report(
         vw_str = str(params["vector_weight"]) if params["vector_weight"] is not None else "None (設定値)"
         k1_str = str(params.get("k1", 1.5))
         b_str = str(params.get("b", 0.75))
+        min_sc_str = str(params.get("min_combined_score")) if params.get("min_combined_score") is not None else "None"
         lines.append(
             f"**パラメータ**: threshold={threshold_str}, vector_weight={vw_str}, "
-            f"n_results={params['n_results']}, k1={k1_str}, b={b_str}",
+            f"n_results={params['n_results']}, k1={k1_str}, b={b_str}, "
+            f"min_combined_score={min_sc_str}",
         )
     lines.append("")
     lines.extend([

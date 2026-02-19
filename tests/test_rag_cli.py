@@ -882,6 +882,58 @@ class TestCLIEvaluate:
                     assert call_kwargs[1]["persist_dir"] == custom_persist_dir
 
 
+    @pytest.mark.asyncio
+    async def test_ac11_min_combined_score_propagation(self, tmp_path: Path) -> None:
+        """AC11: --min-combined-score が create_rag_service に正しく伝播すること."""
+        from src.rag.cli import run_evaluation
+        from argparse import Namespace
+
+        mock_report = EvaluationReport(
+            queries_evaluated=1,
+            average_precision=0.8,
+            average_recall=0.9,
+            average_f1=0.85,
+            average_ndcg=0.9,
+            average_mrr=1.0,
+            negative_source_violations=[],
+            query_results=[],
+        )
+
+        dataset = tmp_path / "dataset.json"
+        dataset.write_text(json.dumps({"queries": []}), encoding="utf-8")
+        output_dir = tmp_path / "output"
+
+        args = Namespace(
+            dataset=str(dataset),
+            output_dir=str(output_dir),
+            baseline_file=None,
+            n_results=5,
+            threshold=None,
+            vector_weight=0.6,
+            persist_dir=None,
+            fail_on_regression=False,
+            regression_threshold=0.1,
+            save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
+            min_combined_score=0.65,
+        )
+
+        mock_eval = AsyncMock(return_value=mock_report)
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
+
+                    await run_evaluation(args)
+
+                    # min_combined_scoreが正しく渡されたか確認
+                    mock_create_service.assert_called_once()
+                    call_kwargs = mock_create_service.call_args
+                    assert call_kwargs[1]["min_combined_score"] == 0.65
+
+
 class TestCLIInitTestDb:
     """CLI init-test-dbコマンドのテスト."""
 
