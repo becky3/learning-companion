@@ -675,15 +675,31 @@ def main() -> None:
         required=True,
         help="チャンクオーバーラップ",
     )
+    def _validate_bm25_k1(value: str) -> float:
+        f = float(value)
+        if f < 0.0:
+            raise argparse.ArgumentTypeError(
+                f"--bm25-k1 must be >= 0.0 (got {f})"
+            )
+        return f
+
+    def _validate_bm25_b(value: str) -> float:
+        f = float(value)
+        if not 0.0 <= f <= 1.0:
+            raise argparse.ArgumentTypeError(
+                f"--bm25-b must be between 0.0 and 1.0 (got {f})"
+            )
+        return f
+
     parser.add_argument(
         "--bm25-k1",
-        type=float,
+        type=_validate_bm25_k1,
         default=1.5,
         help="BM25 k1パラメータ（デフォルト: 1.5）",
     )
     parser.add_argument(
         "--bm25-b",
-        type=float,
+        type=_validate_bm25_b,
         default=0.75,
         help="BM25 bパラメータ（デフォルト: 0.75）",
     )
