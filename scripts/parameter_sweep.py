@@ -7,16 +7,23 @@ Usage:
     # テスト用ChromaDBの初期化（初回のみ）
     uv run python -m src.rag.cli init-test-db --persist-dir .tmp/rag-evaluation/chroma_db_test
 
-    # スイープ実行
+    # 既存データでスイープ実行
     uv run python scripts/parameter_sweep.py
     uv run python scripts/parameter_sweep.py --phase 1
     uv run python scripts/parameter_sweep.py --phase 2 --best-alpha 0.6
+
+    # 拡充データでスイープ実行
+    uv run python scripts/parameter_sweep.py \
+      --dataset tests/fixtures/rag_evaluation_extended/rag_evaluation_dataset_extended.json \
+      --fixture tests/fixtures/rag_evaluation_extended/rag_test_documents_extended.json \
+      --persist-dir .tmp/rag-evaluation-extended/chroma_db_test
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import logging
 import sys
@@ -59,27 +66,16 @@ class SweepResult:
     category_f1: dict[str, float]
 
 
-# 評価データセットのカテゴリマッピング
-QUERY_CATEGORIES: dict[str, str] = {
-    "q1": "normal",
-    "q2": "normal",
-    "q3": "normal",
-    "q4": "normal",
-    "q5": "normal",
-    "q6": "normal",
-    "q7": "close_ranking",
-    "q8": "close_ranking",
-    "q9": "method_mismatch",
-    "q10": "method_mismatch",
-    "q11": "method_mismatch",
-    "q12": "semantic_only",
-    "q13": "semantic_only",
-    "q14": "semantic_only",
-    "q15": "noise_rejection",
-    "q16": "noise_rejection",
-    "q17": "close_ranking",
-    "q18": "keyword_exact",
-}
+DEFAULT_DATASET = "tests/fixtures/rag_evaluation_dataset.json"
+DEFAULT_FIXTURE = "tests/fixtures/rag_test_documents.json"
+
+
+@functools.lru_cache(maxsize=4)
+def load_query_categories(dataset_path: str) -> dict[str, str]:
+    """評価データセットJSONからカテゴリマッピングを動的に読み取る."""
+    with open(dataset_path, encoding="utf-8") as f:
+        data = json.load(f)
+    return {q["id"]: q["category"] for q in data.get("queries", []) if "category" in q}
 
 
 async def run_single_evaluation(
@@ -105,10 +101,11 @@ async def run_single_evaluation(
         n_results=n_results,
     )
 
-    # カテゴリ別F1を計算
+    # カテゴリ別F1を計算（JSONから動的に読み取ったカテゴリを使用）
+    query_categories = load_query_categories(dataset_path)
     category_scores: dict[str, list[float]] = {}
     for qr in report.query_results:
-        cat = QUERY_CATEGORIES.get(qr.query_id, "unknown")
+        cat = query_categories.get(qr.query_id, "unknown")
         if cat not in category_scores:
             category_scores[cat] = []
         category_scores[cat].append(qr.f1)
@@ -215,8 +212,8 @@ async def run_phase2(
 
 async def main_async(args: argparse.Namespace) -> None:
     """メイン処理."""
-    dataset_path = "tests/fixtures/rag_evaluation_dataset.json"
-    fixture_path = "tests/fixtures/rag_test_documents.json"
+    dataset_path = args.dataset
+    fixture_path = args.fixture
     persist_dir = args.persist_dir
 
     if args.phase in (1, 0):
@@ -299,6 +296,18 @@ def main() -> None:
         "--best-alpha",
         type=float,
         help="Best α from Phase 1 (required for --phase 2)",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default=DEFAULT_DATASET,
+        help=f"評価データセットのパス（デフォルト: {DEFAULT_DATASET}）",
+    )
+    parser.add_argument(
+        "--fixture",
+        type=str,
+        default=DEFAULT_FIXTURE,
+        help=f"テストドキュメントフィクスチャのパス（デフォルト: {DEFAULT_FIXTURE}）",
     )
     parser.add_argument(
         "--persist-dir",

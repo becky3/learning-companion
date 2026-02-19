@@ -232,7 +232,10 @@ ai-assistant/
 │   │   ├── rag_test_pages/         # テストページ
 │   │   ├── rag_evaluation_dataset.json
 │   │   ├── rag_chunking_evaluation.json
-│   │   └── rag_test_documents.json
+│   │   ├── rag_test_documents.json
+│   │   └── rag_evaluation_extended/  # 拡充評価データ（Wikipedia）
+│   │       ├── rag_test_documents_extended.json
+│   │       └── rag_evaluation_dataset_extended.json
 │   ├── test_embedding.py
 │   ├── test_chunker.py
 │   ├── test_vector_store.py
@@ -248,6 +251,10 @@ ai-assistant/
 │   ├── test_rag_evaluation.py
 │   ├── test_safe_browsing.py
 │   └── test_slack_rag_handlers.py
+├── scripts/
+│   ├── parameter_sweep.py           # パラメータスイープスクリプト
+│   ├── collect_evaluation_data.py   # Wikipedia APIデータ収集スクリプト
+│   └── eval_data_config.json        # 収集対象トピック設定
 ├── reports/
 │   └── rag-evaluation/
 │       ├── baseline.json           # ベースライン（リポジトリ管理）
@@ -1240,6 +1247,7 @@ class Settings(BaseSettings):
 ## 関連ドキュメント
 
 - ガイド: [docs/guides/rag-overview.md](../guides/rag-overview.md) — RAGシステムの概要（初心者向け）
+- ガイド: [docs/guides/rag-evaluation-data.md](../guides/rag-evaluation-data.md) — RAG評価データ収集・管理ガイド
 - ジャーナル（レトロ変換）: `memory/journal/20260217-062709-retro-f9-rag.md`
 
 ## 変更履歴
