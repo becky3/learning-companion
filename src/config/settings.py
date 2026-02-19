@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     chromadb_persist_dir: str = "./chroma_db"
     rag_chunk_size: int = Field(default=200, ge=1)
     rag_chunk_overlap: int = Field(default=30, ge=0)
-    rag_retrieval_count: int = Field(default=5, ge=1)
+    rag_retrieval_count: int = Field(default=3, ge=1)
     rag_max_crawl_pages: int = Field(default=50, ge=1)
     rag_crawl_delay_sec: float = Field(default=1.0, ge=0)
     rag_crawl_progress_interval: int = Field(default=5, ge=1)  # 進捗報告間隔（ページ数）
@@ -104,9 +104,10 @@ class Settings(BaseSettings):
 
     # RAGハイブリッド検索 (Phase 2)
     rag_hybrid_search_enabled: bool = False  # ハイブリッド検索の有効/無効
-    rag_vector_weight: float = Field(default=1.0, ge=0.0, le=1.0)  # ベクトル検索の重み
-    rag_bm25_k1: float = Field(default=1.5, gt=0.0)  # BM25の用語頻度パラメータ
-    rag_bm25_b: float = Field(default=0.75, ge=0.0, le=1.0)  # BM25の文書長正規化パラメータ
+    rag_vector_weight: float = Field(default=0.90, ge=0.0, le=1.0)  # ベクトル検索の重み
+    rag_bm25_k1: float = Field(default=2.5, gt=0.0)  # BM25の用語頻度パラメータ
+    rag_bm25_b: float = Field(default=0.50, ge=0.0, le=1.0)  # BM25の文書長正規化パラメータ
+    rag_min_combined_score: float | None = Field(default=0.75, ge=0.0, le=1.0)  # combined_scoreの下限閾値（Noneで無効）
     bm25_persist_dir: str = "./bm25_index"
 
     # Safe Browsing (URL安全性チェック)

@@ -139,7 +139,7 @@ class HybridSearchEngine:
         3. 各スコアをmin-max正規化
         4. CC（Convex Combination）でスコアを統合
         5. 統合スコアでソート
-        6. min_combined_score 以下の結果を除外
+        6. min_combined_score 未満の結果を除外
 
         Args:
             query: 検索クエリ
