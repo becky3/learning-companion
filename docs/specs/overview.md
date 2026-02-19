@@ -125,7 +125,7 @@ git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](git-f
 - **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
 - **作業ブランチ**:
   - `feature/f{N}-{機能名}-#{Issue番号}` — 新機能（`develop` → `develop`）
-  - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` → `develop`）
+  - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` → `develop` / `release/*` → `release/*`）
   - `release/v{X.Y.Z}` — リリース準備（`develop` → `main` squash マージ）
   - `hotfix/{修正内容}-#{Issue番号}` — 緊急修正（`main` → `main` + `develop`）
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
