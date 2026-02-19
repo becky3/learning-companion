@@ -32,6 +32,8 @@ class EvaluationParams(TypedDict):
     threshold: float | None
     vector_weight: float | None
     n_results: int
+    k1: float
+    b: float
 
 
 class RegressionInfo(TypedDict):
@@ -128,6 +130,34 @@ def main() -> None:
         required=True,
         help="チャンクオーバーラップ",
     )
+    def _validate_bm25_k1(value: str) -> float:
+        f = float(value)
+        if f < 0.0:
+            raise argparse.ArgumentTypeError(
+                f"--bm25-k1 must be >= 0.0 (got {f})"
+            )
+        return f
+
+    def _validate_bm25_b(value: str) -> float:
+        f = float(value)
+        if not 0.0 <= f <= 1.0:
+            raise argparse.ArgumentTypeError(
+                f"--bm25-b must be between 0.0 and 1.0 (got {f})"
+            )
+        return f
+
+    eval_parser.add_argument(
+        "--bm25-k1",
+        type=_validate_bm25_k1,
+        default=1.5,
+        help="BM25 k1パラメータ（デフォルト: 1.5）",
+    )
+    eval_parser.add_argument(
+        "--bm25-b",
+        type=_validate_bm25_b,
+        default=0.75,
+        help="BM25 bパラメータ（デフォルト: 0.75）",
+    )
 
     # init-test-db サブコマンド
     init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
@@ -222,6 +252,8 @@ def _build_bm25_index_from_fixture(
     *,
     chunk_size: int,
     chunk_overlap: int,
+    k1: float = 1.5,
+    b: float = 0.75,
 ) -> "BM25Index":
     """テストドキュメントフィクスチャからBM25インデックスを構築する.
 
@@ -231,6 +263,8 @@ def _build_bm25_index_from_fixture(
         fixture_path: フィクスチャファイルのパス
         chunk_size: チャンクサイズ
         chunk_overlap: チャンクオーバーラップ
+        k1: BM25 用語頻度の飽和パラメータ（デフォルト: 1.5）
+        b: BM25 文書長の正規化パラメータ（デフォルト: 0.75）
 
     Returns:
         構築済みBM25Indexインスタンス
@@ -241,7 +275,7 @@ def _build_bm25_index_from_fixture(
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
 
-    bm25_index = BM25Index()
+    bm25_index = BM25Index(k1=k1, b=b)
     documents: list[tuple[str, str, str]] = []
     for doc in fixture_data.get("documents", []):
         source_url = doc.get("source_url", "")
@@ -273,10 +307,14 @@ async def run_evaluation(args: argparse.Namespace) -> None:
 
     # BM25インデックスをテストドキュメントから構築（ハイブリッド検索用）
     fixture_path = getattr(args, "fixture", "tests/fixtures/rag_test_documents.json")
+    bm25_k1: float = getattr(args, "bm25_k1", 1.5)
+    bm25_b: float = getattr(args, "bm25_b", 0.75)
     bm25_index = _build_bm25_index_from_fixture(
         fixture_path,
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
+        k1=bm25_k1,
+        b=bm25_b,
     )
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
@@ -333,6 +371,8 @@ async def run_evaluation(args: argparse.Namespace) -> None:
         threshold=args.threshold,
         vector_weight=args.vector_weight,
         n_results=args.n_results,
+        k1=bm25_k1,
+        b=bm25_b,
     )
 
     # レポート出力
@@ -473,7 +513,12 @@ def write_markdown_report(
     if params is not None:
         threshold_str = str(params["threshold"]) if params["threshold"] is not None else "None (設定値)"
         vw_str = str(params["vector_weight"]) if params["vector_weight"] is not None else "None (設定値)"
-        lines.append(f"**パラメータ**: threshold={threshold_str}, vector_weight={vw_str}, n_results={params['n_results']}")
+        k1_str = str(params.get("k1", 1.5))
+        b_str = str(params.get("b", 0.75))
+        lines.append(
+            f"**パラメータ**: threshold={threshold_str}, vector_weight={vw_str}, "
+            f"n_results={params['n_results']}, k1={k1_str}, b={b_str}",
+        )
     lines.append("")
     lines.extend([
         "## サマリー",
