@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -66,8 +66,9 @@ def rag_service_vector_only(
     return RAGKnowledgeService(
         vector_store=mock_vector_store,
         web_crawler=mock_web_crawler,
-        chunk_size=500,
-        chunk_overlap=50,
+        chunk_size=200,
+        chunk_overlap=30,
+        similarity_threshold=None,
         hybrid_search_enabled=False,
     )
 
@@ -79,21 +80,16 @@ def rag_service_hybrid(
     mock_bm25_index: MagicMock,
 ) -> RAGKnowledgeService:
     """ハイブリッド検索有効のRAGKnowledgeServiceインスタンスを作成する."""
-    # 設定をモック
-    mock_settings = MagicMock()
-    mock_settings.rag_vector_weight = 0.5
-    mock_settings.rag_similarity_threshold = None
-    mock_settings.rag_debug_log_enabled = False
-
-    with patch("src.config.settings.get_settings", return_value=mock_settings):
-        return RAGKnowledgeService(
-            vector_store=mock_vector_store,
-            web_crawler=mock_web_crawler,
-            chunk_size=500,
-            chunk_overlap=50,
-            bm25_index=mock_bm25_index,
-            hybrid_search_enabled=True,
-        )
+    return RAGKnowledgeService(
+        vector_store=mock_vector_store,
+        web_crawler=mock_web_crawler,
+        chunk_size=200,
+        chunk_overlap=30,
+        similarity_threshold=None,
+        bm25_index=mock_bm25_index,
+        hybrid_search_enabled=True,
+        vector_weight=0.5,
+    )
 
 
 class TestHybridSearchDisabled:
@@ -114,13 +110,8 @@ class TestHybridSearchDisabled:
             ),
         ]
 
-        mock_settings = MagicMock()
-        mock_settings.rag_similarity_threshold = None
-        mock_settings.rag_debug_log_enabled = False
-
         # Act
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            result = await rag_service_vector_only.retrieve("テストクエリ", n_results=5)
+        result = await rag_service_vector_only.retrieve("テストクエリ", n_results=5)
 
         # Assert
         assert isinstance(result, RAGRetrievalResult)
@@ -138,18 +129,17 @@ class TestHybridSearchDisabled:
         service = RAGKnowledgeService(
             vector_store=mock_vector_store,
             web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
             bm25_index=mock_bm25_index,
             hybrid_search_enabled=False,
         )
 
         mock_vector_store.search.return_value = []
-        mock_settings = MagicMock()
-        mock_settings.rag_similarity_threshold = None
-        mock_settings.rag_debug_log_enabled = False
 
         # Act
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            await service.retrieve("テストクエリ", n_results=5)
+        await service.retrieve("テストクエリ", n_results=5)
 
         # Assert: BM25の検索は呼ばれない
         mock_bm25_index.search.assert_not_called()
@@ -181,13 +171,8 @@ class TestHybridSearchEnabled:
             ),
         ]
 
-        mock_settings = MagicMock()
-        mock_settings.rag_similarity_threshold = None
-        mock_settings.rag_debug_log_enabled = False
-
         # Act
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            result = await rag_service_hybrid.retrieve("テストクエリ", n_results=5)
+        result = await rag_service_hybrid.retrieve("テストクエリ", n_results=5)
 
         # Assert
         assert isinstance(result, RAGRetrievalResult)
@@ -249,8 +234,8 @@ class TestTableDataSearch:
 
     async def test_ac12_table_data_search_ryuuou(
         self,
-        rag_service_hybrid: RAGKnowledgeService,
         mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
         mock_bm25_index: MagicMock,
     ) -> None:
         """AC12: 「りゅうおう」クエリでテーブル内のデータが検索できること.
@@ -258,6 +243,18 @@ class TestTableDataSearch:
         ベクトル検索では閾値を超えてしまうケースでも、
         BM25検索でキーワードマッチにより検索できる。
         """
+        # similarity_threshold=0.5 のサービスを作成
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=0.5,
+            bm25_index=mock_bm25_index,
+            hybrid_search_enabled=True,
+            vector_weight=0.5,
+        )
+
         # Arrange: ベクトル検索は閾値超過（距離が大きい）
         mock_vector_store.search.return_value = [
             RetrievalResult(
@@ -278,13 +275,8 @@ class TestTableDataSearch:
             ),
         ]
 
-        mock_settings = MagicMock()
-        mock_settings.rag_similarity_threshold = 0.5
-        mock_settings.rag_debug_log_enabled = False
-
         # Act
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            result = await rag_service_hybrid.retrieve("りゅうおう", n_results=5)
+        result = await service.retrieve("りゅうおう", n_results=5)
 
         # Assert: BM25のおかげで結果が返る
         assert isinstance(result, RAGRetrievalResult)
@@ -318,13 +310,8 @@ class TestKeywordExactMatch:
             ),
         ]
 
-        mock_settings = MagicMock()
-        mock_settings.rag_similarity_threshold = None
-        mock_settings.rag_debug_log_enabled = False
-
         # Act
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            result = await rag_service_hybrid.retrieve("フロベニウスノルム", n_results=5)
+        result = await rag_service_hybrid.retrieve("フロベニウスノルム", n_results=5)
 
         # Assert: BM25でキーワードマッチした結果が返る
         assert isinstance(result, RAGRetrievalResult)
@@ -404,16 +391,16 @@ class TestHybridSearchEngineInitialization:
         mock_bm25_index: MagicMock,
     ) -> None:
         """AC9: hybrid_search_enabled=Trueの場合、HybridSearchEngineが初期化されること."""
-        mock_settings = MagicMock()
-        mock_settings.rag_vector_weight = 0.5
-
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            service = RAGKnowledgeService(
-                vector_store=mock_vector_store,
-                web_crawler=mock_web_crawler,
-                bm25_index=mock_bm25_index,
-                hybrid_search_enabled=True,
-            )
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            bm25_index=mock_bm25_index,
+            hybrid_search_enabled=True,
+            vector_weight=0.5,
+        )
 
         assert service._hybrid_search_engine is not None
         assert service._hybrid_search_enabled is True
@@ -428,6 +415,9 @@ class TestHybridSearchEngineInitialization:
         service = RAGKnowledgeService(
             vector_store=mock_vector_store,
             web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
             bm25_index=mock_bm25_index,
             hybrid_search_enabled=False,
         )
@@ -441,16 +431,16 @@ class TestHybridSearchEngineInitialization:
         mock_web_crawler: MagicMock,
     ) -> None:
         """AC9: bm25_indexがNoneの場合、hybrid_enabled=Trueでも初期化されないこと."""
-        mock_settings = MagicMock()
-        mock_settings.rag_vector_weight = 0.5
-
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            service = RAGKnowledgeService(
-                vector_store=mock_vector_store,
-                web_crawler=mock_web_crawler,
-                bm25_index=None,  # BM25インデックスなし
-                hybrid_search_enabled=True,
-            )
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            bm25_index=None,  # BM25インデックスなし
+            hybrid_search_enabled=True,
+            vector_weight=0.5,
+        )
 
         # BM25インデックスがないため、エンジンは初期化されない
         assert service._hybrid_search_engine is None

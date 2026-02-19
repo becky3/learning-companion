@@ -14,6 +14,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
+from urllib.parse import urldefrag
 
 from src.rag.evaluation import (
     EvaluationReport,
@@ -87,7 +88,8 @@ def main() -> None:
     eval_parser.add_argument(
         "--vector-weight",
         type=_validate_vector_weight,
-        help="ベクトル検索の重み α（0.0〜1.0）。未指定時は RAG_VECTOR_WEIGHT 設定値を使用",
+        required=True,
+        help="ベクトル検索の重み α（0.0〜1.0）",
     )
     eval_parser.add_argument(
         "--persist-dir",
@@ -114,6 +116,18 @@ def main() -> None:
         default="tests/fixtures/rag_test_documents.json",
         help="BM25インデックス構築用のテストドキュメントフィクスチャ",
     )
+    eval_parser.add_argument(
+        "--chunk-size",
+        type=int,
+        required=True,
+        help="チャンクサイズ",
+    )
+    eval_parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        required=True,
+        help="チャンクオーバーラップ",
+    )
 
     # init-test-db サブコマンド
     init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
@@ -127,6 +141,18 @@ def main() -> None:
         default="tests/fixtures/rag_test_documents.json",
         help="テストドキュメントフィクスチャ",
     )
+    init_parser.add_argument(
+        "--chunk-size",
+        type=int,
+        required=True,
+        help="チャンクサイズ",
+    )
+    init_parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        required=True,
+        help="チャンクオーバーラップ",
+    )
 
     args = parser.parse_args()
 
@@ -137,90 +163,80 @@ def main() -> None:
 
 
 async def create_rag_service(
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
     threshold: float | None = None,
     persist_dir: str | None = None,
     bm25_index: "BM25Index | None" = None,
-    vector_weight: float | None = None,
+    vector_weight: float = 0.6,
 ) -> "RAGKnowledgeService":
     """RAGKnowledgeServiceを生成する.
 
+    全パラメータは呼び出し元が明示的に指定する。settings へのフォールバックは行わない。
+
     Args:
-        threshold: 類似度閾値（指定時は環境変数を一時上書き）
-        persist_dir: ChromaDB永続化ディレクトリ（指定時は設定 chromadb_persist_dir を上書き）
+        chunk_size: チャンクサイズ
+        chunk_overlap: チャンクオーバーラップ
+        threshold: 類似度閾値（Noneの場合はフィルタリングなし）
+        persist_dir: ChromaDB永続化ディレクトリ（未指定時は settings から取得）
         bm25_index: BM25インデックス（指定時はハイブリッド検索を有効化）
-        vector_weight: ベクトル検索の重み α（指定時は環境変数を一時上書き）
+        vector_weight: ベクトル検索の重み α
 
     Returns:
         RAGKnowledgeServiceインスタンス
     """
-    import os
-
     from src.config.settings import get_settings
     from src.embedding.factory import get_embedding_provider
     from src.rag.vector_store import VectorStore
     from src.services.rag_knowledge import RAGKnowledgeService
     from src.services.web_crawler import WebCrawler
 
-    # 環境変数を一時上書き（元の値を保持して復元）
-    original_threshold = os.environ.get("RAG_SIMILARITY_THRESHOLD")
-    original_vector_weight = os.environ.get("RAG_VECTOR_WEIGHT")
-    try:
-        if threshold is not None:
-            os.environ["RAG_SIMILARITY_THRESHOLD"] = str(threshold)
-        if vector_weight is not None:
-            os.environ["RAG_VECTOR_WEIGHT"] = str(vector_weight)
-        if threshold is not None or vector_weight is not None:
-            # lru_cacheをクリアして設定を再読み込み
-            get_settings.cache_clear()
+    settings = get_settings()
+    embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
 
-        settings = get_settings()
-        embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
+    # persist_dir は基盤設定のため settings フォールバックを許容
+    chroma_persist_dir = persist_dir or settings.chromadb_persist_dir
+    vector_store = VectorStore(
+        embedding_provider=embedding_provider,
+        persist_directory=chroma_persist_dir,
+    )
 
-        # persist_dirが指定されている場合はそれを使用
-        chroma_persist_dir = persist_dir or settings.chromadb_persist_dir
-        vector_store = VectorStore(
-            embedding_provider=embedding_provider,
-            persist_directory=chroma_persist_dir,
-        )
+    # WebCrawlerはダミー（評価時は使用しない）
+    web_crawler = WebCrawler()
 
-        # WebCrawlerはダミー（評価時は使用しない）
-        web_crawler = WebCrawler()
-
-        return RAGKnowledgeService(
-            vector_store=vector_store,
-            web_crawler=web_crawler,
-            bm25_index=bm25_index,
-            hybrid_search_enabled=bm25_index is not None,
-        )
-    finally:
-        # 環境変数を復元
-        if threshold is not None:
-            if original_threshold is None:
-                os.environ.pop("RAG_SIMILARITY_THRESHOLD", None)
-            else:
-                os.environ["RAG_SIMILARITY_THRESHOLD"] = original_threshold
-        if vector_weight is not None:
-            if original_vector_weight is None:
-                os.environ.pop("RAG_VECTOR_WEIGHT", None)
-            else:
-                os.environ["RAG_VECTOR_WEIGHT"] = original_vector_weight
-        if threshold is not None or vector_weight is not None:
-            # キャッシュをクリアして次回のget_settings()で新しい設定を読み込む
-            get_settings.cache_clear()
+    return RAGKnowledgeService(
+        vector_store=vector_store,
+        web_crawler=web_crawler,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        similarity_threshold=threshold,
+        bm25_index=bm25_index,
+        hybrid_search_enabled=bm25_index is not None,
+        vector_weight=vector_weight,
+    )
 
 
 def _build_bm25_index_from_fixture(
     fixture_path: str,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
 ) -> "BM25Index":
     """テストドキュメントフィクスチャからBM25インデックスを構築する.
 
+    本番と同じ smart_chunk を適用してチャンク分割してから BM25 に登録する。
+
     Args:
         fixture_path: フィクスチャファイルのパス
+        chunk_size: チャンクサイズ
+        chunk_overlap: チャンクオーバーラップ
 
     Returns:
         構築済みBM25Indexインスタンス
     """
     from src.rag.bm25_index import BM25Index
+    from src.services.rag_knowledge import smart_chunk
 
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
@@ -232,12 +248,14 @@ def _build_bm25_index_from_fixture(
         content = doc.get("content", "")
         if not source_url or not content:
             continue
-        url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
-        doc_id = f"{url_hash}_0"
-        documents.append((doc_id, content, source_url))
+        chunks = smart_chunk(content, chunk_size, chunk_overlap)
+        normalized_url, _ = urldefrag(source_url)
+        url_hash = hashlib.sha256(normalized_url.encode()).hexdigest()[:16]
+        for i, chunk in enumerate(chunks):
+            documents.append((f"{url_hash}_{i}", chunk, normalized_url))
 
     added = bm25_index.add_documents(documents)
-    logger.info("BM25 index built with %d documents", added)
+    logger.info("BM25 index built with %d chunks from fixture", added)
     return bm25_index
 
 
@@ -255,15 +273,20 @@ async def run_evaluation(args: argparse.Namespace) -> None:
 
     # BM25インデックスをテストドキュメントから構築（ハイブリッド検索用）
     fixture_path = getattr(args, "fixture", "tests/fixtures/rag_test_documents.json")
-    bm25_index = _build_bm25_index_from_fixture(fixture_path)
+    bm25_index = _build_bm25_index_from_fixture(
+        fixture_path,
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+    )
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
-    vector_weight: float | None = args.vector_weight
     rag_service = await create_rag_service(
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
         threshold=args.threshold,
         persist_dir=args.persist_dir,
         bm25_index=bm25_index,
-        vector_weight=vector_weight,
+        vector_weight=args.vector_weight,
     )
 
     # 評価実行
@@ -308,7 +331,7 @@ async def run_evaluation(args: argparse.Namespace) -> None:
     # 評価パラメータ
     eval_params = EvaluationParams(
         threshold=args.threshold,
-        vector_weight=vector_weight,
+        vector_weight=args.vector_weight,
         n_results=args.n_results,
     )
 
@@ -517,9 +540,14 @@ def write_markdown_report(
 async def init_test_db(args: argparse.Namespace) -> None:
     """テスト用ChromaDBを初期化する.
 
+    フィクスチャ JSON → CrawledPage 変換 → _ingest_crawled_page() で投入。
+    本番と同じチャンキングパスを通ることで、評価結果が本番動作を反映する。
+
     Args:
         args: コマンドライン引数
     """
+    from src.services.web_crawler import CrawledPage
+
     logger.info("Initializing test ChromaDB...")
     logger.info("Persist directory: %s", args.persist_dir)
     logger.info("Fixture file: %s", args.fixture)
@@ -539,49 +567,34 @@ async def init_test_db(args: argparse.Namespace) -> None:
         logger.warning("No documents found in fixture")
         return
 
-    # VectorStoreを初期化
-    from src.config.settings import get_settings
-    from src.embedding.factory import get_embedding_provider
-    from src.rag.vector_store import DocumentChunk, VectorStore
-
-    settings = get_settings()
-    embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
-
-    vector_store = VectorStore(
-        embedding_provider=embedding_provider,
-        persist_directory=args.persist_dir,
-    )
-
-    # ドキュメントをチャンクに変換して追加
-    chunks: list[DocumentChunk] = []
+    # CrawledPage に変換
+    pages: list[CrawledPage] = []
     for doc in documents:
         source_url = doc.get("source_url", "")
-        title = doc.get("title", "")
         content = doc.get("content", "")
-
         if not source_url or not content:
             logger.warning("Skipping document with missing source_url or content")
             continue
-
-        # URLハッシュでIDを生成
-        url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
-        chunk_id = f"{url_hash}_0"
-
-        chunk = DocumentChunk(
-            id=chunk_id,
-            text=content,
-            metadata={
-                "source_url": source_url,
-                "title": title,
-                "chunk_index": 0,
-                "crawled_at": datetime.now(timezone.utc).isoformat(),
-            },
+        pages.append(
+            CrawledPage(
+                url=source_url,
+                title=doc.get("title", ""),
+                text=content,
+                crawled_at=datetime.now(timezone.utc).isoformat(),
+            )
         )
-        chunks.append(chunk)
 
-    # ベクトルストアに追加
-    count = await vector_store.add_documents(chunks)
-    logger.info("Added %d documents to test ChromaDB at %s", count, args.persist_dir)
+    # RAGKnowledgeService 経由で投入（本番と同じチャンキングパス）
+    rag_service = await create_rag_service(
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+        persist_dir=args.persist_dir,
+    )
+    total = 0
+    for page in pages:
+        count = await rag_service._ingest_crawled_page(page)
+        total += count
+    logger.info("Added %d chunks from %d documents to test ChromaDB at %s", total, len(pages), args.persist_dir)
 
 
 if __name__ == "__main__":

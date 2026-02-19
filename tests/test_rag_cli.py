@@ -315,21 +315,24 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch(
-                "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
-            ):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch(
+                    "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
+                ):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
         # レポートが出力されたか確認
         assert (output_dir / "report.json").exists()
@@ -364,25 +367,28 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
-                # カスタムデータセットパスが使用されたか確認
-                mock_eval.assert_called_once()
-                call_kwargs = mock_eval.call_args
-                assert call_kwargs[1]["dataset_path"] == str(custom_dataset)
+                    # カスタムデータセットパスが使用されたか確認
+                    mock_eval.assert_called_once()
+                    call_kwargs = mock_eval.call_args
+                    assert call_kwargs[1]["dataset_path"] == str(custom_dataset)
 
     @pytest.mark.asyncio
     async def test_ac3_output_dir_option(self, tmp_path: Path) -> None:
@@ -413,21 +419,24 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch(
-                "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
-            ):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch(
+                    "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
+                ):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
         # カスタム出力ディレクトリにレポートが出力されたか確認
         assert custom_output.exists()
@@ -469,24 +478,27 @@ class TestCLIEvaluate:
             baseline_file=str(baseline_file),
             n_results=5,
             threshold=None,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=None,
             fail_on_regression=True,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch(
-                "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
-            ):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch(
+                    "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
+                ):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                with pytest.raises(SystemExit) as exc_info:
-                    await run_evaluation(args)
+                    with pytest.raises(SystemExit) as exc_info:
+                        await run_evaluation(args)
 
-                assert exc_info.value.code == 1
+                    assert exc_info.value.code == 1
 
     @pytest.mark.asyncio
     async def test_ac4_n_results_option(self, tmp_path: Path) -> None:
@@ -518,25 +530,28 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=custom_n_results,
             threshold=None,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
-                # n_resultsが正しく渡されたか確認
-                mock_eval.assert_called_once()
-                call_kwargs = mock_eval.call_args
-                assert call_kwargs[1]["n_results"] == custom_n_results
+                    # n_resultsが正しく渡されたか確認
+                    mock_eval.assert_called_once()
+                    call_kwargs = mock_eval.call_args
+                    assert call_kwargs[1]["n_results"] == custom_n_results
 
     @pytest.mark.asyncio
     async def test_ac5_threshold_option(self, tmp_path: Path) -> None:
@@ -568,25 +583,28 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=custom_threshold,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
-                # thresholdが正しく渡されたか確認
-                mock_create_service.assert_called_once()
-                call_kwargs = mock_create_service.call_args
-                assert call_kwargs[1]["threshold"] == custom_threshold
+                    # thresholdが正しく渡されたか確認
+                    mock_create_service.assert_called_once()
+                    call_kwargs = mock_create_service.call_args
+                    assert call_kwargs[1]["threshold"] == custom_threshold
 
     @pytest.mark.asyncio
     async def test_ac8_vector_weight_option(self, tmp_path: Path) -> None:
@@ -622,23 +640,26 @@ class TestCLIEvaluate:
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
-                mock_create_service.assert_called_once()
-                call_kwargs = mock_create_service.call_args
-                assert call_kwargs[1]["vector_weight"] == custom_vector_weight
+                    mock_create_service.assert_called_once()
+                    call_kwargs = mock_create_service.call_args
+                    assert call_kwargs[1]["vector_weight"] == custom_vector_weight
 
     @pytest.mark.asyncio
-    async def test_ac9_vector_weight_none_when_not_specified(self, tmp_path: Path) -> None:
-        """AC9: --vector-weight 未指定時はNoneが渡されること."""
+    async def test_ac9_chunk_params_propagation(self, tmp_path: Path) -> None:
+        """AC9: --chunk-size/--chunk-overlap がcreate_rag_serviceとBM25構築に正しく伝播すること."""
         from src.rag.cli import run_evaluation
         from argparse import Namespace
 
@@ -657,31 +678,42 @@ class TestCLIEvaluate:
         dataset.write_text(json.dumps({"queries": []}), encoding="utf-8")
         output_dir = tmp_path / "output"
 
-        # argparse は未指定時 vector_weight=None を設定する
         args = Namespace(
             dataset=str(dataset),
             output_dir=str(output_dir),
             baseline_file=None,
             n_results=5,
             threshold=None,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=None,
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=300,
+            chunk_overlap=50,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        mock_bm25_builder = MagicMock(return_value=MagicMock())
+        with patch("src.rag.cli._build_bm25_index_from_fixture", mock_bm25_builder):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
-                mock_create_service.assert_called_once()
-                call_kwargs = mock_create_service.call_args
-                assert call_kwargs[1]["vector_weight"] is None
+                    # BM25構築にchunkパラメータが渡されたか確認
+                    mock_bm25_builder.assert_called_once()
+                    bm25_kwargs = mock_bm25_builder.call_args
+                    assert bm25_kwargs[1]["chunk_size"] == 300
+                    assert bm25_kwargs[1]["chunk_overlap"] == 50
+
+                    # create_rag_serviceにchunkパラメータが渡されたか確認
+                    mock_create_service.assert_called_once()
+                    call_kwargs = mock_create_service.call_args
+                    assert call_kwargs[1]["chunk_size"] == 300
+                    assert call_kwargs[1]["chunk_overlap"] == 50
 
     @pytest.mark.asyncio
     async def test_ac13_params_in_json_report(self, tmp_path: Path) -> None:
@@ -715,15 +747,18 @@ class TestCLIEvaluate:
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
         # JSONレポートにパラメータが含まれるか確認
         json_path = output_dir / "report.json"
@@ -765,25 +800,28 @@ class TestCLIEvaluate:
             baseline_file=None,
             n_results=5,
             threshold=None,
-            vector_weight=None,
+            vector_weight=0.6,
             persist_dir=custom_persist_dir,
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
-            with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
-                mock_service = AsyncMock()
-                mock_create_service.return_value = mock_service
+        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+                    mock_service = AsyncMock()
+                    mock_create_service.return_value = mock_service
 
-                await run_evaluation(args)
+                    await run_evaluation(args)
 
-                # persist_dirが正しく渡されたか確認
-                mock_create_service.assert_called_once()
-                call_kwargs = mock_create_service.call_args
-                assert call_kwargs[1]["persist_dir"] == custom_persist_dir
+                    # persist_dirが正しく渡されたか確認
+                    mock_create_service.assert_called_once()
+                    call_kwargs = mock_create_service.call_args
+                    assert call_kwargs[1]["persist_dir"] == custom_persist_dir
 
 
 class TestCLIInitTestDb:
@@ -813,24 +851,23 @@ class TestCLIInitTestDb:
         args = Namespace(
             persist_dir=str(persist_dir),
             fixture=str(fixture_path),
+            chunk_size=200,
+            chunk_overlap=30,
         )
 
-        with patch("src.config.settings.get_settings") as mock_settings:
-            with patch("src.embedding.factory.get_embedding_provider") as mock_provider:
-                with patch("src.rag.vector_store.VectorStore") as mock_vector_store:
-                    mock_settings.return_value = MagicMock(embedding_provider="local")
-                    mock_provider.return_value = MagicMock()
+        with patch("src.rag.cli.create_rag_service") as mock_create_service:
+            mock_service = AsyncMock()
+            mock_service._ingest_crawled_page = AsyncMock(return_value=1)
+            mock_create_service.return_value = mock_service
 
-                    mock_store_instance = MagicMock()
-                    mock_store_instance.add_documents = AsyncMock(return_value=1)
-                    mock_vector_store.return_value = mock_store_instance
+            await init_test_db(args)
 
-                    await init_test_db(args)
+            # create_rag_serviceが正しい引数で呼ばれたか確認
+            mock_create_service.assert_called_once_with(
+                chunk_size=200,
+                chunk_overlap=30,
+                persist_dir=str(persist_dir),
+            )
 
-                    # VectorStoreが正しいパスで初期化されたか確認
-                    mock_vector_store.assert_called_once()
-                    call_kwargs = mock_vector_store.call_args[1]
-                    assert call_kwargs["persist_directory"] == str(persist_dir)
-
-                    # add_documentsが呼ばれたか確認
-                    mock_store_instance.add_documents.assert_called_once()
+            # _ingest_crawled_pageが呼ばれたか確認
+            mock_service._ingest_crawled_page.assert_called_once()

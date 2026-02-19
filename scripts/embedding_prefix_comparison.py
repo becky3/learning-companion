@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -39,11 +38,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config.settings import get_settings
 from src.embedding.factory import get_embedding_provider
-from src.rag.bm25_index import BM25Index
 from src.rag.evaluation import evaluate_retrieval
-from src.rag.vector_store import DocumentChunk, VectorStore
+from src.rag.vector_store import VectorStore
 from src.services.rag_knowledge import RAGKnowledgeService
-from src.services.web_crawler import WebCrawler
+from src.services.web_crawler import CrawledPage, WebCrawler
 
 OUTPUT_DIR = Path(".tmp/prefix-comparison")
 DEFAULT_DATASET = "tests/fixtures/rag_evaluation_dataset.json"
@@ -69,53 +67,26 @@ class ComparisonResult:
     avg_mrr: float
 
 
-def _load_fixture_documents(fixture_path: str) -> list[DocumentChunk]:
-    """フィクスチャからDocumentChunkリストを生成する."""
+def _load_fixture_pages(fixture_path: str) -> list[CrawledPage]:
+    """フィクスチャからCrawledPageリストを生成する."""
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
 
-    chunks: list[DocumentChunk] = []
+    pages: list[CrawledPage] = []
     for doc in fixture_data.get("documents", []):
         source_url = doc.get("source_url", "")
         content = doc.get("content", "")
-        title = doc.get("title", "")
         if not source_url or not content:
             continue
-        url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
-        doc_id = f"{url_hash}_0"
-        chunks.append(
-            DocumentChunk(
-                id=doc_id,
+        pages.append(
+            CrawledPage(
+                url=source_url,
+                title=doc.get("title", ""),
                 text=content,
-                metadata={
-                    "source_url": source_url,
-                    "title": title,
-                    "chunk_index": 0,
-                    "crawled_at": "2026-01-01T00:00:00Z",
-                },
+                crawled_at="2026-01-01T00:00:00Z",
             )
         )
-    return chunks
-
-
-def _build_bm25_index(fixture_path: str) -> BM25Index:
-    """フィクスチャからBM25インデックスを構築する."""
-    with open(fixture_path, encoding="utf-8") as f:
-        fixture_data = json.load(f)
-
-    bm25_index = BM25Index()
-    documents: list[tuple[str, str, str]] = []
-    for doc in fixture_data.get("documents", []):
-        source_url = doc.get("source_url", "")
-        content = doc.get("content", "")
-        if not source_url or not content:
-            continue
-        url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
-        doc_id = f"{url_hash}_0"
-        documents.append((doc_id, content, source_url))
-
-    bm25_index.add_documents(documents)
-    return bm25_index
+    return pages
 
 
 async def build_and_evaluate(
@@ -136,25 +107,36 @@ async def build_and_evaluate(
         settings = get_settings()
         embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
 
-        # インデックス構築
+        # インデックス構築（本番と同じ _ingest_crawled_page 経由）
         vector_store = VectorStore(
             embedding_provider=embedding_provider,
             persist_directory=persist_dir,
         )
-        chunks = _load_fixture_documents(fixture_path)
-        logger.info("[%s] Indexing %d documents...", label, len(chunks))
-        await vector_store.add_documents(chunks)
+        pages = _load_fixture_pages(fixture_path)
+        logger.info("[%s] Indexing %d documents...", label, len(pages))
 
         # BM25インデックス構築（ハイブリッドモード時のみ）
-        bm25_index = _build_bm25_index(fixture_path) if hybrid else None
+        # _smart_chunk を使うため RAGKnowledgeService 経由で構築
+        from src.rag.bm25_index import BM25Index
 
-        # RAGサービス構築
+        bm25_index: BM25Index | None = None
+        if hybrid:
+            bm25_index = BM25Index()
+
         rag_service = RAGKnowledgeService(
             vector_store=vector_store,
             web_crawler=WebCrawler(),
+            chunk_size=settings.rag_chunk_size,
+            chunk_overlap=settings.rag_chunk_overlap,
+            similarity_threshold=settings.rag_similarity_threshold,
             bm25_index=bm25_index,
             hybrid_search_enabled=hybrid,
+            vector_weight=settings.rag_vector_weight,
         )
+
+        # 本番と同じ _ingest_crawled_page 経由でデータ投入
+        for page in pages:
+            await rag_service._ingest_crawled_page(page)
 
         # 評価実行
         logger.info("[%s] Evaluating...", label)

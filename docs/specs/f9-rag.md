@@ -799,10 +799,15 @@ class RAGKnowledgeService:
         self,
         vector_store: VectorStore,
         web_crawler: WebCrawler,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
+        *,
+        chunk_size: int,
+        chunk_overlap: int,
+        similarity_threshold: float | None,
+        safe_browsing_client: SafeBrowsingClient | None = None,
         bm25_index: BM25Index | None = None,
         hybrid_search_enabled: bool = False,
+        vector_weight: float = 1.0,
+        debug_log_enabled: bool = False,
     ) -> None: ...
 
     async def ingest_from_index(
@@ -926,39 +931,53 @@ async def evaluate_retrieval(
 ### 評価CLIツール (`src/rag/cli.py`)
 
 ```bash
-# 基本実行
-python -m src.rag.cli evaluate
-
-# オプション指定
+# 評価実行（chunk-size, chunk-overlap, vector-weight は必須）
 python -m src.rag.cli evaluate \
+  --chunk-size 200 \
+  --chunk-overlap 30 \
+  --vector-weight 0.6 \
   --dataset tests/fixtures/rag_evaluation_dataset.json \
   --output-dir reports/rag-evaluation \
   --baseline-file reports/rag-evaluation/baseline.json \
   --persist-dir ./test_chroma_db \
   --n-results 5 \
   --threshold 0.5 \
-  --vector-weight 0.7 \
   --fail-on-regression
 
-# テスト用ChromaDB初期化
+# テスト用ChromaDB初期化（chunk-size, chunk-overlap は必須）
 python -m src.rag.cli init-test-db \
+  --chunk-size 200 \
+  --chunk-overlap 30 \
   --persist-dir ./test_chroma_db \
   --fixture tests/fixtures/rag_test_documents.json
 ```
 
-**CLIオプション**:
+**CLIオプション（evaluate）**:
 
-| オプション | デフォルト | 説明 |
-|-----------|----------|------|
-| `--dataset` | `tests/fixtures/rag_evaluation_dataset.json` | 評価データセットのパス |
-| `--output-dir` | `reports/rag-evaluation` | レポート出力ディレクトリ |
-| `--baseline-file` | `None` | ベースラインJSONファイルのパス |
-| `--n-results` | `5` | 各クエリで取得する結果数 |
-| `--threshold` | `None` | 類似度閾値 |
-| `--vector-weight` | `None`（設定値を使用） | ベクトル検索の重み α（0.0〜1.0）。未指定時は `RAG_VECTOR_WEIGHT` 設定値 |
-| `--fail-on-regression` | `False` | リグレッション検出時に exit code 1 で終了 |
-| `--regression-threshold` | `0.1` | F1スコアの低下がこの値を超えたらリグレッション判定 |
-| `--save-baseline` | `False` | 現在の結果をベースラインとして保存 |
+| オプション | 必須 | デフォルト | 説明 |
+|-----------|------|----------|------|
+| `--chunk-size` | **必須** | — | チャンクサイズ |
+| `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
+| `--vector-weight` | **必須** | — | ベクトル検索の重み α（0.0〜1.0） |
+| `--dataset` | | `tests/fixtures/rag_evaluation_dataset.json` | 評価データセットのパス |
+| `--output-dir` | | `reports/rag-evaluation` | レポート出力ディレクトリ |
+| `--baseline-file` | | `None` | ベースラインJSONファイルのパス |
+| `--n-results` | | `5` | 各クエリで取得する結果数 |
+| `--threshold` | | `None` | 類似度閾値 |
+| `--fixture` | | `tests/fixtures/rag_test_documents.json` | BM25インデックス構築用フィクスチャ |
+| `--persist-dir` | | `None` | ChromaDB永続化ディレクトリ |
+| `--fail-on-regression` | | `False` | リグレッション検出時に exit code 1 で終了 |
+| `--regression-threshold` | | `0.1` | F1スコアの低下がこの値を超えたらリグレッション判定 |
+| `--save-baseline` | | `False` | 現在の結果をベースラインとして保存 |
+
+**CLIオプション（init-test-db）**:
+
+| オプション | 必須 | デフォルト | 説明 |
+|-----------|------|----------|------|
+| `--chunk-size` | **必須** | — | チャンクサイズ |
+| `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
+| `--persist-dir` | | `./test_chroma_db` | ChromaDB永続化ディレクトリ |
+| `--fixture` | | `tests/fixtures/rag_test_documents.json` | テストドキュメントフィクスチャ |
 
 **出力ファイル**: `report.json`, `report.md`, `baseline.json`
 
@@ -993,8 +1012,8 @@ class Settings(BaseSettings):
     embedding_model_online: str = "text-embedding-3-small"
     embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
     chromadb_persist_dir: str = "./chroma_db"
-    rag_chunk_size: int = 500
-    rag_chunk_overlap: int = 50
+    rag_chunk_size: int = 200
+    rag_chunk_overlap: int = 30
     rag_retrieval_count: int = 5
     rag_max_crawl_pages: int = 50
     rag_crawl_delay_sec: float = 1.0
@@ -1279,6 +1298,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-19 | チャンクサイズ縮小（`rag_chunk_size` 500→200, `rag_chunk_overlap` 50→30）、`RAGKnowledgeService` コンストラクタを必須引数化（`similarity_threshold` / `vector_weight` / `debug_log_enabled` 追加、内部 `get_settings()` 参照廃止）、評価CLI の環境変数ハック廃止、`init_test_db` / BM25インデックス構築を `_ingest_crawled_page` / `_smart_chunk` 経由に統一（#522） |
 | 2026-02-19 | パラメータスイープ再実行（拡充データ101件+プレフィックス有効）で `RAG_VECTOR_WEIGHT` 推奨値を 0.5→1.0 に更新（#518） |
 | 2026-02-19 | Embeddingプレフィックス検証: `embed_documents()` / `embed_query()` メソッド追加、`EMBEDDING_PREFIX_ENABLED` 設定追加（#517） |
 | 2026-02-18 | 評価CLIに `--vector-weight` オプション追加、CC自然減衰の対称性を記述（#509） |
