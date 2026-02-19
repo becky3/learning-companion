@@ -253,6 +253,7 @@ ai-assistant/
 │   └── test_slack_rag_handlers.py
 ├── scripts/
 │   ├── parameter_sweep.py           # パラメータスイープスクリプト
+│   ├── embedding_prefix_comparison.py # Embeddingプレフィックスあり/なし比較
 │   ├── collect_evaluation_data.py   # Wikipedia APIデータ収集スクリプト
 │   └── eval_data_config.json        # 収集対象トピック設定
 ├── reports/
@@ -280,10 +281,18 @@ class EmbeddingProvider(abc.ABC):
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """テキストリストをベクトルリストに変換する."""
 
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """ドキュメント用Embedding（デフォルトはembed()に委譲）."""
+
+    async def embed_query(self, text: str) -> list[float]:
+        """クエリ用Embedding（デフォルトはembed()に委譲）."""
+
     @abc.abstractmethod
     async def is_available(self) -> bool:
         """プロバイダーが利用可能かチェックする."""
 ```
+
+`embed_documents()` / `embed_query()` は concrete メソッド（abstract ではない）。デフォルトでは `embed()` に委譲するため、既存サブクラスの変更は不要。
 
 **`LLMProvider` と別階層にする理由**:
 
@@ -300,13 +309,18 @@ class LMStudioEmbedding(EmbeddingProvider):
     仕様: docs/specs/f9-rag.md
     """
 
+    DOCUMENT_PREFIX = "search_document: "
+    QUERY_PREFIX = "search_query: "
+
     def __init__(
         self,
         base_url: str = "http://localhost:1234/v1",
         model: str = "nomic-embed-text",
+        prefix_enabled: bool = False,
     ) -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
         self._model = model
+        self._prefix_enabled = prefix_enabled
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await self._client.embeddings.create(
@@ -314,10 +328,20 @@ class LMStudioEmbedding(EmbeddingProvider):
         )
         return [item.embedding for item in response.data]
 
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        # prefix_enabled=True 時は "search_document: " を付加
+        ...
+
+    async def embed_query(self, text: str) -> list[float]:
+        # prefix_enabled=True 時は "search_query: " を付加
+        ...
+
     async def is_available(self) -> bool:
         # モデル一覧取得で疎通確認
         ...
 ```
+
+`prefix_enabled` パラメータ（デフォルト: `False`）により、nomic-embed-text のタスク固有プレフィックスを制御する。`embed()` 自体は変更なし（後方互換性）。
 
 #### OpenAI Embedding (`src/embedding/openai_embedding.py`)
 
@@ -967,6 +991,7 @@ class Settings(BaseSettings):
     embedding_provider: Literal["local", "online"] = "local"
     embedding_model_local: str = "nomic-embed-text"
     embedding_model_online: str = "text-embedding-3-small"
+    embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
     chromadb_persist_dir: str = "./chroma_db"
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
@@ -1254,6 +1279,7 @@ class Settings(BaseSettings):
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-19 | Embeddingプレフィックス検証: `embed_documents()` / `embed_query()` メソッド追加、`EMBEDDING_PREFIX_ENABLED` 設定追加（#517） |
 | 2026-02-18 | 評価CLIに `--vector-weight` オプション追加、CC自然減衰の対称性を記述（#509） |
 | 2026-02-18 | BM25インデックスの永続化機能を追加（#497） |
 | 2026-02-18 | ハイブリッド検索の統合手法を RRF → CC（Convex Combination）+ min-max 正規化に変更、NDCG/MRR 評価指標を追加（#501） |

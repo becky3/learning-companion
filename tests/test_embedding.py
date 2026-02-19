@@ -188,3 +188,159 @@ def test_lmstudio_embedding_custom_params() -> None:
     )
     assert provider._client.base_url.host == "192.168.1.100"
     assert provider._model == "custom-embed"
+
+
+# --- Embedding prefix tests (Issue #517) ---
+
+
+@pytest.mark.asyncio
+async def test_embed_documents_default_delegates_to_embed() -> None:
+    """embed_documents() がデフォルトで embed() に委譲すること."""
+    provider = LMStudioEmbedding(prefix_enabled=False)
+
+    mock_item_1 = MagicMock()
+    mock_item_1.embedding = [0.1, 0.2, 0.3]
+    mock_response = MagicMock()
+    mock_response.data = [mock_item_1]
+    provider._client.embeddings.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    result = await provider.embed_documents(["hello"])
+    assert result == [[0.1, 0.2, 0.3]]
+    provider._client.embeddings.create.assert_awaited_once_with(
+        model="nomic-embed-text",
+        input=["hello"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_embed_query_default_delegates_to_embed() -> None:
+    """embed_query() がデフォルトで embed() に委譲し単一ベクトルを返すこと."""
+    provider = LMStudioEmbedding(prefix_enabled=False)
+
+    mock_item = MagicMock()
+    mock_item.embedding = [0.4, 0.5, 0.6]
+    mock_response = MagicMock()
+    mock_response.data = [mock_item]
+    provider._client.embeddings.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    result = await provider.embed_query("hello")
+    assert result == [0.4, 0.5, 0.6]
+    provider._client.embeddings.create.assert_awaited_once_with(
+        model="nomic-embed-text",
+        input=["hello"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_prefix_enabled_adds_document_prefix() -> None:
+    """prefix_enabled=True で embed_documents() にドキュメントプレフィックスが付加されること."""
+    provider = LMStudioEmbedding(prefix_enabled=True)
+
+    mock_item = MagicMock()
+    mock_item.embedding = [0.1, 0.2, 0.3]
+    mock_response = MagicMock()
+    mock_response.data = [mock_item]
+    provider._client.embeddings.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    await provider.embed_documents(["hello"])
+    provider._client.embeddings.create.assert_awaited_once_with(
+        model="nomic-embed-text",
+        input=["search_document: hello"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_prefix_enabled_adds_query_prefix() -> None:
+    """prefix_enabled=True で embed_query() にクエリプレフィックスが付加されること."""
+    provider = LMStudioEmbedding(prefix_enabled=True)
+
+    mock_item = MagicMock()
+    mock_item.embedding = [0.7, 0.8, 0.9]
+    mock_response = MagicMock()
+    mock_response.data = [mock_item]
+    provider._client.embeddings.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    await provider.embed_query("hello")
+    provider._client.embeddings.create.assert_awaited_once_with(
+        model="nomic-embed-text",
+        input=["search_query: hello"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_prefix_disabled_no_prefix_on_documents() -> None:
+    """prefix_enabled=False で embed_documents() にプレフィックスが付かないこと."""
+    provider = LMStudioEmbedding(prefix_enabled=False)
+
+    mock_item = MagicMock()
+    mock_item.embedding = [0.1, 0.2, 0.3]
+    mock_response = MagicMock()
+    mock_response.data = [mock_item]
+    provider._client.embeddings.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    await provider.embed_documents(["hello"])
+    provider._client.embeddings.create.assert_awaited_once_with(
+        model="nomic-embed-text",
+        input=["hello"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_openai_embed_documents_delegates_to_embed() -> None:
+    """OpenAIEmbedding の embed_documents() がデフォルト実装（embed委譲）で動作すること."""
+    provider = OpenAIEmbedding(api_key="sk-test")
+
+    mock_item = MagicMock()
+    mock_item.embedding = [1.0, 2.0, 3.0]
+    mock_response = MagicMock()
+    mock_response.data = [mock_item]
+    provider._client.embeddings.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    result = await provider.embed_documents(["test"])
+    assert result == [[1.0, 2.0, 3.0]]
+
+
+@pytest.mark.asyncio
+async def test_openai_embed_query_delegates_to_embed() -> None:
+    """OpenAIEmbedding の embed_query() がデフォルト実装（embed委譲）で動作すること."""
+    provider = OpenAIEmbedding(api_key="sk-test")
+
+    mock_item = MagicMock()
+    mock_item.embedding = [1.0, 2.0, 3.0]
+    mock_response = MagicMock()
+    mock_response.data = [mock_item]
+    provider._client.embeddings.create = AsyncMock(return_value=mock_response)  # type: ignore[method-assign]
+
+    result = await provider.embed_query("test")
+    assert result == [1.0, 2.0, 3.0]
+
+
+def test_embedding_prefix_enabled_setting_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """embedding_prefix_enabled のデフォルト値が True であること."""
+    monkeypatch.delenv("EMBEDDING_PREFIX_ENABLED", raising=False)
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.embedding_prefix_enabled is True
+
+
+def test_embedding_prefix_enabled_setting_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """embedding_prefix_enabled が環境変数で変更可能であること."""
+    monkeypatch.setenv("EMBEDDING_PREFIX_ENABLED", "true")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert settings.embedding_prefix_enabled is True
+
+
+def test_factory_passes_prefix_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ファクトリが prefix_enabled を LMStudioEmbedding に渡すこと."""
+    monkeypatch.setenv("EMBEDDING_PREFIX_ENABLED", "true")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    provider = get_embedding_provider(settings, "local")
+    assert isinstance(provider, LMStudioEmbedding)
+    assert provider._prefix_enabled is True
+
+
+def test_factory_passes_prefix_enabled_by_default() -> None:
+    """ファクトリがデフォルトで prefix_enabled=True を渡すこと."""
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    provider = get_embedding_provider(settings, "local")
+    assert isinstance(provider, LMStudioEmbedding)
+    assert provider._prefix_enabled is True
