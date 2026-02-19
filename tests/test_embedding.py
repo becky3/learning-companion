@@ -316,10 +316,10 @@ async def test_openai_embed_query_delegates_to_embed() -> None:
 
 
 def test_embedding_prefix_enabled_setting_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """embedding_prefix_enabled のデフォルト値が False であること."""
+    """embedding_prefix_enabled のデフォルト値が True であること."""
     monkeypatch.delenv("EMBEDDING_PREFIX_ENABLED", raising=False)
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
-    assert settings.embedding_prefix_enabled is False
+    assert settings.embedding_prefix_enabled is True
 
 
 def test_embedding_prefix_enabled_setting_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -338,9 +338,9 @@ def test_factory_passes_prefix_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     assert provider._prefix_enabled is True
 
 
-def test_factory_passes_prefix_disabled_by_default() -> None:
-    """ファクトリがデフォルトで prefix_enabled=False を渡すこと."""
+def test_factory_passes_prefix_enabled_by_default() -> None:
+    """ファクトリがデフォルトで prefix_enabled=True を渡すこと."""
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     provider = get_embedding_provider(settings, "local")
     assert isinstance(provider, LMStudioEmbedding)
-    assert provider._prefix_enabled is False
+    assert provider._prefix_enabled is True

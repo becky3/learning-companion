@@ -991,7 +991,7 @@ class Settings(BaseSettings):
     embedding_provider: Literal["local", "online"] = "local"
     embedding_model_local: str = "nomic-embed-text"
     embedding_model_online: str = "text-embedding-3-small"
-    embedding_prefix_enabled: bool = False  # Embeddingプレフィックスの有効化
+    embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
     chromadb_persist_dir: str = "./chroma_db"
     rag_chunk_size: int = 500
     rag_chunk_overlap: int = 50
