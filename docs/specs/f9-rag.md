@@ -961,9 +961,9 @@ python -m src.rag.cli evaluate \
   --chunk-overlap 30 \
   --vector-weight 0.6 \
   --dataset tests/fixtures/rag_evaluation_dataset.json \
-  --output-dir reports/rag-evaluation \
-  --baseline-file reports/rag-evaluation/baseline.json \
-  --persist-dir ./test_chroma_db \
+  --output-dir .tmp/rag-evaluation \
+  --baseline-file .tmp/rag-evaluation/baseline.json \
+  --persist-dir .tmp/test_chroma_db \
   --n-results 5 \
   --threshold 0.5 \
   --fail-on-regression
@@ -972,7 +972,7 @@ python -m src.rag.cli evaluate \
 python -m src.rag.cli init-test-db \
   --chunk-size 200 \
   --chunk-overlap 30 \
-  --persist-dir ./test_chroma_db \
+  --persist-dir .tmp/test_chroma_db \
   --fixture tests/fixtures/rag_test_documents.json
 ```
 
@@ -984,7 +984,7 @@ python -m src.rag.cli init-test-db \
 | `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
 | `--vector-weight` | **必須** | — | ベクトル検索の重み α（0.0〜1.0） |
 | `--dataset` | | `tests/fixtures/rag_evaluation_dataset.json` | 評価データセットのパス |
-| `--output-dir` | | `reports/rag-evaluation` | レポート出力ディレクトリ |
+| `--output-dir` | | `.tmp/rag-evaluation` | レポート出力ディレクトリ |
 | `--baseline-file` | | `None` | ベースラインJSONファイルのパス |
 | `--n-results` | | `5` | 各クエリで取得する結果数 |
 | `--threshold` | | `None` | 類似度閾値 |
@@ -1000,7 +1000,7 @@ python -m src.rag.cli init-test-db \
 |-----------|------|----------|------|
 | `--chunk-size` | **必須** | — | チャンクサイズ |
 | `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
-| `--persist-dir` | | `./test_chroma_db` | ChromaDB永続化ディレクトリ |
+| `--persist-dir` | | `.tmp/test_chroma_db` | ChromaDB永続化ディレクトリ |
 | `--fixture` | | `tests/fixtures/rag_test_documents.json` | テストドキュメントフィクスチャ |
 
 **出力ファイル**: `report.json`, `report.md`, `baseline.json`

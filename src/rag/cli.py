@@ -170,7 +170,7 @@ def main() -> None:
     init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
     init_parser.add_argument(
         "--persist-dir",
-        default="./test_chroma_db",
+        default=".tmp/test_chroma_db",
         help="ChromaDB永続化ディレクトリ",
     )
     init_parser.add_argument(
