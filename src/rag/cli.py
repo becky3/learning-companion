@@ -62,7 +62,7 @@ def main() -> None:
     )
     eval_parser.add_argument(
         "--output-dir",
-        default="reports/rag-evaluation",
+        default=".tmp/rag-evaluation",
         help="レポート出力ディレクトリ",
     )
     eval_parser.add_argument(
