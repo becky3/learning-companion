@@ -87,7 +87,8 @@ def main() -> None:
     eval_parser.add_argument(
         "--vector-weight",
         type=_validate_vector_weight,
-        help="ベクトル検索の重み α（0.0〜1.0）。未指定時は RAG_VECTOR_WEIGHT 設定値を使用",
+        required=True,
+        help="ベクトル検索の重み α（0.0〜1.0）",
     )
     eval_parser.add_argument(
         "--persist-dir",
@@ -114,6 +115,18 @@ def main() -> None:
         default="tests/fixtures/rag_test_documents.json",
         help="BM25インデックス構築用のテストドキュメントフィクスチャ",
     )
+    eval_parser.add_argument(
+        "--chunk-size",
+        type=int,
+        required=True,
+        help="チャンクサイズ",
+    )
+    eval_parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        required=True,
+        help="チャンクオーバーラップ",
+    )
 
     # init-test-db サブコマンド
     init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
@@ -127,6 +140,18 @@ def main() -> None:
         default="tests/fixtures/rag_test_documents.json",
         help="テストドキュメントフィクスチャ",
     )
+    init_parser.add_argument(
+        "--chunk-size",
+        type=int,
+        required=True,
+        help="チャンクサイズ",
+    )
+    init_parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        required=True,
+        help="チャンクオーバーラップ",
+    )
 
     args = parser.parse_args()
 
@@ -137,18 +162,25 @@ def main() -> None:
 
 
 async def create_rag_service(
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
     threshold: float | None = None,
     persist_dir: str | None = None,
     bm25_index: "BM25Index | None" = None,
-    vector_weight: float | None = None,
+    vector_weight: float = 0.6,
 ) -> "RAGKnowledgeService":
     """RAGKnowledgeServiceを生成する.
 
+    全パラメータは呼び出し元が明示的に指定する。settings へのフォールバックは行わない。
+
     Args:
-        threshold: 類似度閾値（未指定時は settings から取得）
+        chunk_size: チャンクサイズ
+        chunk_overlap: チャンクオーバーラップ
+        threshold: 類似度閾値（Noneの場合はフィルタリングなし）
         persist_dir: ChromaDB永続化ディレクトリ（未指定時は settings から取得）
         bm25_index: BM25インデックス（指定時はハイブリッド検索を有効化）
-        vector_weight: ベクトル検索の重み α（未指定時は settings から取得）
+        vector_weight: ベクトル検索の重み α
 
     Returns:
         RAGKnowledgeServiceインスタンス
@@ -162,11 +194,7 @@ async def create_rag_service(
     settings = get_settings()
     embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
 
-    # CLI引数で指定されなかった場合は settings から取得
-    actual_threshold = threshold if threshold is not None else settings.rag_similarity_threshold
-    actual_vector_weight = vector_weight if vector_weight is not None else settings.rag_vector_weight
-
-    # persist_dirが指定されている場合はそれを使用
+    # persist_dir は基盤設定のため settings フォールバックを許容
     chroma_persist_dir = persist_dir or settings.chromadb_persist_dir
     vector_store = VectorStore(
         embedding_provider=embedding_provider,
@@ -179,17 +207,20 @@ async def create_rag_service(
     return RAGKnowledgeService(
         vector_store=vector_store,
         web_crawler=web_crawler,
-        chunk_size=settings.rag_chunk_size,
-        chunk_overlap=settings.rag_chunk_overlap,
-        similarity_threshold=actual_threshold,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        similarity_threshold=threshold,
         bm25_index=bm25_index,
         hybrid_search_enabled=bm25_index is not None,
-        vector_weight=actual_vector_weight,
+        vector_weight=vector_weight,
     )
 
 
 def _build_bm25_index_from_fixture(
     fixture_path: str,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
 ) -> "BM25Index":
     """テストドキュメントフィクスチャからBM25インデックスを構築する.
 
@@ -197,15 +228,14 @@ def _build_bm25_index_from_fixture(
 
     Args:
         fixture_path: フィクスチャファイルのパス
+        chunk_size: チャンクサイズ
+        chunk_overlap: チャンクオーバーラップ
 
     Returns:
         構築済みBM25Indexインスタンス
     """
-    from src.config.settings import get_settings
     from src.rag.bm25_index import BM25Index
     from src.services.rag_knowledge import smart_chunk
-
-    settings = get_settings()
 
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
@@ -217,7 +247,7 @@ def _build_bm25_index_from_fixture(
         content = doc.get("content", "")
         if not source_url or not content:
             continue
-        chunks = smart_chunk(content, settings.rag_chunk_size, settings.rag_chunk_overlap)
+        chunks = smart_chunk(content, chunk_size, chunk_overlap)
         url_hash = hashlib.sha256(source_url.encode()).hexdigest()[:16]
         for i, chunk in enumerate(chunks):
             documents.append((f"{url_hash}_{i}", chunk, source_url))
@@ -241,15 +271,20 @@ async def run_evaluation(args: argparse.Namespace) -> None:
 
     # BM25インデックスをテストドキュメントから構築（ハイブリッド検索用）
     fixture_path = getattr(args, "fixture", "tests/fixtures/rag_test_documents.json")
-    bm25_index = _build_bm25_index_from_fixture(fixture_path)
+    bm25_index = _build_bm25_index_from_fixture(
+        fixture_path,
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+    )
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
-    vector_weight: float | None = args.vector_weight
     rag_service = await create_rag_service(
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
         threshold=args.threshold,
         persist_dir=args.persist_dir,
         bm25_index=bm25_index,
-        vector_weight=vector_weight,
+        vector_weight=args.vector_weight,
     )
 
     # 評価実行
@@ -294,7 +329,7 @@ async def run_evaluation(args: argparse.Namespace) -> None:
     # 評価パラメータ
     eval_params = EvaluationParams(
         threshold=args.threshold,
-        vector_weight=vector_weight,
+        vector_weight=args.vector_weight,
         n_results=args.n_results,
     )
 
@@ -548,7 +583,11 @@ async def init_test_db(args: argparse.Namespace) -> None:
         )
 
     # RAGKnowledgeService 経由で投入（本番と同じチャンキングパス）
-    rag_service = await create_rag_service(persist_dir=args.persist_dir)
+    rag_service = await create_rag_service(
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+        persist_dir=args.persist_dir,
+    )
     total = 0
     for page in pages:
         count = await rag_service._ingest_crawled_page(page)

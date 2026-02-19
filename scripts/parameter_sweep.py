@@ -88,12 +88,18 @@ async def run_single_evaluation(
     threshold: float | None,
     dataset_path: str,
     fixture_path: str,
+    chunk_size: int,
+    chunk_overlap: int,
     n_results: int = 5,
     persist_dir: str | None = None,
 ) -> SweepResult:
     """単一パラメータセットで評価を実行."""
-    bm25_index = _build_bm25_index_from_fixture(fixture_path)
+    bm25_index = _build_bm25_index_from_fixture(
+        fixture_path, chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+    )
     rag_service = await create_rag_service(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
         threshold=threshold,
         bm25_index=bm25_index,
         vector_weight=vector_weight,
@@ -165,6 +171,7 @@ def print_results_table(results: list[SweepResult], phase: int) -> None:
 
 async def run_phase1(
     dataset_path: str, fixture_path: str,
+    chunk_size: int, chunk_overlap: int,
     persist_dir: str | None = None,
 ) -> list[SweepResult]:
     """Phase 1: α スイープ."""
@@ -178,6 +185,8 @@ async def run_phase1(
             threshold=None,
             dataset_path=dataset_path,
             fixture_path=fixture_path,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
             persist_dir=persist_dir,
         )
         results.append(result)
@@ -191,6 +200,7 @@ async def run_phase1(
 
 async def run_phase2(
     best_alpha: float, dataset_path: str, fixture_path: str,
+    chunk_size: int, chunk_overlap: int,
     persist_dir: str | None = None,
 ) -> list[SweepResult]:
     """Phase 2: threshold スイープ."""
@@ -204,6 +214,8 @@ async def run_phase2(
             threshold=thresh,
             dataset_path=dataset_path,
             fixture_path=fixture_path,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
             persist_dir=persist_dir,
         )
         results.append(result)
@@ -220,14 +232,24 @@ async def main_async(args: argparse.Namespace) -> None:
     dataset_path = args.dataset
     fixture_path = args.fixture
     persist_dir = args.persist_dir
+    chunk_size = args.chunk_size
+    chunk_overlap = args.chunk_overlap
 
     if args.phase in (1, 0):
-        phase1_results = await run_phase1(dataset_path, fixture_path, persist_dir)
+        phase1_results = await run_phase1(
+            dataset_path, fixture_path,
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+            persist_dir=persist_dir,
+        )
 
         if args.phase == 0:
             # 全自動: Phase 1 のベストで Phase 2 も実行
             best_alpha = max(phase1_results, key=lambda r: r.avg_f1).vector_weight
-            phase2_results = await run_phase2(best_alpha, dataset_path, fixture_path, persist_dir)
+            phase2_results = await run_phase2(
+                best_alpha, dataset_path, fixture_path,
+                chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+                persist_dir=persist_dir,
+            )
 
             # サマリー出力
             print("\n" + "=" * 60)
@@ -284,7 +306,11 @@ async def main_async(args: argparse.Namespace) -> None:
         if args.best_alpha is None:
             print("ERROR: --best-alpha is required for Phase 2")
             sys.exit(1)
-        await run_phase2(args.best_alpha, dataset_path, fixture_path, persist_dir)
+        await run_phase2(
+            args.best_alpha, dataset_path, fixture_path,
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+            persist_dir=persist_dir,
+        )
 
 
 def main() -> None:
@@ -319,6 +345,18 @@ def main() -> None:
         type=str,
         default=DEFAULT_PERSIST_DIR,
         help=f"ChromaDB永続化ディレクトリ（デフォルト: {DEFAULT_PERSIST_DIR}）",
+    )
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        required=True,
+        help="チャンクサイズ",
+    )
+    parser.add_argument(
+        "--chunk-overlap",
+        type=int,
+        required=True,
+        help="チャンクオーバーラップ",
     )
     args = parser.parse_args()
     asyncio.run(main_async(args))
