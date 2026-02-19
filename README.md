@@ -23,7 +23,7 @@ RSS記事の自動収集・要約配信、チャットでの質問応答、ユ�
 
 ## 技術スタック
 
-Python 3.11+ / uv / slack-bolt / OpenAI SDK / Anthropic SDK / SQLite + SQLAlchemy / APScheduler / feedparser / MCP SDK / ChromaDB / BeautifulSoup4
+Python 3.11+ / uv / slack-bolt / OpenAI SDK / Anthropic SDK / SQLite + SQLAlchemy / feedparser / MCP SDK / ChromaDB / BeautifulSoup4
 
 ## セットアップ
 
@@ -59,13 +59,13 @@ RAG検索精度の評価パイプラインを提供します。
 ```bash
 # テスト用ChromaDBを初期化
 uv run python -m src.rag.cli init-test-db \
-  --persist-dir ./test_chroma_db \
+  --persist-dir .tmp/test_chroma_db \
   --fixture tests/fixtures/rag_test_documents.json
 
 # RAG検索精度を評価
 uv run python -m src.rag.cli evaluate \
-  --persist-dir ./test_chroma_db \
-  --output-dir reports/rag-evaluation
+  --persist-dir .tmp/test_chroma_db \
+  --output-dir .tmp/rag-evaluation
 ```
 
 詳細は [RAGナレッジ機能仕様](docs/specs/f9-rag.md) を参照してください。
@@ -87,7 +87,8 @@ src/
   llm/factory.py     # プロバイダー生成ファクトリ
   embedding/         # Embeddingプロバイダー（LM Studio / OpenAI）
   rag/               # RAGインフラ（チャンキング、ChromaDBベクトルストア、評価CLI）
-  mcp/
+  process_guard.py   # Bot重複起動防止
+  mcp_bridge/
     __init__.py
     client_manager.py  # MCPサーバー接続管理
   services/chat.py           # チャット応答 (オンラインLLM)
@@ -97,7 +98,10 @@ src/
   services/topic_recommender.py # 学習トピック提案 (オンラインLLM)
   services/web_crawler.py     # Webクローラー（RAG用）
   services/rag_knowledge.py   # RAGナレッジサービス
-  scheduler/jobs.py  # APScheduler 毎朝の収集・配信ジョブ
+  services/ogp_extractor.py   # OGPメタデータ抽出
+  services/safe_browsing.py   # Google Safe Browsing API
+  services/thread_history.py  # Slackスレッド履歴取得
+  scheduler/jobs.py  # 配信ジョブ・フォーマット
 mcp-servers/                 # MCPサーバー群（将来リポジトリ分離対象）
   weather/
     server.py          # 天気予報MCPサーバー（気象庁API）
@@ -125,14 +129,16 @@ CLAUDE.mdには以下の重要な情報が含まれています：
 - LLM使い分けルール
 - サブエージェントの使用方法
 
-### 開発フロー概要
+### 開発フロー概要（git-flow）
+
+本プロジェクトは git-flow ベースのブランチ戦略を採用。詳細は [git-flow仕様](docs/specs/git-flow.md) を参照。
 
 1. Issue・Milestoneの確認 (`gh milestone list`, `gh issue list`)
 2. 対象Issueの仕様書を読む (`docs/specs/`)
-3. ブランチ作成 (`feature/f{N}-{機能名}-#{Issue番号}`)
+3. `develop` からブランチ作成 (`feature/f{N}-{機能名}-#{Issue番号}`)
 4. 実装・テスト
 5. コミット (`feat(f{N}): 説明 (#{Issue番号})`)
-6. PR作成 (`gh pr create`)
+6. `develop` に向けてPR作成 (`gh pr create --base develop`)
 
 ### テストと lint
 
@@ -166,7 +172,7 @@ uv run mypy src
 
 - [Claude Code Hooks](docs/specs/claude-code-hooks.md)
 - [Claude Code Actions](docs/specs/claude-code-actions.md)
-- [エージェントチーム](docs/specs/agent-teams.md)
+- エージェントチーム: [共通仕様](docs/specs/agent-teams/common.md) / [fixed-theme](docs/specs/agent-teams/fixed-theme.md) / [mixed-genius](docs/specs/agent-teams/mixed-genius.md)
 - [Planner サブエージェント](docs/specs/planner-agent.md)
 - [Doc Reviewer サブエージェント](docs/specs/doc-review-agent.md)
 - [Test Runner サブエージェント](docs/specs/test-runner-agent.md)

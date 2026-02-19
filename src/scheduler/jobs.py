@@ -1,4 +1,4 @@
-"""APScheduler 毎朝の収集・配信ジョブ
+"""配信ジョブ・フォーマット
 仕様: docs/specs/f2-feed-collection.md
 """
 
@@ -10,12 +10,11 @@ from datetime import datetime
 from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.db.models import Article, Feed
-from src.services.feed_collector import FeedCollector
+from src.services.feed_collector import NO_SUMMARY_TEXT, FeedCollector
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ def _build_article_blocks(
 
     summary = (article.summary or "").strip()
     if not summary:
-        summary = "要約なし"
+        summary = NO_SUMMARY_TEXT
 
     if layout == "horizontal":
         title_part = f":newspaper: *<{article.url}|{article.title}>*\n{dt_str}\n\n"
@@ -452,34 +451,3 @@ async def feed_test_deliver(
 
     # delivered フラグは更新しない（テストなので副作用なし）
     logger.info("Test delivery completed for %d feeds", feeds_delivered)
-
-
-def setup_scheduler(
-    collector: FeedCollector,
-    session_factory: async_sessionmaker[AsyncSession],
-    slack_client: object,
-    channel_id: str,
-    hour: int = 7,
-    minute: int = 0,
-    tz: str = "Asia/Tokyo",
-    max_articles_per_feed: int = 10,
-    layout: Literal["vertical", "horizontal"] = "horizontal",
-) -> AsyncIOScheduler:
-    """スケジューラを設定して返す."""
-    scheduler = AsyncIOScheduler(timezone=tz)
-    scheduler.add_job(
-        daily_collect_and_deliver,
-        "cron",
-        hour=hour,
-        minute=minute,
-        kwargs={
-            "collector": collector,
-            "session_factory": session_factory,
-            "slack_client": slack_client,
-            "channel_id": channel_id,
-            "max_articles_per_feed": max_articles_per_feed,
-            "layout": layout,
-        },
-        id="daily_feed_job",
-    )
-    return scheduler

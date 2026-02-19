@@ -22,6 +22,8 @@ from src.services.summarizer import Summarizer
 
 logger = logging.getLogger(__name__)
 
+NO_SUMMARY_TEXT = "（要約なし）"
+
 
 def strip_html(text: str) -> str:
     """HTMLタグを除去してプレーンテキストに変換する."""
@@ -156,7 +158,7 @@ class FeedCollector:
                     continue
 
                 if skip_summary:
-                    summary = description if description else "（要約なし）"
+                    summary = description if description else NO_SUMMARY_TEXT
                 else:
                     try:
                         timeout = self._summarize_timeout if self._summarize_timeout > 0 else None
@@ -205,6 +207,24 @@ class FeedCollector:
             articles.extend(new_articles)
 
         return articles
+
+    async def fetch_feed_title(self, url: str) -> str:
+        """RSSフィードのtitleタグからフィード名を取得する.
+
+        Args:
+            url: RSSフィードのURL
+
+        Returns:
+            フィード名。取得できない場合はURLをそのまま返す。
+        """
+        try:
+            parsed = await asyncio.to_thread(feedparser.parse, url)
+            title = str(parsed.feed.get("title", ""))
+            if title:
+                return title.strip()
+        except Exception:
+            logger.warning("Failed to fetch feed title from %s", url)
+        return url
 
     async def add_feed(self, url: str, name: str, category: str = "一般") -> Feed:
         """フィードを追加する.

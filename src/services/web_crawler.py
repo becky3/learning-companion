@@ -10,15 +10,28 @@ import ipaddress
 import logging
 import re
 import socket
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from urllib.parse import urldefrag, urljoin, urlparse
+from urllib.robotparser import RobotFileParser
 
 import aiohttp
 from bs4 import BeautifulSoup
 from charset_normalizer import from_bytes
 
 logger = logging.getLogger(__name__)
+
+USER_AGENT = "AIAssistantBot"
+
+
+@dataclass
+class _RobotsCacheEntry:
+    """robots.txt キャッシュエントリ."""
+
+    parser: RobotFileParser
+    fetched_at: float
+    crawl_delay: float | None = field(default=None)
 
 
 @dataclass
@@ -29,6 +42,150 @@ class CrawledPage:
     title: str
     text: str  # 抽出済みプレーンテキスト
     crawled_at: str  # ISO 8601 タイムスタンプ
+
+
+class RobotsChecker:
+    """robots.txt の取得・解析・キャッシュを管理する.
+
+    仕様: docs/specs/f9-rag.md
+    """
+
+    def __init__(self, cache_ttl: int = 3600) -> None:
+        """RobotsCheckerを初期化する.
+
+        Args:
+            cache_ttl: robots.txt キャッシュの有効期間（秒）
+        """
+        self._cache: dict[str, _RobotsCacheEntry] = {}
+        self._cache_ttl = cache_ttl
+        self._lock = asyncio.Lock()
+
+    @staticmethod
+    def _robots_url(url: str) -> str:
+        """URLからrobots.txtのURLを生成する."""
+        parsed = urlparse(url)
+        if not parsed.scheme or parsed.hostname is None:
+            raise ValueError(f"Invalid URL for robots.txt: {url!r}")
+        return f"{parsed.scheme}://{parsed.hostname}{':' + str(parsed.port) if parsed.port else ''}/robots.txt"
+
+    @staticmethod
+    def _cache_key(url: str) -> str:
+        """URLからキャッシュキーを生成する（スキーム+ホスト+ポート）."""
+        parsed = urlparse(url)
+        if not parsed.scheme or parsed.hostname is None:
+            raise ValueError(f"Invalid URL for robots.txt cache key: {url!r}")
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        return f"{parsed.scheme}://{parsed.hostname}:{port}"
+
+    async def _fetch_and_parse(self, url: str, timeout: aiohttp.ClientTimeout) -> _RobotsCacheEntry:
+        """robots.txt を取得して解析する.
+
+        取得に失敗した場合は全てを許可するパーサーを返す（フェイルオープン）。
+
+        Args:
+            url: 対象ページのURL
+            timeout: HTTPリクエストタイムアウト
+
+        Returns:
+            キャッシュエントリ
+        """
+        robots_url = self._robots_url(url)
+        parser = RobotFileParser()
+        crawl_delay: float | None = None
+
+        try:
+            async with aiohttp.ClientSession(timeout=timeout, headers={"User-Agent": USER_AGENT}) as session:
+                async with session.get(robots_url, allow_redirects=False) as resp:
+                    if resp.status == 200:
+                        text = await resp.text()
+                        lines = text.splitlines()
+                        parser.parse(lines)
+                        crawl_delay = parser.crawl_delay(USER_AGENT)  # type: ignore[assignment]
+                        logger.debug("Fetched robots.txt from %s", robots_url)
+                    else:
+                        # 404等: robots.txt が存在しない → 全て許可
+                        parser.parse([])
+                        logger.debug(
+                            "robots.txt not found at %s (status=%d), allowing all",
+                            robots_url,
+                            resp.status,
+                        )
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            # 取得失敗 → フェイルオープン
+            parser.parse([])
+            logger.warning(
+                "Failed to fetch robots.txt from %s, allowing all (fail-open)",
+                robots_url,
+            )
+        except Exception:
+            parser.parse([])
+            logger.warning(
+                "Unexpected error fetching robots.txt from %s, allowing all",
+                robots_url,
+                exc_info=True,
+            )
+
+        return _RobotsCacheEntry(
+            parser=parser,
+            fetched_at=time.monotonic(),
+            crawl_delay=crawl_delay,
+        )
+
+    async def _get_entry(self, url: str, timeout: aiohttp.ClientTimeout) -> _RobotsCacheEntry:
+        """キャッシュからエントリを取得するか、新規に取得する.
+
+        Args:
+            url: 対象ページのURL
+            timeout: HTTPリクエストタイムアウト
+
+        Returns:
+            キャッシュエントリ
+        """
+        key = self._cache_key(url)
+
+        async with self._lock:
+            entry = self._cache.get(key)
+            if entry is not None:
+                elapsed = time.monotonic() - entry.fetched_at
+                if elapsed < self._cache_ttl:
+                    return entry
+
+        # キャッシュミスまたは期限切れ: 再取得
+        new_entry = await self._fetch_and_parse(url, timeout)
+
+        async with self._lock:
+            self._cache[key] = new_entry
+
+        return new_entry
+
+    async def can_fetch(self, url: str, timeout: aiohttp.ClientTimeout) -> bool:
+        """指定URLのクロールが robots.txt で許可されているか判定する.
+
+        Args:
+            url: 判定対象のURL
+            timeout: HTTPリクエストタイムアウト
+
+        Returns:
+            クロールが許可されている場合は True
+        """
+        entry = await self._get_entry(url, timeout)
+        allowed: bool = entry.parser.can_fetch(USER_AGENT, url)
+        if not allowed:
+            logger.info("robots.txt disallows crawling: %s", url)
+        return allowed
+
+    async def get_crawl_delay(self, url: str, timeout: aiohttp.ClientTimeout) -> float | None:
+        """robots.txt で指定された Crawl-delay を取得する.
+
+        Args:
+            url: 対象のURL
+            timeout: HTTPリクエストタイムアウト
+
+        Returns:
+            Crawl-delay 値（秒）。未指定の場合は None
+        """
+        entry = await self._get_entry(url, timeout)
+        return entry.crawl_delay
 
 
 class WebCrawler:
@@ -43,6 +200,8 @@ class WebCrawler:
         max_pages: int = 50,
         crawl_delay: float = 1.0,
         max_concurrent: int = 5,
+        respect_robots_txt: bool = True,
+        robots_txt_cache_ttl: int = 3600,
     ) -> None:
         """WebCrawlerを初期化する.
 
@@ -51,11 +210,19 @@ class WebCrawler:
             max_pages: 1回のクロールで取得する最大ページ数
             crawl_delay: 同一ドメインへの連続リクエスト間の待機秒数
             max_concurrent: 同時接続数の上限
+            respect_robots_txt: robots.txt を遵守するかどうか
+            robots_txt_cache_ttl: robots.txt キャッシュの有効期間（秒）
         """
         self._timeout = aiohttp.ClientTimeout(total=timeout)
         self._max_pages = max_pages
         self._crawl_delay = crawl_delay
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._respect_robots_txt = respect_robots_txt
+        self._robots_checker: RobotsChecker | None = (
+            RobotsChecker(cache_ttl=robots_txt_cache_ttl)
+            if respect_robots_txt
+            else None
+        )
 
     def validate_url(self, url: str) -> str:
         """URL検証・正規化. 問題なければ正規化済みURLを返す.
@@ -315,12 +482,27 @@ class WebCrawler:
             if len(urls) >= self._max_pages:
                 break
 
+        # robots.txt チェック: Disallow されたURLをフィルタリング
+        if self._robots_checker and urls:
+            allowed_urls: list[str] = []
+            for url in urls:
+                if await self._robots_checker.can_fetch(url, self._timeout):
+                    allowed_urls.append(url)
+            if len(allowed_urls) < len(urls):
+                logger.info(
+                    "robots.txt filtered %d URLs out of %d",
+                    len(urls) - len(allowed_urls),
+                    len(urls),
+                )
+            urls = allowed_urls
+
         return urls
 
     async def crawl_page(self, url: str) -> CrawledPage | None:
         """単一ページの本文テキストを取得する. 失敗時は None.
 
         - validate_url() でURL検証後にHTTPアクセスを行う
+        - robots.txt が有効な場合、Disallow パスはスキップする
 
         Args:
             url: クロールするURL
@@ -334,10 +516,16 @@ class WebCrawler:
             logger.warning("URL validation failed: %s - %s", url, e)
             return None
 
+        # robots.txt チェック
+        if self._robots_checker:
+            if not await self._robots_checker.can_fetch(validated_url, self._timeout):
+                return None
+
         try:
             async with self._semaphore:
                 async with aiohttp.ClientSession(
                     timeout=self._timeout,
+                    headers={"User-Agent": USER_AGENT},
                 ) as session:
                     # SSRF対策: リダイレクト追従を無効化
                     async with session.get(validated_url, allow_redirects=False) as resp:
@@ -373,11 +561,34 @@ class WebCrawler:
             logger.exception("Unexpected error while fetching page: %s", url)
             return None
 
+    async def _get_effective_crawl_delay(self, url: str) -> float:
+        """設定値と robots.txt の Crawl-delay のうち大きい方を返す.
+
+        Args:
+            url: 対象のURL
+
+        Returns:
+            適用すべきクロール遅延（秒）
+        """
+        delay = self._crawl_delay
+        if self._robots_checker:
+            robots_delay = await self._robots_checker.get_crawl_delay(url, self._timeout)
+            if robots_delay is not None and robots_delay > delay:
+                logger.debug(
+                    "Using robots.txt Crawl-delay=%.1f (> configured %.1f) for %s",
+                    robots_delay,
+                    delay,
+                    urlparse(url).hostname,
+                )
+                delay = robots_delay
+        return delay
+
     async def crawl_pages(self, urls: list[str]) -> list[CrawledPage]:
         """複数ページを並行クロールする.
 
         - Semaphore により同時接続数を max_concurrent に制限
         - 同一ドメインへの連続リクエスト間に crawl_delay 秒の待機を挿入（負荷軽減）
+        - robots.txt の Crawl-delay が設定値より大きい場合はそちらを採用
         - ページ単位でエラーを隔離し、他のページの処理は継続
 
         Args:
@@ -393,20 +604,46 @@ class WebCrawler:
         last_request_time: dict[str, float] = {}
         time_lock = asyncio.Lock()
 
+        # ホストごとの実効遅延をキャッシュ
+        effective_delays: dict[str, float] = {}
+
         async def crawl_with_delay(url: str) -> CrawledPage | None:
             """同一ドメインへの遅延を挿入してクロールする."""
             hostname = urlparse(url).hostname
 
-            if hostname and self._crawl_delay > 0:
+            if hostname:
+                # 実効遅延を取得（ホスト単位でキャッシュ）
+                # 競合状態を避けるため、ロック内でチェック＆設定
+                delay: float
                 async with time_lock:
-                    previous = last_request_time.get(hostname)
-                    if previous is not None:
-                        now = asyncio.get_event_loop().time()
-                        elapsed = now - previous
-                        if elapsed < self._crawl_delay:
-                            await asyncio.sleep(self._crawl_delay - elapsed)
-                    # リクエスト前に時刻を更新（他のタスクが同じホストに同時アクセスしないようにする）
-                    last_request_time[hostname] = asyncio.get_event_loop().time()
+                    if hostname in effective_delays:
+                        delay = effective_delays[hostname]
+                    else:
+                        # ロックを保持したまま遅延を取得するとデッドロックの恐れがあるため
+                        # ロックを一時解放する必要がある。ダブルチェックロッキングで対応。
+                        pass
+
+                # ロック外で遅延を取得（初回のみ）
+                if hostname not in effective_delays:
+                    delay_value = await self._get_effective_crawl_delay(url)
+                    async with time_lock:
+                        # 他のタスクが設定済みでなければ設定
+                        if hostname not in effective_delays:
+                            effective_delays[hostname] = delay_value
+                        delay = effective_delays[hostname]
+                else:
+                    delay = effective_delays[hostname]
+
+                if delay > 0:
+                    async with time_lock:
+                        previous = last_request_time.get(hostname)
+                        if previous is not None:
+                            now = asyncio.get_event_loop().time()
+                            elapsed = now - previous
+                            if elapsed < delay:
+                                await asyncio.sleep(delay - elapsed)
+                        # リクエスト前に時刻を更新（他のタスクが同じホストに同時アクセスしないようにする）
+                        last_request_time[hostname] = asyncio.get_event_loop().time()
 
             page = await self.crawl_page(url)
 

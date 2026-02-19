@@ -26,6 +26,65 @@ def _generate_doc_id(source_url: str, chunk_index: int) -> str:
     return f"{url_hash}_{chunk_index}"
 
 
+def min_max_normalize(scores: list[float]) -> list[float]:
+    """スコアリストを[0, 1]の範囲にmin-max正規化する.
+
+    Args:
+        scores: 正規化するスコアのリスト
+
+    Returns:
+        正規化されたスコアのリスト
+
+    Note:
+        - 空リスト → 空リストを返す
+        - 全要素が同じ値 → 全て1.0を返す（最大スコアとして扱う）
+        - 通常 → [0, 1]に正規化
+    """
+    if not scores:
+        return []
+
+    min_score = min(scores)
+    max_score = max(scores)
+
+    if max_score == min_score:
+        return [1.0] * len(scores)
+
+    score_range = max_score - min_score
+    return [(s - min_score) / score_range for s in scores]
+
+
+def convex_combination(
+    norm_vector_scores: dict[str, float],
+    norm_bm25_scores: dict[str, float],
+    vector_weight: float = 0.5,
+) -> dict[str, float]:
+    """Convex Combination（凸結合）でスコアを統合する.
+
+    score(d) = α * norm_vector(d) + (1-α) * norm_bm25(d)
+
+    片方のみにヒットしたドキュメントは、もう片方を0として計算する。
+
+    Args:
+        norm_vector_scores: ドキュメントID → 正規化済みベクトルスコア
+        norm_bm25_scores: ドキュメントID → 正規化済みBM25スコア
+        vector_weight: ベクトル検索の重み α（0.0〜1.0）
+
+    Returns:
+        ドキュメントID → 統合スコアのマッピング
+    """
+    vector_weight = max(0.0, min(1.0, vector_weight))
+    bm25_weight = 1.0 - vector_weight
+    all_doc_ids = set(norm_vector_scores) | set(norm_bm25_scores)
+
+    scores: dict[str, float] = {}
+    for doc_id in all_doc_ids:
+        v_score = norm_vector_scores.get(doc_id, 0.0)
+        b_score = norm_bm25_scores.get(doc_id, 0.0)
+        scores[doc_id] = vector_weight * v_score + bm25_weight * b_score
+
+    return scores
+
+
 @dataclass
 class HybridSearchResult:
     """ハイブリッド検索結果.
@@ -38,7 +97,7 @@ class HybridSearchResult:
     metadata: dict[str, str | int]
     vector_distance: float | None  # ベクトル検索での距離（Noneの場合はBM25のみでヒット）
     bm25_score: float | None  # BM25スコア（Noneの場合はベクトル検索のみでヒット）
-    rrf_score: float  # RRFで統合されたスコア
+    combined_score: float  # CCで統合されたスコア
 
 
 class HybridSearchEngine:
@@ -52,7 +111,6 @@ class HybridSearchEngine:
         vector_store: VectorStore,
         bm25_index: BM25Index,
         vector_weight: float = 0.5,
-        rrf_k: int = 60,
     ) -> None:
         """HybridSearchEngineを初期化する.
 
@@ -60,18 +118,17 @@ class HybridSearchEngine:
             vector_store: ベクトルストア
             bm25_index: BM25インデックス
             vector_weight: ベクトル検索の重み（0.0〜1.0）
-            rrf_k: RRFの定数（デフォルト: 60、論文推奨値）
         """
         self._vector_store = vector_store
         self._bm25_index = bm25_index
         self._vector_weight = max(0.0, min(1.0, vector_weight))
-        self._rrf_k = rrf_k
 
     async def search(
         self,
         query: str,
         n_results: int = 5,
         similarity_threshold: float | None = None,
+        min_combined_score: float | None = None,
     ) -> list[HybridSearchResult]:
         """ハイブリッド検索を実行する.
 
@@ -79,19 +136,22 @@ class HybridSearchEngine:
 
         1. ベクトル検索で候補を取得
         2. BM25検索で候補を取得
-        3. RRF（Reciprocal Rank Fusion）でスコアを統合
-        4. 統合スコアでソート
+        3. 各スコアをmin-max正規化
+        4. CC（Convex Combination）でスコアを統合
+        5. 統合スコアでソート
+        6. min_combined_score 未満の結果を除外
 
         Args:
             query: 検索クエリ
             n_results: 返却する結果の最大数
             similarity_threshold: ベクトル検索の類似度閾値
+            min_combined_score: combined_scoreの下限閾値（None=フィルタなし）
 
         Returns:
-            HybridSearchResultのリスト（RRFスコア降順）
+            HybridSearchResultのリスト（統合スコア降順）
         """
-        # 多めに取得してからRRFで統合
-        fetch_count = max(n_results * 3, 20)
+        # 多めに取得してからCCで統合
+        fetch_count = max(n_results * 3, 30)
 
         # ベクトル検索
         # 閾値フィルタリングは最終段階で行うため、ここでは適用しない
@@ -108,235 +168,124 @@ class HybridSearchEngine:
         if not vector_results and not bm25_results:
             return []
 
-        # ベクトル検索のみの場合
-        if not bm25_results:
-            return self._convert_vector_only_results(
-                vector_results, n_results, similarity_threshold
-            )
-
-        # BM25のみの場合
-        if not vector_results:
-            return self._convert_bm25_only_results(bm25_results, n_results)
-
-        # 両方の結果がある場合はRRFで統合
-        return self._merge_with_rrf(
+        # CCで統合（片方が空でも正しく処理される）
+        results = self._merge_with_cc(
             vector_results, bm25_results, n_results, similarity_threshold
         )
 
-    def _convert_vector_only_results(
+        # combined_score 下限フィルタ
+        if min_combined_score is not None:
+            results = [r for r in results if r.combined_score >= min_combined_score]
+
+        return results
+
+    def _merge_with_cc(
         self,
         vector_results: list[RetrievalResult],
+        bm25_results: list[BM25Result],
         n_results: int,
         similarity_threshold: float | None,
     ) -> list[HybridSearchResult]:
-        """ベクトル検索結果のみを変換する."""
-        results: list[HybridSearchResult] = []
-        rank = 0  # 閾値を満たすもののみでランク計算
+        """CCで検索結果を統合する.
+
+        1. vector distance → similarity 変換（1.0 - distance）
+        2. similarity_threshold 超過分を除外
+        3. vector similarity に min-max 正規化
+        4. BM25 スコアに min-max 正規化
+        5. CC で統合
+        6. score > 0 でフィルタ → 降順ソート → 上位 n_results 返却
+        """
+        # --- ベクトル検索結果の処理 ---
+        # doc_id → (similarity, text, metadata, distance) のマッピング
+        vector_doc_data: dict[str, tuple[float, str, dict[str, str | int], float]] = {}
 
         for i, vr in enumerate(vector_results):
-            # 閾値フィルタリング（先にフィルタしてからn_results件を取得）
-            if similarity_threshold is not None and vr.distance > similarity_threshold:
-                continue
-
-            # 必要件数に達したら終了
-            if len(results) >= n_results:
-                break
-
-            # RRFスコアを計算（閾値を満たすもののランクで計算）
-            rrf_score = self._vector_weight / (self._rrf_k + rank + 1)
-            rank += 1
-
-            # VectorStoreと同じ形式でdoc_idを生成
             source_url = str(vr.metadata.get("source_url", ""))
             chunk_index = int(vr.metadata.get("chunk_index", i))
             doc_id = _generate_doc_id(source_url, chunk_index)
 
-            results.append(
-                HybridSearchResult(
-                    doc_id=doc_id,
-                    text=vr.text,
-                    metadata=vr.metadata,
-                    vector_distance=vr.distance,
-                    bm25_score=None,
-                    rrf_score=rrf_score,
-                )
-            )
+            similarity = 1.0 - vr.distance
 
-        return results
-
-    def _convert_bm25_only_results(
-        self,
-        bm25_results: list["BM25Result"],
-        n_results: int,
-    ) -> list[HybridSearchResult]:
-        """BM25検索結果のみを変換する."""
-        results: list[HybridSearchResult] = []
-        bm25_weight = 1.0 - self._vector_weight
-
-        for i, br in enumerate(bm25_results[:n_results]):
-            # RRFスコアを計算（BM25のランクのみ）
-            rrf_score = bm25_weight / (self._rrf_k + i + 1)
-
-            # BM25Indexからsource_urlを取得
-            source_url = self._bm25_index.get_source_url(br.doc_id)
-            metadata: dict[str, str | int] = {}
-            if source_url:
-                metadata["source_url"] = source_url
-
-            results.append(
-                HybridSearchResult(
-                    doc_id=br.doc_id,
-                    text=br.text,
-                    metadata=metadata,
-                    vector_distance=None,
-                    bm25_score=br.score,
-                    rrf_score=rrf_score,
-                )
-            )
-
-        return results
-
-    def _merge_with_rrf(
-        self,
-        vector_results: list["RetrievalResult"],
-        bm25_results: list["BM25Result"],
-        n_results: int,
-        similarity_threshold: float | None,
-    ) -> list[HybridSearchResult]:
-        """RRFで検索結果を統合する."""
-        bm25_weight = 1.0 - self._vector_weight
-
-        # ドキュメントIDでマッピング
-        doc_map: dict[str, dict[str, float | None | dict[str, str | int] | str]] = {}
-
-        # ベクトル検索結果を処理
-        # 閾値を満たした結果だけでランクを進める（_convert_vector_only_resultsと一貫性を保つ）
-        vector_rank = 0
-        for i, vr in enumerate(vector_results):
-            # VectorStoreと同じ形式でdoc_idを生成
-            source_url = str(vr.metadata.get("source_url", ""))
-            chunk_index = int(vr.metadata.get("chunk_index", i))
-            doc_id = _generate_doc_id(source_url, chunk_index)
-
-            # 閾値チェック（フィルタリングではなく、スコア計算に影響）
+            # 閾値チェック: 超過したものはベクトルスコアを0として扱う
             if similarity_threshold is not None and vr.distance > similarity_threshold:
-                # 閾値を超えている場合はベクトル検索のRRFスコアを0に
-                vector_rank_bonus = 0.0
+                # 閾値超過: similarity を 0 にしてスコア計算から除外
+                vector_doc_data[doc_id] = (0.0, vr.text, vr.metadata, vr.distance)
             else:
-                # 閾値を満たした結果のみでランクを計算
-                vector_rank_bonus = self._vector_weight / (self._rrf_k + vector_rank + 1)
-                vector_rank += 1
+                vector_doc_data[doc_id] = (similarity, vr.text, vr.metadata, vr.distance)
 
-            doc_map[doc_id] = {
-                "text": vr.text,
-                "metadata": vr.metadata,
-                "vector_distance": vr.distance,
-                "bm25_score": None,
-                "vector_rrf": vector_rank_bonus,
-                "bm25_rrf": 0.0,
-            }
+        # 閾値を通過した similarity 値だけで min-max 正規化
+        valid_similarities = {
+            doc_id: data[0]
+            for doc_id, data in vector_doc_data.items()
+            if data[0] > 0.0
+        }
+        norm_vector_scores: dict[str, float] = {}
+        if valid_similarities:
+            raw_values = list(valid_similarities.values())
+            normalized = min_max_normalize(raw_values)
+            doc_ids = list(valid_similarities.keys())
+            norm_vector_scores = dict(zip(doc_ids, normalized))
 
-        # BM25結果を処理
-        for i, br in enumerate(bm25_results):
-            bm25_rank_bonus = bm25_weight / (self._rrf_k + i + 1)
+        # --- BM25結果の処理 ---
+        bm25_doc_data: dict[str, tuple[float, str, dict[str, str | int]]] = {}
 
-            if br.doc_id in doc_map:
-                # 既存のエントリを更新
-                doc_map[br.doc_id]["bm25_score"] = br.score
-                doc_map[br.doc_id]["bm25_rrf"] = bm25_rank_bonus
-            else:
-                # 新規エントリを追加（BM25のみヒット）
-                # BM25Indexからsource_urlを取得
-                bm25_source_url: str | None = self._bm25_index.get_source_url(br.doc_id)
-                bm25_metadata: dict[str, str | int] = {}
-                if bm25_source_url:
-                    bm25_metadata["source_url"] = bm25_source_url
+        for br in bm25_results:
+            bm25_source_url = self._bm25_index.get_source_url(br.doc_id)
+            bm25_metadata: dict[str, str | int] = {}
+            if bm25_source_url:
+                bm25_metadata["source_url"] = bm25_source_url
+            bm25_doc_data[br.doc_id] = (br.score, br.text, bm25_metadata)
 
-                doc_map[br.doc_id] = {
-                    "text": br.text,
-                    "metadata": bm25_metadata,
-                    "vector_distance": None,
-                    "bm25_score": br.score,
-                    "vector_rrf": 0.0,
-                    "bm25_rrf": bm25_rank_bonus,
-                }
+        # BM25 スコアの min-max 正規化
+        norm_bm25_scores: dict[str, float] = {}
+        if bm25_doc_data:
+            bm25_raw_values = [data[0] for data in bm25_doc_data.values()]
+            bm25_normalized = min_max_normalize(bm25_raw_values)
+            bm25_doc_ids = list(bm25_doc_data.keys())
+            norm_bm25_scores = dict(zip(bm25_doc_ids, bm25_normalized))
 
-        # RRFスコアを計算してソート
+        # --- CC 統合 ---
+        cc_scores = convex_combination(
+            norm_vector_scores, norm_bm25_scores, self._vector_weight
+        )
+
+        # --- 結果構築 ---
+        # 全ドキュメントのデータを統合
+        all_doc_ids = set(vector_doc_data) | set(bm25_doc_data)
+
         results: list[HybridSearchResult] = []
-        for doc_id, data in doc_map.items():
-            # 型安全なキャスト（dictが含まれる可能性があるためisinstanceでガード）
-            raw_vector_rrf = data.get("vector_rrf", 0.0)
-            raw_bm25_rrf = data.get("bm25_rrf", 0.0)
-            vector_rrf = (
-                float(raw_vector_rrf)
-                if isinstance(raw_vector_rrf, (int, float))
-                else 0.0
-            )
-            bm25_rrf = (
-                float(raw_bm25_rrf)
-                if isinstance(raw_bm25_rrf, (int, float))
-                else 0.0
-            )
-            rrf_score = vector_rrf + bm25_rrf
+        for doc_id in all_doc_ids:
+            score = cc_scores.get(doc_id, 0.0)
 
-            # 閾値超過かつBM25ヒットなしのドキュメントを除外
-            # vector_rrf == 0 は閾値超過を意味し、bm25_rrf == 0 はBM25ヒットなし
-            # 両方0の場合（両方でヒットしなかった）は結果に含めない
-            if vector_rrf == 0.0 and bm25_rrf == 0.0:
+            # score が 0 のドキュメントは除外
+            if score <= 0.0:
                 continue
 
-            # 型安全なキャスト
-            raw_vector_distance = data.get("vector_distance")
-            raw_bm25_score = data.get("bm25_score")
-            vector_distance: float | None = (
-                float(raw_vector_distance)
-                if isinstance(raw_vector_distance, (int, float))
-                else None
-            )
+            # テキストとメタデータの取得（ベクトル検索結果を優先）
+            if doc_id in vector_doc_data:
+                _, text, metadata, distance = vector_doc_data[doc_id]
+                vector_distance: float | None = distance
+            else:
+                text = bm25_doc_data[doc_id][1]
+                metadata = bm25_doc_data[doc_id][2]
+                vector_distance = None
+
             bm25_score: float | None = (
-                float(raw_bm25_score)
-                if isinstance(raw_bm25_score, (int, float))
-                else None
+                bm25_doc_data[doc_id][0] if doc_id in bm25_doc_data else None
             )
 
             results.append(
                 HybridSearchResult(
                     doc_id=doc_id,
-                    text=str(data["text"]),
-                    metadata=data["metadata"] if isinstance(data["metadata"], dict) else {},
+                    text=text,
+                    metadata=metadata,
                     vector_distance=vector_distance,
                     bm25_score=bm25_score,
-                    rrf_score=rrf_score,
+                    combined_score=score,
                 )
             )
 
-        # RRFスコアでソート
-        results.sort(key=lambda x: x.rrf_score, reverse=True)
+        # 統合スコアでソート
+        results.sort(key=lambda x: x.combined_score, reverse=True)
 
         return results[:n_results]
-
-
-def reciprocal_rank_fusion(
-    rankings: list[list[str]],
-    k: int = 60,
-) -> dict[str, float]:
-    """RRFでスコアを統合する.
-
-    RRF_score(d) = Σ 1 / (k + rank(d))
-
-    Args:
-        rankings: 各検索手法のランキング結果（ドキュメントIDのリスト）
-        k: 定数（デフォルト: 60、論文推奨値）
-
-    Returns:
-        ドキュメントID → 統合スコアのマッピング
-    """
-    scores: dict[str, float] = {}
-
-    for ranking in rankings:
-        for rank, doc_id in enumerate(ranking, start=1):
-            if doc_id not in scores:
-                scores[doc_id] = 0.0
-            scores[doc_id] += 1.0 / (k + rank)
-
-    return scores

@@ -20,13 +20,50 @@ from src.rag.table_chunker import chunk_table_data
 from src.rag.vector_store import DocumentChunk, VectorStore
 
 if TYPE_CHECKING:
-    from src.config.settings import Settings
     from src.rag.bm25_index import BM25Index
     from src.rag.hybrid_search import HybridSearchEngine
     from src.services.safe_browsing import SafeBrowsingClient
     from src.services.web_crawler import CrawledPage, WebCrawler
 
 logger = logging.getLogger(__name__)
+
+
+def smart_chunk(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
+    """コンテンツタイプに応じた適切なチャンキング手法を選択する.
+
+    仕様: docs/specs/f9-rag.md
+
+    - TABLE: テーブルデータとして行単位でチャンキング
+    - HEADING/MIXED: 見出し単位でチャンキング
+    - PROSE: 従来の段落ベースチャンキング
+
+    Args:
+        text: チャンキング対象のテキスト
+        chunk_size: チャンクの最大文字数
+        chunk_overlap: チャンク間のオーバーラップ文字数
+
+    Returns:
+        チャンクのリスト
+    """
+    if not text or not text.strip():
+        return []
+
+    content_type = detect_content_type(text)
+    logger.debug("Detected content type: %s", content_type.value)
+
+    if content_type == ContentType.TABLE:
+        table_chunks = chunk_table_data(text)
+        if table_chunks:
+            return [chunk.formatted_text for chunk in table_chunks]
+        logger.debug("Table chunking returned no results, falling back to prose")
+
+    if content_type in (ContentType.HEADING, ContentType.MIXED):
+        heading_chunks = chunk_by_headings(text, max_chunk_size=chunk_size)
+        if heading_chunks:
+            return [chunk.formatted_text for chunk in heading_chunks]
+        logger.debug("Heading chunking returned no results, falling back to prose")
+
+    return chunk_text(text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
 
 @dataclass
@@ -54,11 +91,16 @@ class RAGKnowledgeService:
         self,
         vector_store: VectorStore,
         web_crawler: WebCrawler,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
+        *,
+        chunk_size: int,
+        chunk_overlap: int,
+        similarity_threshold: float | None,
         safe_browsing_client: SafeBrowsingClient | None = None,
         bm25_index: BM25Index | None = None,
         hybrid_search_enabled: bool = False,
+        vector_weight: float = 1.0,
+        min_combined_score: float | None = None,
+        debug_log_enabled: bool = False,
     ) -> None:
         """RAGKnowledgeServiceを初期化する.
 
@@ -67,30 +109,34 @@ class RAGKnowledgeService:
             web_crawler: Webクローラー
             chunk_size: チャンクの最大文字数
             chunk_overlap: チャンク間のオーバーラップ文字数
+            similarity_threshold: 類似度閾値（Noneで無制限）
             safe_browsing_client: Safe Browsing クライアント（オプション）
             bm25_index: BM25インデックス（オプション、ハイブリッド検索用）
             hybrid_search_enabled: ハイブリッド検索の有効/無効
+            vector_weight: ベクトル検索の重み（ハイブリッド検索用）
+            min_combined_score: combined_scoreの下限閾値（None=フィルタなし）
+            debug_log_enabled: RAGデバッグログの有効/無効
         """
         self._vector_store = vector_store
         self._web_crawler = web_crawler
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
+        self._similarity_threshold = similarity_threshold
         self._safe_browsing_client = safe_browsing_client
         self._bm25_index = bm25_index
         self._hybrid_search_enabled = hybrid_search_enabled
+        self._min_combined_score = min_combined_score
+        self._debug_log_enabled = debug_log_enabled
         self._hybrid_search_engine: HybridSearchEngine | None = None
 
         # ハイブリッド検索エンジンの初期化
         if hybrid_search_enabled and bm25_index is not None:
-            from src.config.settings import get_settings
             from src.rag.hybrid_search import HybridSearchEngine
 
-            settings = get_settings()
             self._hybrid_search_engine = HybridSearchEngine(
                 vector_store=vector_store,
                 bm25_index=bm25_index,
-                vector_weight=settings.rag_vector_weight,
-                rrf_k=settings.rag_rrf_k,
+                vector_weight=vector_weight,
             )
             logger.info("Hybrid search engine initialized")
 
@@ -244,48 +290,8 @@ class RAGKnowledgeService:
         """コンテンツタイプに応じた適切なチャンキング手法を選択する.
 
         仕様: docs/specs/f9-rag.md
-
-        - TABLE: テーブルデータとして行単位でチャンキング
-        - HEADING/MIXED: 見出し単位でチャンキング
-        - PROSE: 従来の段落ベースチャンキング
-
-        Args:
-            text: チャンキング対象のテキスト
-
-        Returns:
-            チャンクのリスト
         """
-        if not text or not text.strip():
-            return []
-
-        content_type = detect_content_type(text)
-        logger.debug("Detected content type: %s", content_type.value)
-
-        if content_type == ContentType.TABLE:
-            # テーブルデータ: 行単位でチャンキング
-            table_chunks = chunk_table_data(text)
-            if table_chunks:
-                return [chunk.formatted_text for chunk in table_chunks]
-            # テーブルチャンキングに失敗した場合はフォールバック
-            logger.debug("Table chunking returned no results, falling back to prose")
-
-        if content_type in (ContentType.HEADING, ContentType.MIXED):
-            # 見出しあり: 見出し単位でチャンキング
-            heading_chunks = chunk_by_headings(
-                text,
-                max_chunk_size=self._chunk_size,
-            )
-            if heading_chunks:
-                return [chunk.formatted_text for chunk in heading_chunks]
-            # 見出しチャンキングに失敗した場合はフォールバック
-            logger.debug("Heading chunking returned no results, falling back to prose")
-
-        # 通常テキスト: 従来のチャンキング
-        return chunk_text(
-            text,
-            chunk_size=self._chunk_size,
-            chunk_overlap=self._chunk_overlap,
-        )
+        return smart_chunk(text, self._chunk_size, self._chunk_overlap)
 
     async def _ingest_crawled_page(self, page: CrawledPage) -> int:
         """クロール済みページをチャンキングして保存する.
@@ -364,29 +370,23 @@ class RAGKnowledgeService:
         Returns:
             RAGRetrievalResult: コンテキストとソース情報
         """
-        from src.config.settings import get_settings
-
-        settings = get_settings()
-
         # ハイブリッド検索が有効な場合
         if self._hybrid_search_enabled and self._hybrid_search_engine is not None:
-            return await self._retrieve_hybrid(query, n_results, settings)
+            return await self._retrieve_hybrid(query, n_results)
 
         # 従来のベクトル検索のみ
-        return await self._retrieve_vector_only(query, n_results, settings)
+        return await self._retrieve_vector_only(query, n_results)
 
     async def _retrieve_vector_only(
         self,
         query: str,
         n_results: int,
-        settings: "Settings",
     ) -> RAGRetrievalResult:
         """ベクトル検索のみで検索を実行する（従来の動作）.
 
         Args:
             query: 検索クエリ
             n_results: 返却する結果の最大数
-            settings: 設定オブジェクト
 
         Returns:
             RAGRetrievalResult: コンテキストとソース情報
@@ -394,14 +394,14 @@ class RAGKnowledgeService:
         results = await self._vector_store.search(
             query,
             n_results=n_results,
-            similarity_threshold=settings.rag_similarity_threshold,
+            similarity_threshold=self._similarity_threshold,
         )
 
         if not results:
             return RAGRetrievalResult(context="", sources=[])
 
         # デバッグログ出力
-        if settings.rag_debug_log_enabled:
+        if self._debug_log_enabled:
             logger.info("RAG retrieve (vector only): query=%r", query)
             for i, result in enumerate(results, start=1):
                 source_url = result.metadata.get("source_url", "不明")
@@ -437,7 +437,6 @@ class RAGKnowledgeService:
         self,
         query: str,
         n_results: int,
-        settings: "Settings",
     ) -> RAGRetrievalResult:
         """ハイブリッド検索（ベクトル＋BM25）で検索を実行する.
 
@@ -446,7 +445,6 @@ class RAGKnowledgeService:
         Args:
             query: 検索クエリ
             n_results: 返却する結果の最大数
-            settings: 設定オブジェクト
 
         Returns:
             RAGRetrievalResult: コンテキストとソース情報
@@ -456,21 +454,22 @@ class RAGKnowledgeService:
         results = await self._hybrid_search_engine.search(
             query,
             n_results=n_results,
-            similarity_threshold=settings.rag_similarity_threshold,
+            similarity_threshold=self._similarity_threshold,
+            min_combined_score=self._min_combined_score,
         )
 
         if not results:
             return RAGRetrievalResult(context="", sources=[])
 
         # デバッグログ出力
-        if settings.rag_debug_log_enabled:
+        if self._debug_log_enabled:
             logger.info("RAG retrieve (hybrid): query=%r", query)
             for i, result in enumerate(results, start=1):
                 source_url = result.metadata.get("source_url", "不明")
                 logger.info(
-                    "RAG result %d: rrf_score=%.4f vector_dist=%s bm25_score=%s source=%r",
+                    "RAG result %d: combined_score=%.4f vector_dist=%s bm25_score=%s source=%r",
                     i,
-                    result.rrf_score,
+                    result.combined_score,
                     f"{result.vector_distance:.3f}" if result.vector_distance is not None else "N/A",
                     f"{result.bm25_score:.3f}" if result.bm25_score is not None else "N/A",
                     source_url,

@@ -8,6 +8,7 @@ import logging
 
 from openai import AsyncOpenAI
 
+from src.config.settings import DEFAULT_LMSTUDIO_BASE_URL
 from src.embedding.base import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
@@ -19,13 +20,18 @@ class LMStudioEmbedding(EmbeddingProvider):
     仕様: docs/specs/f9-rag.md
     """
 
+    DOCUMENT_PREFIX = "search_document: "
+    QUERY_PREFIX = "search_query: "
+
     def __init__(
         self,
-        base_url: str = "http://localhost:1234/v1",
+        base_url: str = DEFAULT_LMSTUDIO_BASE_URL,
         model: str = "nomic-embed-text",
+        prefix_enabled: bool = False,
     ) -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
         self._model = model
+        self._prefix_enabled = prefix_enabled
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """テキストリストをベクトルリストに変換する."""
@@ -34,6 +40,19 @@ class LMStudioEmbedding(EmbeddingProvider):
             input=texts,
         )
         return [item.embedding for item in response.data]
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """ドキュメント用Embedding（プレフィックス有効時はsearch_document:を付加）."""
+        if self._prefix_enabled:
+            texts = [self.DOCUMENT_PREFIX + t for t in texts]
+        return await self.embed(texts)
+
+    async def embed_query(self, text: str) -> list[float]:
+        """クエリ用Embedding（プレフィックス有効時はsearch_query:を付加）."""
+        if self._prefix_enabled:
+            text = self.QUERY_PREFIX + text
+        result = await self.embed([text])
+        return result[0]
 
     async def is_available(self) -> bool:
         """モデル一覧取得で疎通確認する."""

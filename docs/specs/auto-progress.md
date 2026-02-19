@@ -28,7 +28,7 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 
 | ブランチ | 役割 | マージ方式 |
 |---------|------|-----------|
-| `main` | 本番（プロダクション）。常に安定版 | develop からの手動マージ（Phase 1）→ 定期自動（Phase 2） |
+| `main` | 本番（プロダクション）。常に安定版 | develop からの手動マージ |
 | `develop` | ステージング。自動マージ先。feature ブランチのベース | feature ブランチからの自動マージ |
 | `feature/*` | 機能開発ブランチ。develop から分岐 | develop へのPRマージ |
 
@@ -46,9 +46,9 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 | 設定 | 値 | 理由 |
 |------|-----|------|
 | Require a pull request before merging | YES | 直 push 禁止 |
-| Require status checks to pass | YES | CI 必須（pytest, mypy, ruff, markdownlint） |
+| Require status checks to pass | NO | 外部 CI ワークフロー不使用。品質チェック（pytest, mypy, ruff, markdownlint）はエージェント内テストで担保 |
 | Require approvals | NO | 自動マージを許可するため |
-| Require linear history | YES | squash merge で履歴を綺麗に |
+| Require linear history | NO | 通常マージで開発履歴を保持（マージ方式は `git-flow.md` の「マージ方式」セクション参照） |
 | Include administrators | NO | 管理者は緊急時にバイパス可能 |
 | Allow auto-merge | YES | 自動マージを許可 |
 
@@ -57,9 +57,9 @@ IssueからPRマージまでの全工程を自動化するパイプライン。�
 | 設定 | 値 | 理由 |
 |------|-----|------|
 | Require a pull request before merging | YES | 直 push 禁止 |
-| Require status checks to pass | YES | CI 必須 |
+| Require status checks to pass | NO | 外部 CI ワークフロー不使用。品質チェックはエージェント内テストで担保 |
 | Require approvals | YES (1名) | 管理者の承認必須 |
-| Require linear history | YES | squash merge で履歴を綺麗に |
+| Require linear history | NO | squash マージで履歴はリリース単位にまとまる（マージ方式は `git-flow.md` の「マージ方式」セクション参照） |
 | Include administrators | YES | 管理者も保護対象 |
 | Allow auto-merge | NO | 手動マージのみ |
 
@@ -75,24 +75,18 @@ gh pr create --base main --head develop \
   --body "develop の変更を main にリリース"
 ```
 
-main 向き PR が作成 → pr-review.yml で自動レビュー → 管理者がマージ
+main 向き PR が作成 → Copilot ネイティブレビュー（または管理者による手動レビュー）→ 管理者がマージ
 
-**Phase 2: 定期リリース（release.yml）**
-
-- スケジュール: 毎週月曜 0:00 UTC（JST 09:00）
-- 処理: develop と main の差分コミット数をチェックし、差分があれば develop → main のリリースPRを自動作成
-- リリースPRの自動作成には `BECKY3_PAT` を使用（pr-review.yml の自動レビューをトリガーするため）
-- 差分がなければ何もしない
-
-**main への自動マージは Phase 2 でも手動維持**。将来的に自動化する場合も、GitHub 通知で猶予期間（「30分以内に auto:failed がなければ自動マージ」）を設ける。
+**main への自動マージは手動維持**。将来的に自動化する場合も、GitHub 通知で猶予期間（「30分以内に auto:failed がなければ自動マージ」）を設ける。
 
 ### ワークフローへの影響
 
 | ファイル | 変更 | 内容 |
 |---------|------|------|
-| `claude.yml` | YAML 変更なし | CLAUDE.md で `gh pr create --base develop` を指示 |
-| `pr-review.yml` | 変更不要 | 既に動的にベースブランチを解決済み |
-| `auto-fix.yml` | 変更不要 | `gh pr merge` は PR のベースブランチに自動マージ |
+| `claude.yml` | 変更あり | `branch_prefix: "auto/"` 追加、`REPO_OWNER_PAT` 使用、`auto:pipeline` ラベル付与ステップ維持 |
+| `pr-review.yml` | 稼働中 | PRKit ベースの自動レビュー。`auto/` ブランチプレフィックス付きPRはスキップ（Copilot に委譲） |
+| `auto-fix.yml` | **無効化** | copilot-auto-fix.yml に置き換え |
+| `copilot-auto-fix.yml` | **新規** | Copilot レビュー結果に基づく自動修正 + マージ |
 | GitHub 設定 | Default branch を develop に変更 | `Settings > General > Default branch` |
 
 ## 全体フロー
@@ -112,26 +106,23 @@ flowchart TD
     D4 -->|曖昧| F2[不明点をコメント<br/>auto:failed 付与]
     E --> G[テスト・品質チェック]
     G --> H[PR作成]
-    H --> I[pr-review.yml: 自動レビュー]
-    I --> J{指摘あり?}
-    J -->|あり| K[auto-fix.yml: 自動修正]
-    K --> L[Resolve conversation]
-    L --> M[/review 再リクエスト]
-    M --> I
-    J -->|なし| N{品質ゲート通過?}
+    H --> I[copilot-auto-fix.yml 起動<br/>pull_request opened]
+    I --> I2[Copilot レビュー待機<br/>30秒ポーリング]
+    I2 --> J[Copilot レビュー検知<br/>自動修正 + マージ判定]
+    J --> K{unresolved<br/>threads?}
+    K -->|0件| N{品質ゲート通過?}
+    K -->|1件以上| L[claude-code-action<br/>で自動修正]
+    L --> M[Resolve conversation]
+    M --> N
     N -->|全条件クリア| O[自動マージ → develop]
     N -->|条件未達| P[auto:failed ラベル付与]
-    J -->|3回超過| P
 
-    O --> R{実行テスト必要?}
-    R -->|必要| S[レビューIssueに追記]
-    R -->|不要| Q
+    O --> S[レビューIssueにコメント記録]
     S --> Q[post-merge.yml: 次Issue選定]
     Q --> B
 
     O --> T{develop → main<br/>リリース}
-    T -->|Phase 1: 手動| U[管理者がリリースPR作成]
-    T -->|Phase 2: 自動| V[release.yml 定期実行]
+    T -->|手動| U[管理者がリリースPR作成]
 
     style O fill:#0d0,color:#fff
     style P fill:#d00,color:#fff
@@ -139,8 +130,21 @@ flowchart TD
     style S fill:#C2E0C6,color:#000
     style T fill:#1D76DB,color:#fff
     style U fill:#0E8A16,color:#fff
-    style V fill:#0E8A16,color:#fff
 ```
+
+## コマンド体系
+
+PRコメントで使用するコマンド:
+
+| コマンド | 動作 | 状態 |
+|----------|------|------|
+| `/review` | PRKit によるレビュー実行（pr-review.yml） | 有効（通常PR向け。`auto/` ブランチプレフィックス付き PR はスキップ） |
+| `/fix` | レビュー実行後に auto-fix を起動（pr-review.yml 経由） | **無効化**（auto-fix.yml 無効化に伴い使用不可） |
+| `/review-pr` | PRKit による手動レビュー（Claude Code スキル） | 有効（手動実行用として維持） |
+
+**自動パイプラインでのレビュー**: Copilot のネイティブレビューが PR 作成時に自動実行される。コマンドによるトリガーは不要。
+
+**手動レビュー**: Claude Code 上で `/review-pr` スキルを使用するか、PRコメントで `/review` を投稿する。
 
 ## 自動設計フェーズ
 
@@ -229,7 +233,7 @@ flowchart TD
 
 **事後拒否権の仕組み:**
 
-- 仕様書の品質チェックはPR作成後の自動レビュー（pr-review.yml）で実施
+- 仕様書の品質チェックはPR作成後の Copilot ネイティブレビューで実施（Copilot が Markdown 仕様書をどの程度レビューするかは運用で検証。不足する場合は手動で `/review-pr` を実行）
 - 管理者は GitHub 通知（PR作成）で仕様書を確認し、方向性が間違っていれば `auto:failed` で停止
 - 問題がなければ何もしなくてよい（デフォルトで進行）
 
@@ -239,31 +243,23 @@ flowchart TD
 - 仕様書はPRに含まれるため、自動レビューで品質保証可能
 - `auto:failed` による事後停止で十分な安全性を確保できる
 
-### auto-triage との連携（Phase 2）
-
-auto-triage.yml がIssue更新時に事前スクリーニングを実施:
-
-| Issueの状態 | 判定結果 | アクション |
-|------------|---------|-----------|
-| 仕様書あり + AC定義済み | 自動実装可能 | 管理者に通知（ラベル付与は管理者判断） |
-| 仕様書あり + AC未定義 | 仕様書の補完が必要 | Issueにコメントで報告 |
-| 仕様書なし + Issue具体的 | 仕様書の作成が必要 | Issueにコメントで報告 |
-| 仕様書なし + Issue曖昧 | 人間の判断が必要 | Issueにコメントで報告 |
-| 依存Issueあり | ブロック中 | Issueにコメントで報告 |
-
-**注記**: Phase 2 で細分化ラベル（`auto:needs-spec`, `auto:needs-discussion` 等）が必要になったら追加する。
-
 ## ラベル設計
 
 ### ラベル一覧
 
 | ラベル | 色 | 用途 | 付与タイミング |
 |--------|-----|------|--------------|
-| `auto-implement` | `#0E8A16` (緑) | 自動実装トリガー | 管理者が手動 or post-merge.yml |
+| `auto-implement` | `#0E8A16` (緑) | 自動実装トリガー（Issue用） | 管理者が手動 |
+| `auto:pipeline` | `#0E8A16` (緑) | 自動パイプラインで作成されたPRの検索・フィルタ用マーカー（ワークフロー制御には使用しない。制御は `auto/` ブランチプレフィックスで判定） | claude.yml が PR 作成後に付与 |
+| `auto:fix-requested` | `#FBCA04` (黄) | auto-fix の起動トリガー（PRKit 方式） | **休止中**。pr-review.yml が `/fix` or `auto:pipeline` 検出時に付与していた。Copilot 方式では不使用 |
+| `auto:copilot-reviewed` | `#1D76DB` (青) | Copilot レビュー完了のステータスマーカー（ワークフロートリガーではない） | copilot-auto-fix.yml が Copilot レビュー検知後に `GITHUB_TOKEN` で付与 |
+| `auto:merged` | `#1D76DB` (青) | 自動マージ済みマーカー（post-merge.yml の発火条件） | copilot-auto-fix.yml（merge-or-dryrun.sh）がマージ直前に付与 |
 | `auto:failed` | `#d73a4a` (赤) | 自動処理の失敗・停止（緊急停止にも使用） | 各ワークフロー失敗時 or 管理者が手動 |
 | `auto:review-batch` | `#C2E0C6` (薄緑) | 自動マージレビューバッチIssue | post-merge.yml |
 
-**設計方針**: ラベルは最小限に抑え、Phase 2 で必要になったら追加する。自動処理の状態は GitHub Actions の実行状態で把握できるため、中間状態ラベル（`auto:in-progress` 等）は不要。`auto:failed` は失敗と緊急停止の両方をカバーする（旧 `auto:hold` の機能を統合）。ラベルなし = 自動処理対象外（旧 `skip-auto` に相当）。
+**命名規則**: `auto-implement` = Issue 側（ユーザーが手動付与）、`auto:*` = PR 側（ワークフローが自動管理）。
+
+**設計方針**: ラベルは最小限に抑え、必要になったら追加する。自動処理の状態は GitHub Actions の実行状態で把握できるため、中間状態ラベル（`auto:in-progress` 等）は不要。`auto:failed` は失敗と緊急停止の両方をカバーする。ラベルなし = 自動処理対象外。
 
 ### ラベル状態遷移
 
@@ -274,14 +270,12 @@ stateDiagram-v2
     実装中 --> PR作成: 実装成功
     実装中 --> auto_failed: 実装失敗
 
-    PR作成 --> レビュー中: pr-review.yml
-    レビュー中 --> 修正中: 指摘あり（auto-fix.yml）
-    修正中 --> レビュー中: /review 再リクエスト
-    レビュー中 --> マージ済み: 品質ゲート通過（develop へマージ）
-    レビュー中 --> auto_failed: 3回超過 or 禁止パターン
+    PR作成 --> copilot_auto_fix: copilot-auto-fix.yml 起動（pull_request opened）
+    copilot_auto_fix --> copilot_reviewed: Copilot レビュー検知（sleep ポーリング）
+    copilot_auto_fix --> マージ済み: 修正完了 or 指摘なし（auto:merged 付与 → develop へマージ）
+    copilot_auto_fix --> auto_failed: マージ条件未達（禁止パターン含む）
 
-    マージ済み --> review_issue: src/変更あり
-    マージ済み --> [*]: docs/のみの変更
+    マージ済み --> review_issue: 全PRを記録
     review_issue --> [*]: テスト完了
 
     auto_implement --> auto_failed: 管理者が緊急停止
@@ -290,6 +284,8 @@ stateDiagram-v2
 
     state "auto-implement" as auto_implement
     state "auto:failed" as auto_failed
+    state "auto:copilot-reviewed" as copilot_reviewed
+    state "copilot-auto-fix.yml" as copilot_auto_fix
     state "レビューIssueに追記" as review_issue
 ```
 
@@ -300,11 +296,17 @@ stateDiagram-v2
 | ファイル | 状態 | トリガー | 役割 |
 |----------|------|---------|------|
 | `claude.yml` | 既存改修 | `issues[labeled]` 追加 | `auto-implement` ラベルで自動実装開始 |
-| `pr-review.yml` | 据え置き | 変更なし | PR自動レビュー |
-| `auto-fix.yml` | 新規 | `workflow_run[completed]`（pr-review.yml） | レビュー指摘の自動修正 + マージ判定 |
-| `auto-triage.yml` | 新規（Phase 2） | `issues[opened, edited]`, `schedule` | Issue分析・ラベル自動付与 |
-| `post-merge.yml` | 新規（Phase 2） | `pull_request[closed]` | マージ後の次Issue自動ピックアップ |
-| `release.yml` | 新規（Phase 2） | `schedule`（週1回） | develop → main の定期リリースPR作成 |
+| `pr-review.yml` | 稼働中 | `pull_request` / `issue_comment` | PRKit ベースの自動レビュー（`auto/` ブランチプレフィックス付き PR はスキップ） |
+| `auto-fix.yml` | **無効化** | — | PRKit ベースの自動修正ループ（copilot-auto-fix.yml に移行） |
+| `copilot-auto-fix.yml` | **変更** | `pull_request[opened]` + `workflow_dispatch` | Copilot レビュー検知（sleep ポーリング） + 自動修正 + マージ。自己完結型 |
+| ~~`copilot-review-poll.yml`~~ | **廃止・削除** | — | sleep ポーリングに移行したため不要（Issue #386） |
+| `post-merge.yml` | **変更** | `pull_request[closed]` | マージ後の全PRレビュー記録 + 次Issue自動ピックアップ |
+
+### 無効化方針
+
+`auto-fix.yml` は削除せず、トリガーを `workflow_dispatch` のみに変更して無効化する。切り戻しが容易で、PRKit の精度改善時に再有効化も可能。
+
+`pr-review.yml` は通常PR向けに稼働継続する。`auto/` ブランチプレフィックス付きPRのみスキップし、Copilot レビュー（copilot-auto-fix.yml）に委譲する。
 
 ### claude.yml 改修内容
 
@@ -317,57 +319,61 @@ stateDiagram-v2
    - `auto:failed` ラベルが付いていない（停止中は発火しない）
 3. **既存機能への影響なし**: `@claude` メンションによる手動トリガーは従来通り動作
 
-### auto-fix.yml 設計
+### レビュー方式の移行（Issue #351）
 
-**トリガー条件:**
+PRKit ベースのレビュー→修正ループ（pr-review.yml → auto-fix.yml）はレビュー収束問題（Issue #351）のため**自動パイプライン（`auto/` ブランチプレフィックス付き PR）では休止**。代替として Copilot ネイティブレビューベースの copilot-auto-fix.yml を使用する。
 
-- イベント: `workflow_run[completed]`（pr-review.yml の完了時）
-- 発火条件:
-  1. pr-review.yml が `completed`（成功/失敗問わず）
-  2. 対象PRに `auto:failed` ラベルが付いていない
-- 理由: pr-review.yml の全レビュアー（prt-* ツール群）がコメント投稿を完了してから auto-fix を開始するため。`issue_comment` トリガーではコメント逐次投稿による早期発火のリスクがある
-- 同時実行制御: workflow_run から対象PR番号を取得し、PR番号ごとの concurrency グループで制御（cancel-in-progress: false）
+通常PR（`auto/` プレフィックスなし）では pr-review.yml による PRKit レビューが引き続き稼働する。
 
-**対象レビューツール:**
+| 方式 | ワークフロー | 対象 | 状態 | 設計書 |
+|------|-------------|------|------|--------|
+| PRKit レビュー | `pr-review.yml` | 通常PR | **稼働中** | — |
+| PRKit 自動修正ループ | `pr-review.yml` + `auto-fix.yml` | `auto/` プレフィックス付き PR | **休止中** | `auto-fix-structure.md` |
+| Copilot ベース | `copilot-auto-fix.yml` | `auto/` プレフィックス付き PR | **稼働中** | `copilot-auto-fix.md` |
 
-- auto-fix ループの修正対象は pr-review.yml が実行する prt-* ツール群のインラインコメントのみ
-- GitHub 組み込みの Copilot PR Reviewer は auto-fix ループの対象外（GitHub 側の制御であり、投稿タイミングを管理できないため）
-- Copilot の指摘は管理者が手動確認、または自動ループ安定後に再導入を検討
+**自動修正ループ休止の経緯:**
 
-**処理フロー:**
+- PRKit の prt-silent-failure-hunter の正答率が17%（CRITICAL 判定の正答率20%）
+- レビュー→修正→再レビューのループで、修正済みコードが「初見」として再レビューされ新規指摘が出続ける
+- PR #350 で4ラウンド回しても収束しなかった実績データに基づく判断
+- 詳細分析: Issue #351 コメント1（データ付き）
 
-1. **対象PR特定**: workflow_run イベントのペイロードから、トリガー元の pr-review.yml が処理したPR番号を取得
-2. **ループ回数チェック**: PR内の `github-actions[bot]` による「レビュー指摘への自動対応」コメント数をカウント。3回以上なら上限到達
-3. **レビュー結果判定（機械可読フラグ方式）**: pr-review.yml が投稿したレビューコメント本文に `<!-- auto-fix:no-issues -->` HTML コメントがあれば指摘なしと判定
-4. **禁止パターンチェック**: PRの変更ファイルを走査し、禁止パターン（`CLAUDE.md`, `.claude/settings.json`, `.env*`, `pyproject.toml` の dependencies 変更）に該当するか判定。`.github/workflows/*` は develop 向き緩和により対象外
-5. **分岐処理**:
-   - ループ上限到達 + 指摘あり → `auto:failed` 付与 + PRコメントで通知
-   - 禁止パターン検出 → `auto:failed` 付与 + PRコメントで通知
-   - 指摘あり + 上限未到達 → `claude-code-action` で `/check-pr` を実行し自動修正 → 対応済みスレッドを `resolveReviewThread` で resolve → `BECKY3_PAT` で `/review` コメント投稿（再レビュートリガー）
-   - 指摘なし + 禁止パターンなし → マージ判定へ
-6. **マージ判定**: 4条件（レビュー指摘ゼロ、CI全通過、コンフリクトなし、`auto:failed` なし）を全て確認
-7. **自動マージ**: 条件クリアで `gh pr merge --squash` を `BECKY3_PAT` で実行
+**自動修正ループ復帰条件:**
 
-**エラー時の共通挙動:**
+- Issue #265 で PRKit の精度データを蓄積継続
+- 正答率が実用レベル（目安: 80%以上）に達した時点で自動パイプラインへの再投入を検討
+- 単発レビュー（pr-review.yml、`/review-pr` スキル）では引き続き PRKit を使用可能
 
-- 全ステップで失敗時は `auto:failed` ラベル付与 + PRコメントで理由を通知
-- 通知内容: 失敗したステップ名、エラー概要、GitHub Actions 実行ログへのリンク
-- GitHub API エラー（レート制限、権限不足、ネットワーク障害等）は即座に `auto:failed` で停止（リトライしない）
-- 実装の詳細（`set -euo pipefail`、ロギングレベル等）はYAML実装時に定義
+### copilot-auto-fix.yml 設計
 
-**使用シークレット:**
+Copilot ネイティブレビューに基づく自動修正 + マージのワークフロー。再レビューループなしの単方向フロー。
 
-| シークレット | 用途 |
-|-------------|------|
-| `CLAUDE_CODE_OAUTH_TOKEN` | claude-code-action の認証 |
-| `BECKY3_PAT` | `/review` コメント投稿（ワークフロー連鎖）+ 自動マージ実行 |
-| `GITHUB_TOKEN` | その他のGitHub API操作（ラベル付与、PRチェック等） |
+**詳細設計**: `docs/specs/copilot-auto-fix.md` を参照
+
+**概要フロー:**
+
+```
+PR作成 → copilot-auto-fix.yml 起動（pull_request[opened]、auto/ ブランチ）
+  → Copilot レビュー待機（30秒ポーリング、最大 COPILOT_REVIEW_TIMEOUT 秒）
+    → Copilot レビュー検知 → auto:copilot-reviewed ラベル付与（ステータスマーカー）
+      → unresolved threads == 0 → マージ判定 → 自動マージ
+      → unresolved threads > 0  → claude-code-action で修正 → マージ判定 → 自動マージ
+    → タイムアウト → auto:failed 付与 → 手動復旧（workflow_dispatch で再実行）
+```
+
+**既存スクリプトの流用**: `check-review-result.sh`, `check-forbidden.sh`, `merge-check.sh`, `merge-or-dryrun.sh` 等はそのまま利用可能。
+
+### auto-fix.yml 設計（休止中）
+
+PRKit ベースのレビュー指摘自動修正ワークフロー。詳細は `auto-fix-structure.md` を参照。
+
+**休止理由**: レビュー方式の移行（上記）を参照。
 
 ## Resolve conversation 自動化
 
 ### 概要
 
-PRレビューの「Resolve conversation」を GitHub GraphQL API で自動実行する。check-pr スキルの指摘対応後に、対応済みスレッドを自動的に resolve する。
+PRレビューの「Resolve conversation」を GitHub GraphQL API で自動実行する。check-pr スキルの指摘対応後に、判断済みスレッド（✅ 対応済み、❌ 対応不要、⏸️ 別Issue化）を resolve する。
 
 ### 技術仕様
 
@@ -400,12 +406,13 @@ gh api graphql -f query='
 **スレッドの resolve:**
 
 ```bash
-gh api graphql -f query='
-mutation($threadId: ID!) {
-  resolveReviewThread(input: { threadId: $threadId }) {
+# Windows Git Bash では GraphQL変数が正しく渡らないため、IDを直接埋め込む
+gh api graphql -f query="
+mutation {
+  resolveReviewThread(input: { threadId: \"$THREAD_ID\" }) {
     thread { isResolved }
   }
-}' -f threadId="$THREAD_ID"
+}"
 ```
 
 ### エラー時の挙動
@@ -414,92 +421,102 @@ mutation($threadId: ID!) {
 - 全スレッドの resolve が失敗した場合は `::error::` でログ（`auto:failed` は付与しない。再レビューで再検出されるため）
 - GraphQL レスポンスの `errors` フィールドをチェックし、エラー内容をログに記録
 
+### 実装
+
+resolve 処理は `.github/scripts/auto-fix/resolve-threads.sh` にスクリプト化されている。
+
+```bash
+# 全未解決スレッドを resolve
+PR_NUMBER=123 .github/scripts/auto-fix/resolve-threads.sh
+
+# 特定のスレッドIDのみ resolve
+PR_NUMBER=123 .github/scripts/auto-fix/resolve-threads.sh PRRT_xxx PRRT_yyy
+```
+
 ### 組み込み箇所
 
-check-pr スキル（`.claude/skills/check-pr/SKILL.md`）のステップ11（対応コメント投稿）の後に追加:
+check-pr スキル（`.claude/skills/check-pr/SKILL.md`）のステップ12 で `resolve-threads.sh` を呼び出す。
 
-> 11.5. 対応済みスレッドの resolve: 修正が完了した指摘のレビュースレッドを `resolveReviewThread` mutation で resolve する
+### 自動パイプラインでのタイミング
 
-### 自動ループでのタイミング
+**Copilot 方式（現行）:**
+
+```
+Copilot レビュー指摘検出 → claude-code-action が /check-pr で修正 → コミット & push
+→ 判断済みスレッドを resolve → マージ判定
+```
+
+**PRKit 方式（休止中）:**
 
 ```
 レビュー指摘検出 → Claude が /check-pr で修正 → コミット & push
-→ 対応コメント投稿 → 対応済みスレッドを resolve → /review 再リクエスト
+→ 対応コメント投稿 → 判断済みスレッドを resolve → /fix 再リクエスト
 → 再レビュー（resolve済みスレッドは対象外）
 ```
 
 ## 安全弁設計
 
-### 多層防御（10層）
+### 多層防御（9層）
 
-**第1層: ループ回数制限**
+**第1層: 単方向フロー制約**
 
-- レビュー→修正ループは最大3回まで
-- 超過時は `auto:failed` ラベル付与 + PRコメントで通知
+- Copilot 方式: 再レビューループを行わず、1回の修正のみ実行。修正後にマージ条件を満たさなければ `auto:failed` で停止
+- PRKit 方式（休止中）: レビュー→修正ループは最大3回まで。超過時は `auto:failed` ラベル付与 + PRコメントで通知
 
-**第2層: 変更規模制限（Phase 2）**
+**第2層: 禁止パターン（自動マージ不可ファイル）**
 
-- 変更ファイル数20超 or 差分行数500超 → `auto:failed` ラベル付与
-- auto-triage.yml で自動判定
+以下のファイルが変更に含まれるPRは自動マージしない（auto-fix は続行し、マージ判定でブロック）:
 
-**第3層: 禁止パターン（自動マージ不可ファイル）**
+| パターン | 理由 |
+|---------|------|
+| `.env*` | 環境変数・シークレット |
+| `pyproject.toml` | 依存パッケージ・ツール設定 |
 
-以下のファイルが変更に含まれるPRは `auto:failed` ラベルを付与し、自動マージしない:
+**注記**: `.github/workflows/*` は禁止パターンに含まない。自動マージパイプライン（`copilot-auto-fix.yml`）は `auto/` ブランチの develop 向け PR のみを処理するため、ワークフロー変更が main に直接自動マージされることはない。main への反映はリリースPR（develop → main）で管理者が手動レビュー・マージする。
 
-| パターン | 理由 | develop 向き緩和 |
-|---------|------|-----------------|
-| `CLAUDE.md` | Claude自身の動作ルール変更 | 不可（常に禁止） |
-| `.github/workflows/*` | CI/CD設定の変更 | 可（develop へのマージは許可） |
-| `.claude/settings.json` | Claude Code設定の変更 | 不可（常に禁止） |
-| `.env*` | 環境変数・シークレット | 不可（常に禁止） |
-| `pyproject.toml` の dependencies | 依存パッケージ変更 | 不可（常に禁止） |
-
-**develop 向き緩和の理由**: `.github/workflows/*` の変更は develop にマージしても即座にプロダクションに影響しない。リリースPR（develop → main）時に管理者が確認できるため、develop への自動マージは許可する。ただし main への直接自動マージは引き続き禁止。
-
-**注記**: リリースPR（develop → main）は管理者が手動で作成・マージするため、auto-fix.yml の処理対象外。ワークフロー変更を含む場合でも、リリースPRでの人間レビューが安全弁として機能する。
-
-**第4層: `auto:failed` ラベル（緊急停止ボタン兼用）**
+**第3層: `auto:failed` ラベル（緊急停止ボタン兼用）**
 
 - Issue/PRに `auto:failed` ラベルを付与すると全自動処理が即停止
 - 自動処理の失敗時にも自動付与される
 - 全ワークフローの if 条件で最初にチェックされる
 - 管理者が手動で除去し、`auto-implement` を再付与すると再開
 
-**第5層: concurrency グループ**
+**第4層: concurrency グループ**
 
 - PR番号ごとの concurrency グループで同じPRに対する同時実行を防止
 - `cancel-in-progress: false`（進行中のジョブはキャンセルしない）
 
-**第6層: マージ前4条件チェック**
+**第5層: マージ前6条件チェック**
 
 自動マージ実行前に以下を全て確認:
 
-1. レビュー指摘ゼロ
-2. CI全チェック通過
-3. コンフリクトなし
-4. `auto:failed` ラベルなし
+1. PR が OPEN 状態
+2. レビュー指摘ゼロ
+3. ステータスチェック通過（外部 CI 未設定時は自動 PASS）
+4. コンフリクトなし
+5. `auto:failed` ラベルなし
+6. 禁止パターンなし（`FORBIDDEN_DETECTED` 環境変数で判定）
 
-**第7層: ブランチ保護ルール（2層構成）**
+**第6層: ブランチ保護ルール（2層構成）**
 
-- **develop**: PR必須 + CI必須。承認不要（自動マージ許可）
-- **main**: PR必須 + CI必須 + 承認必須。手動マージのみ
+- **develop**: PR必須。承認不要（自動マージ許可）。品質チェックはエージェント内テストで担保
+- **main**: PR必須 + 承認必須。手動マージのみ
 - 自動マージは develop にのみ実行。main への直接自動マージは禁止
 
-**第8層: ロールバック準備**
+**第7層: ロールバック準備**
 
-- 自動マージ後に develop のテストが壊れた場合、revert PRを作成（Phase 2）
+- 自動マージ後に develop のテストが壊れた場合、revert PRを作成
 - main はリリースPR経由でのみ更新されるため、develop で revert すれば main は無傷
 
-**第9層: 段階的信頼（導入時の安全策）**
+**第8層: 段階的信頼（導入時の安全策）**
 
 - ドライラン → docs限定 → 全面解禁の段階的な移行
 - develop ブランチの採用により、全面解禁時のリスクが軽減（main への影響はリリースPRで制御）
 
-**第10層: リリースPRゲートキーピング**
+**第9層: リリースPRゲートキーピング**
 
 - develop → main のリリースPRで、自動マージされた全変更を管理者が一括確認
-- Phase 0-1: 手動リリースPR作成
-- Phase 2: 週1回の定期自動リリースPR（release.yml）
+- 管理者が手動でリリースPR作成
 
 ## GitHub Actions 環境の制約
 
@@ -520,93 +537,66 @@ GitHub Actions（ubuntu-latest）環境では以下が利用不可:
 - ruff（リンター）
 - markdownlint（ドキュメントチェック）
 
-### 実行テスト要否の判定
+### マージ後のレビュー通知（自動マージレビューIssue方式）
 
-マージ後にローカルでの実行テストが必要かどうかを、変更内容から自動判定する。
-
-**実行テスト不要（静的チェックのみで品質保証可能）:**
-
-| 変更パターン | 理由 |
-|-------------|------|
-| `docs/` 配下のみの変更 | ドキュメント変更は実行に影響しない |
-| `.github/workflows/*` の変更 | CI 設定はデプロイ時に検証される |
-| `.claude/` 配下のみの変更 | Claude Code 設定はローカル実行に影響しない |
-| `CLAUDE.md`, `README.md` のみ | ドキュメント |
-| テストファイルのみの変更 | テスト自体は CI で実行済み |
-
-**実行テスト必要（ローカル環境での動作確認が必要）:**
-
-| 変更パターン | 理由 |
-|-------------|------|
-| `src/` 配下のコード変更 | Bot の動作に直接影響 |
-| `pyproject.toml` の依存追加・変更 | 依存パッケージの動作確認が必要 |
-| `config/` 配下の変更 | 設定変更が動作に影響する可能性 |
-| `mcp-servers/` 配下の変更 | MCP サーバーの動作確認が必要 |
-
-### マージ後の実行テスト通知（自動マージレビューIssue方式）
-
-`auto:review-batch` ラベル付きの集約Issueで管理する。自動マージが発生するたびにIssueに追記され、管理者がまとめてレビューする。GitHub 通知で管理者に自動的に届くため、カスタム通知は不要。
+`auto:review-batch` ラベル付きの集約Issueで管理する。全ての自動マージPRをコメントとして記録し、管理者がまとめてレビューする。GitHub 通知で管理者に自動的に届くため、カスタム通知は不要。
 
 **フロー:**
 
 ```
 PRマージ完了
   ↓
-[post-merge.yml] 変更ファイル分析
-  ↓
-実行テスト必要と判定
+[post-merge.yml] PR の変更ファイル一覧を取得
   ↓
 auto:review-batch ラベルの Open Issue を検索
   ↓
-既存あり → 追記 / なし → 新規作成（ピン留め）
+なし → 新規作成（概要 body + ピン留め）
+  ↓
+コメントで PR 情報を追記
 （GitHub 通知で管理者に自動的に届く）
 ```
 
-**レビューIssueのフォーマット:**
+**Issue body（新規作成時のみ）:**
 
 ```markdown
 # 自動マージレビュー
 
-自動マージされたPRのうち、実行テストが必要なものの一覧です。
-確認完了後、このIssueをクローズしてください。
+自動マージされたPRの一覧です。
+各PRの変更内容を確認し、問題がなければこのIssueをクローズしてください。
+```
 
----
+**コメントフォーマット（各PR記録）:**
 
+```markdown
 ## PR #123: フィード追加機能の改善 (2026-02-12)
 
-- 変更: `src/services/feed.py`, `src/utils/parser.py`
-- [ ] Bot 起動確認（`uv run python -m src.main`）
-- [ ] フィード追加で URL のみ入力 → RSS 自動検出されること ※要実行テスト
-- [ ] エラーログに異常がないこと
-
-## PR #125: MCP サーバー設定変更 (2026-02-13)
-
-- 変更: `mcp-servers/weather/main.py`, `config/mcp_servers.json`
-- [ ] MCP サーバー起動確認 ※要実行テスト
-- [ ] 天気取得コマンドの動作確認 ※要実行テスト
+### 変更ファイル
+- `src/services/feed.py`
+- `src/utils/parser.py`
 ```
 
 **Issueの管理ルール:**
 
+- Issueタイトル: `自動マージレビュー (created:YYYY-MM-DD)`（作成日付を含める、UTC基準）
 - `auto:review-batch` ラベルの Open Issue は常に1つのみ
 - ピン留め（`gh issue pin`）して常に目につくようにする
 - 管理者がまとめてチェック → 問題なければIssueクローズ
 - 次の自動マージで新しいIssueが自動作成される
-- チェックリストは仕様書のACから「ローカル実行でのみ確認可能な項目」を自動抽出
+- 各PRの情報はコメントで追記（Issue body は概要のみ固定）
 
 **管理者のアクション:**
 
 - レビューIssueを定期的にチェック（推奨: 毎朝）
-- 問題なし: チェックボックスを埋めてIssueクローズ
+- 問題なし: Issueクローズ
 - 問題あり: 対象PRに `@claude` で修正依頼コメント（既存の操作フロー）
 
-### 実行テストで問題が見つかった場合のフロー
+### レビューで問題が見つかった場合のフロー
 
 ```mermaid
 flowchart TD
-    A[管理者がレビューIssueを確認] --> B[ローカルで実行テスト]
+    A[管理者がレビューIssueを確認] --> B[ローカルで動作確認]
     B --> C{問題あり?}
-    C -->|なし| D[チェック済み → Issueクローズ]
+    C -->|なし| D[確認完了 → Issueクローズ]
     C -->|あり| E{修正方法}
     E -->|自動修正| F["PRに @claude コメント<br/>→ 新PR作成 → 自動ループ"]
     E -->|手動修正| G[管理者がローカルで修正・push]
@@ -615,23 +605,25 @@ flowchart TD
 
 ## マージ判定基準
 
-自動マージは以下の4条件を全て満たす場合のみ実行:
+自動マージは以下の6条件を全て満たす場合のみ実行:
 
 | 条件 | 確認方法 |
 |------|---------|
-| レビュー指摘ゼロ | レビュー結果コメントに「なし」を含む |
-| CI全チェック通過 | `gh pr checks` で全て SUCCESS or SKIPPED |
+| PR が OPEN 状態 | `gh pr view --json state` で `OPEN` を確認 |
+| レビュー指摘ゼロ | GraphQL API の reviewThreads で unresolved threads == 0 を確認 |
+| ステータスチェック通過 | `statusCheckRollup` で確認（外部 CI 未設定時は自動 PASS） |
 | コンフリクトなし | `gh pr view --json mergeable` が `MERGEABLE` |
 | `auto:failed` なし | PRのラベルに `auto:failed` が含まれない |
+| 禁止パターンなし | `FORBIDDEN_DETECTED` 環境変数で判定（auto-fix は続行、マージのみブロック） |
 
-マージ方式: `gh pr merge --squash`（中間コミットを1つにまとめる）
+マージ方式: `gh pr merge --merge`（通常マージ）。マージ方式の統一ルールは `docs/specs/git-flow.md` の「マージ方式」セクションを参照。
 マージ先: `develop` ブランチ（main への直接マージは禁止）
 
 ## 失敗時の振る舞い
 
 | パターン | 対応 | 通知先 | ラベル |
 |---------|------|--------|--------|
-| テスト失敗 | 最大3回修正を試行。解消しなければ失敗報告 | PRコメント + `auto:failed` → GitHub通知 | `auto:failed` |
+| テスト失敗 | Copilot 方式: 1回修正を試行。解消しなければ `auto:failed` で停止。PRKit 方式（休止中）: 最大3回修正を試行 | PRコメント + `auto:failed` → GitHub通知 | `auto:failed` |
 | 仕様不明確 | Issueにコメントで不明点を報告。人間の判断を待つ | Issueコメント + `auto:failed` → GitHub通知 | `auto:failed` |
 | 実装が長時間 | `--max-turns` で間接制御。タイムアウト時に停止 | `auto:failed` ラベル → GitHub通知 | `auto:failed` |
 | API/権限エラー | 即座に停止。エラー内容とActionsログURLを通知 | PRコメント + `auto:failed` → GitHub通知 | `auto:failed` |
@@ -698,28 +690,33 @@ flowchart TD
 
 ## ワークフロー連鎖の技術仕様
 
-### 問題
+> **注記**: 以下のワークフロー連鎖（`/fix` コメントによる再トリガー）は **PRKit 方式固有**の仕組み。
+> Copilot 方式では `copilot-auto-fix.yml` が `pull_request[opened]` で直接トリガーされ、Copilot レビュー検知は sleep ポーリングでワークフロー内完結する（ラベルベースのワークフロー連鎖は不要）。
+> `REPO_OWNER_PAT` は Copilot 方式では**自動マージ実行**（`merge-or-dryrun.sh`）および **PR 作成**（`claude-auto-implement` ジョブ、PR 作成イベントで copilot-auto-fix.yml をトリガーするため PAT 必須）に使用する。
+> `auto/` ブランチプレフィックスにより対象 PR を判定するため、ラベルのタイミング依存によるレースコンディションは発生しない。
+
+### 問題（PRKit 方式固有）
 
 GitHub Actions は `GITHUB_TOKEN` で作成したイベントでは同一リポジトリのワークフローを再トリガーしない（無限ループ防止の仕様）。
 
-### 解決策
+### 解決策（PRKit 方式固有）
 
-`BECKY3_PAT`（Personal Access Token）を使用して `/review` コメントを投稿する。PATで作成されたイベントは `github.actor == 'becky3'` として扱われるため、`pr-review.yml` の if 条件を通過してワークフロー連鎖が成立する。
+`REPO_OWNER_PAT`（Personal Access Token）を使用して `/fix` コメントを投稿する。PATで作成されたイベントは `github.actor` がPAT所有者のログイン名になるため、`pr-review.yml` の if 条件（`github.actor` によるフィルタ）を通過してワークフロー連鎖が成立する。
 
 ### 必要なシークレット
 
 | シークレット名 | 用途 | スコープ |
 |---------------|------|---------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | 既存。claude-code-action の認証 | — |
-| `BECKY3_PAT` | 新規。ワークフロー連鎖トリガー + 自動マージ | Fine-grained PAT 推奨（詳細は下記） |
+| `REPO_OWNER_PAT` | 自動マージ実行（Copilot 方式）。PRKit 方式では `/fix` コメント投稿（ワークフロー連鎖）にも使用 | Fine-grained PAT 推奨（詳細は下記） |
 
-**BECKY3_PAT の作成手順（推奨: Fine-grained PAT）:**
+**REPO_OWNER_PAT の作成手順（推奨: Fine-grained PAT）:**
 
 1. GitHub Settings > Developer settings > Personal access tokens > **Fine-grained tokens**
-2. Repository access: `becky3/ai-assistant` のみ（最小権限の原則）
-3. Permissions: Contents (Read and write), Pull requests (Read and write), Workflows (Read and write)
+2. Repository access: 対象リポジトリのみ（例: `<owner>/<repo>`）。最小権限の原則に従い、必要なリポジトリのみに限定する
+3. Permissions: Contents (Read and write), Issues (Read and write), Pull requests (Read and write), Workflows (Read and write)
 4. Expiration: 最大90日（定期的なローテーションが必要）
-5. Token を作成し、リポジトリの Settings > Secrets and variables > Actions に `BECKY3_PAT` として登録
+5. Token を作成し、リポジトリの Settings > Secrets and variables > Actions に `REPO_OWNER_PAT` として登録
 
 **セキュリティ注記:**
 
@@ -742,24 +739,21 @@ GitHub Actions は `GITHUB_TOKEN` で作成したイベントでは同一リポ�
 ### Phase 1: レビュー自動ループ + マージ
 
 - auto-fix.yml の新規作成
-- `BECKY3_PAT` シークレット登録
+- `REPO_OWNER_PAT` シークレット登録
 - check-pr スキルに resolve conversation ステップ追加
 - ブランチ保護ルール設定（develop: 自動マージ許可、main: 手動のみ）
 - ラベルの動作確認（`auto:failed` による停止・再開フロー）
 - 段階的マージ解禁の開始
 - develop → main のリリースPRは管理者が手動作成
 
-### Phase 2: フルサイクル自動化
+### Phase 2: マージ後処理の自動化
 
-**必須:**
+**実装済み:**
 
-- post-merge.yml の新規作成（マージ後の次Issue自動ピックアップ）
-- release.yml の新規作成（develop → main の定期リリースPR自動作成）
+- post-merge.yml の作成（マージ後の全PRレビュー記録 + 次Issue自動ピックアップ）
 
 **検討（運用状況を見て判断）:**
 
-- auto-triage.yml の新規作成（Issue自動分析・ラベル付与）
-- 変更規模の自動判定（`auto:failed` 付与による大規模変更のブロック）
 - revert PR の自動作成（develop でテストが壊れた場合の自動ロールバック）
 
 ### 段階的マージ解禁
@@ -772,16 +766,23 @@ GitHub Actions は `GITHUB_TOKEN` で作成したイベントでは同一リポ�
 
 ## コスト見積もり
 
+**Copilot ベース（現行）:**
+
 | 項目 | 1回あたり | 月次（1日1件ペース） |
 |------|---------|-------------------|
 | 自動実装（claude.yml） | 〜$8 | 〜$160 |
-| 自動レビュー（pr-review.yml） | 〜$1 | 〜$20 |
-| 自動修正（auto-fix.yml）※平均1.5回 | 〜$3 | 〜$60 |
-| **Phase 1 合計** | **〜$12** | **〜$240** |
-| 定期リリースPR（release.yml）※Phase 2 | 〜$1 | 〜$4 |
-| Issue自動分析（auto-triage.yml）※Phase 2 | 〜$0.5 | 〜$5 |
-| マージ後処理（post-merge.yml）※Phase 2 | 〜$0.5 | 〜$6 |
-| **Phase 2 追加分合計** | **〜$2** | **〜$15** |
+| Copilot レビュー | $0（サブスクリプション込み） | $0 |
+| 自動修正（copilot-auto-fix.yml）※指摘ある場合のみ | 〜$2 | 〜$40 |
+| **合計** | **〜$10** | **〜$200** |
+| マージ後処理（post-merge.yml） | 〜$0.5 | 〜$6 |
+
+**PRKit ベース（休止中）との比較:**
+
+| 項目 | PRKit ベース | Copilot ベース | 差額 |
+|------|-------------|---------------|------|
+| レビューコスト | 〜$1/回（claude-code-action） | $0（サブスク込み） | -$1 |
+| 修正コスト | 〜$3/回（平均1.5ラウンド） | 〜$2/回（1ラウンドのみ） | -$1 |
+| **月次合計** | **〜$240** | **〜$200** | **-$40** |
 
 GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）内で収まる見込み。
 
@@ -794,63 +795,78 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 - [ ] AC3: 既存の `@claude` メンション機能に影響がない
 - [ ] AC4: CLAUDE.md に自動進行ルールセクションが追加されている
 
-### Phase 1
+### Phase 1（Copilot ベース — 現行）
 
-- [ ] AC5: pr-review.yml の完了後（`workflow_run[completed]`）、auto-fix.yml が自動的に起動する
-- [ ] AC6: auto-fix.yml が既存の check-pr スキルを使用してレビュー指摘に自動対応する
-- [ ] AC7: 対応済みのレビュースレッドが `resolveReviewThread` で自動的に resolve される
-- [ ] AC8: 修正後に `/review` が自動投稿され、pr-review.yml の再レビューがトリガーされる
-- [ ] AC9: レビュー→修正ループが最大3回で停止し、超過時は `auto:failed` ラベルが付与される
-- [ ] AC10: レビュー指摘ゼロ・CI全通過・コンフリクトなし・auto:failedなしの4条件を全て満たす場合のみ自動マージが実行される
-- [ ] AC11: 禁止パターンに該当するファイルが変更に含まれるPRは自動マージされず `auto:failed` ラベルが付与される
-- [ ] AC12: 同じPRに対する auto-fix.yml の同時実行が concurrency で防止される
-- [ ] AC13: `BECKY3_PAT` シークレットが登録されている
-- [ ] AC14: feature ブランチが develop をベースに作成される
-- [ ] AC15: 自動マージが develop ブランチに対して実行される（main には直接マージしない）
-- [ ] AC16: develop ブランチに保護ルールが設定されている（CI必須、PR必須）
-- [ ] AC17: main ブランチに保護ルールが設定されている（承認必須、手動マージのみ）
+- [ ] AC5: `auto/` ブランチプレフィックスの PR が `opened` イベントで copilot-auto-fix.yml が起動する
+- [ ] AC5.1: Copilot レビュー完了を 30 秒間隔の sleep ポーリングで検知する（最大待機: `COPILOT_REVIEW_TIMEOUT` 秒、Actions variable で設定可能）
+- [ ] AC5.2: Copilot レビュー検知後に `auto:copilot-reviewed` ラベルがステータスマーカーとして付与される
+- [ ] AC5.3: Copilot レビューがタイムアウトした場合に `auto:failed` が付与される
+- [ ] AC5.4: `workflow_dispatch` で PR 番号を指定して手動再実行できる
+- [ ] AC6: `auto/` ブランチプレフィックスのない PR では copilot-auto-fix.yml が起動しない
+- [ ] AC7: `auto:failed` ラベルのある PR、マージ済み/クローズ済みの PR では copilot-auto-fix.yml がスキップされる
+- [ ] AC8: unresolved threads == 0 のとき直接マージ判定に進む
+- [ ] AC9: unresolved threads > 0 のとき、claude-code-action で自動修正が実行される
+- [ ] AC10: 自動修正後、対応済みスレッドが `resolveReviewThread` で resolve され、unresolved threads が再カウントされる
+- [ ] AC10.1: 修正後に再レビューループを行わず、マージ判定に進む（単方向フロー）
+- [ ] AC11: PR OPEN・レビュー指摘ゼロ・ステータスチェック通過（外部 CI 未設定時は自動 PASS）・コンフリクトなし・auto:failedなし・禁止パターンなしの6条件を全て満たす場合のみ自動マージが実行される
+- [ ] AC12: 禁止パターンに該当するファイルが変更に含まれるPRは自動修正が続行されるが、マージ判定でブロックされる（手動マージ待ち）
+- [ ] AC13: 同じPRに対する copilot-auto-fix.yml の同時実行が concurrency で防止される
+- [ ] AC14: `REPO_OWNER_PAT` シークレットが登録されている
+- [ ] AC15: feature ブランチが develop をベースに作成される
+- [ ] AC16: 自動マージが develop ブランチに対して実行される（main には直接マージしない）
+- [ ] AC17: develop ブランチに保護ルールが設定されている（PR必須。品質チェックはエージェント内テストで担保）
+- [ ] AC18: main ブランチに保護ルールが設定されている（承認必須、手動マージのみ）
+- [ ] AC19: `auto-fix.yml` が無効化されており、`pr-review.yml` が `auto/` ブランチプレフィックス付きPRをスキップする
+
+### Phase 1（PRKit ベース — 休止中）
+
+以下の AC は PRKit 方式が稼働していた際のもの。Copilot 方式の稼働中は検証対象外。
+PRKit 復帰時に再度有効化する。
+
+- [ ] ~~AC5-old: PRに `auto:fix-requested` ラベルが付与されると auto-fix.yml が起動する~~
+- [ ] ~~AC8-old: 修正後に `/fix` が自動投稿され、pr-review.yml の再レビュー + auto-fix がトリガーされる~~
+- [ ] ~~AC9-old: レビュー→修正ループが最大3回で停止し、超過時は `auto:failed` ラベルが付与される~~
 
 ### Phase 1（自動設計フェーズ）
 
-- [ ] AC18: 仕様書がないIssueに `auto-implement` が付与された場合、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進む
-- [ ] AC19: Issue内容が曖昧な場合、`auto:failed` ラベルが付与され、不明点がIssueにコメントされる
-- [ ] AC20: 自動生成された仕様書がPRに含まれてコミットされる
+- [ ] AC24: 仕様書がないIssueに `auto-implement` が付与された場合、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進む
+- [ ] AC25: Issue内容が曖昧な場合、`auto:failed` ラベルが付与され、不明点がIssueにコメントされる
+- [ ] AC26: 自動生成された仕様書がPRに含まれてコミットされる
 
-### Phase 1（実行テスト通知）
+### Phase 2（post-merge.yml）
 
-- [ ] AC21: `src/` 配下の変更を含むPRが自動マージされた場合、`auto:review-batch` レビューIssueにチェックリストが追記される
-- [ ] AC22: `docs/` 配下のみの変更PRではレビューIssueへの追記が行われない
-- [ ] AC23: チェックリストが仕様書のACから自動生成される
-
-### Phase 2
-
-- [ ] AC24: Issue作成・更新時に auto-triage.yml が仕様書の有無を分析し、適切なラベルを自動付与する
-- [ ] AC25: PRマージ後に post-merge.yml が次の `auto-implement` 候補Issueをピックアップする
-- [ ] AC26: 変更ファイル数20超 or 差分行数500超のPRに `auto:failed` ラベルが付与される
-- [ ] AC27: release.yml が週次で develop → main のリリースPRを自動作成する（差分がある場合のみ）
+- [ ] AC27: 自動マージされた全PRが `auto:review-batch` レビューIssueにコメントとして記録される（フィルタなし）
+- [ ] AC28: レビューIssueが存在しない場合、概要bodyで新規作成されピン留めされる
+- [ ] AC29: 各PRの記録にはPR番号・タイトル・変更ファイル一覧が含まれる
+- [ ] AC30: PRマージ後に post-merge.yml が次の `auto-implement` 候補Issueをピックアップし、PRコメントに投稿する（ラベルは付与しない）
 
 ## テスト方針
 
 - Phase 0: テスト用Issueに `auto-implement` ラベルを付与し、claude.yml が起動することを確認
-- Phase 1: テスト用PRを作成し、レビュー→修正→再レビュー→マージの全サイクルが自動実行されることを確認
+- Phase 1（Copilot）: テスト用PRを作成し、Copilot レビュー → 自動修正 → マージの全サイクルが自動実行されることを確認
 - 自動設計テスト: 仕様書がないIssueに `auto-implement` を付与し、`/doc-gen spec` で仕様書が自動生成され、停止せずそのまま実装に進むことを確認
-- 実行テスト通知: `src/` 変更を含むPRの自動マージ後に `auto:review-batch` レビューIssueにチェックリストが追記されることを確認
-- 安全弁テスト: `auto:failed` ラベルで処理が停止すること、ループ上限で停止すること、禁止パターンで `auto:failed` が付くことを各々確認
+- レビュー記録: 自動マージ後に `auto:review-batch` レビューIssueにPR情報がコメントとして記録されることを確認
+- 安全弁テスト: `auto:failed` ラベルで処理が停止すること、禁止パターンで自動修正は続行しマージ判定でブロックされることを各々確認
 - ブランチ戦略テスト: 自動実装PRのベースブランチが develop であること、main への直接自動マージが行われないことを確認
 - **注意**: GitHub Actions 環境ではローカル LLM・Slack Bot の統合テストは実行不可。pytest はモック使用のユニットテストのみ実行される
-- **Phase 2**: release.yml が作成するリリースPRの本文に、develop ブランチのフルCI実行状況（pytest, mypy, ruff, markdownlint の最新結果）を自動記載する
+- **Phase 2**: post-merge.yml がマージ後に正しくトリガーされ、review-batch Issue へのコメント記録・次Issue候補の投稿が行われることを確認する
 
 ## 関連ファイル
 
 | ファイル | 役割 |
 |---------|------|
 | `.github/workflows/claude.yml` | 自動実装ワークフロー（既存改修） |
-| `.github/workflows/pr-review.yml` | PR自動レビュー（据え置き） |
-| `.github/workflows/auto-fix.yml` | レビュー指摘自動対応（新規） |
-| `.github/workflows/auto-triage.yml` | Issue自動分析（新規、Phase 2） |
-| `.github/workflows/post-merge.yml` | マージ後処理（新規、Phase 2） |
-| `.github/workflows/release.yml` | 定期リリースPR作成（新規、Phase 2） |
-| `.claude/skills/check-pr/SKILL.md` | check-prスキル（resolve追加） |
+| `.github/workflows/copilot-auto-fix.yml` | Copilot レビュー検知（sleep ポーリング） + 自動修正 + マージ（自己完結型） |
+| ~~`.github/workflows/copilot-review-poll.yml`~~ | **廃止・削除**: sleep ポーリングに移行したため不要（Issue #386） |
+| `.github/workflows/pr-review.yml` | PRKit ベースの自動レビュー（通常PR向けに稼働、`auto/` ブランチプレフィックス付き PR はスキップ） |
+| `.github/workflows/auto-fix.yml` | PRKit ベースの自動修正ループ（**休止中**） |
+| `.github/workflows/post-merge.yml` | マージ後処理 |
+| `docs/specs/copilot-auto-fix.md` | copilot-auto-fix.yml の詳細設計書（**新規**） |
+| `docs/specs/auto-fix-structure.md` | auto-fix.yml の詳細設計書（PRKit ベース、**休止中**） |
+| `.github/scripts/auto-fix/resolve-threads.sh` | レビュースレッド resolve スクリプト |
+| `.github/scripts/post-merge/update-review-issue.sh` | レビューIssue更新スクリプト（全PRをコメント記録） |
+| `.github/scripts/post-merge/pick-next-issue.sh` | 次Issue候補ピックアップスクリプト |
+| `.claude/skills/check-pr/SKILL.md` | check-prスキル（resolve は `resolve-threads.sh` に委譲） |
 | `CLAUDE.md` | 自動進行ルールセクション追加 |
 
 ## 参考資料

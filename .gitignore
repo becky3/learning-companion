@@ -19,6 +19,7 @@ ENV/
 *.db
 *.sqlite3
 chroma_db/
+bm25_index/
 
 # IDE
 .vscode/
@@ -31,12 +32,7 @@ chroma_db/
 Thumbs.db
 
 # Claude Code
-.claude/
-!.claude/settings.json
-!.claude/scripts/
-!.claude/skills/
-!.claude/agents/
-!.claude/team-themes/
+.claude/settings.local.json
 
 # Process guard
 bot.pid
@@ -46,6 +42,9 @@ bot.pid
 .mypy_cache/
 htmlcov/
 .coverage
+
+# Temporary files
+.tmp/
 
 # Zenn drafts (personal, not for repository)
 docs/zenn-drafts/

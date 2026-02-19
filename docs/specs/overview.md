@@ -102,7 +102,7 @@ ONLINE_LLM_PROVIDER=openai
 1. GitHub Issueで機能・タスクを管理
 2. 各機能の仕様書を先に作成・承認
 3. 仕様書に基づいて実装・テスト
-4. 機能完了時にレトロスペクティブを実施し、運用ルールを改善
+4. 機能完了時にジャーナルに記録し、運用ルールを改善
 
 ### 仕様書テンプレート
 
@@ -118,9 +118,17 @@ ONLINE_LLM_PROVIDER=openai
 ## テスト方針
 ```
 
-### Git運用
+### Git運用（git-flow）
 
-- ブランチ: `feature/f{N}-{機能名}-#{Issue番号}`
+git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](git-flow.md) を参照。
+
+- **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
+- **作業ブランチ**:
+  - `feature/f{N}-{機能名}-#{Issue番号}` — 新機能（`develop` → `develop`）
+  - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` → `develop` / `release/*` → `release/*`）
+  - `release/v{X.Y.Z}` — リリース準備（`develop` → `main` squash マージ）
+  - `hotfix/{修正内容}-#{Issue番号}` — 緊急修正（`main` → `main` + `develop`）
 - コミット: `feat(f{N}): 説明 (#{Issue番号})`
-- PR作成時に `Closes #{Issue番号}` で紐付け
+- PR作成時に `Closes #{Issue番号}` でIssueを紐付け（feature/bugfix: base `develop`, release/hotfix: base `main`）
+- リリース後は `main` → `develop` に差分反映（履歴の整合性維持）
 - マイルストーンでStep単位の進捗管理

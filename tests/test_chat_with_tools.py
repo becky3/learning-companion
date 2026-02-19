@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -91,6 +91,10 @@ def _make_mock_mcp_manager(
 
     mock_manager.get_available_tools = AsyncMock(return_value=tools)
     mock_manager.call_tool = AsyncMock(return_value=call_result)
+    # get_response_instruction は同期メソッドなので MagicMock を使用する
+    # AsyncMock のままだと呼び出し時にコルーチンが生成されるが await されず
+    # RuntimeWarning: coroutine was never awaited が発生する
+    mock_manager.get_response_instruction = MagicMock(return_value="")
     return mock_manager
 
 

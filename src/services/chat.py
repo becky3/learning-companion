@@ -43,6 +43,7 @@ class ChatService:
         mcp_manager: MCPClientManager | None = None,
         thread_history_service: ThreadHistoryService | None = None,
         rag_service: RAGKnowledgeService | None = None,
+        slack_format_instruction: str = "",
     ) -> None:
         self._llm = llm
         self._session_factory = session_factory
@@ -50,6 +51,7 @@ class ChatService:
         self._mcp_manager = mcp_manager
         self._thread_history = thread_history_service
         self._rag_service = rag_service
+        self._slack_format_instruction = slack_format_instruction
 
     async def respond(
         self,
@@ -102,6 +104,13 @@ class ChatService:
                     else "以下は質問に関連する参考情報です。回答に役立つ場合は活用してください:\n"
                 )
                 system_content += rag_prefix + rag_context
+            # Slack mrkdwn指示を最後に追加（RAGコンテキストの後）
+            if self._slack_format_instruction:
+                system_content = (
+                    system_content + "\n\n" + self._slack_format_instruction
+                    if system_content
+                    else self._slack_format_instruction
+                )
             if system_content:
                 messages.append(Message(role="system", content=system_content))
             messages.extend(history)

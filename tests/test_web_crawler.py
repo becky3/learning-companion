@@ -8,9 +8,10 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, patch
 
+import aiohttp
 import pytest
 
-from src.services.web_crawler import CrawledPage, WebCrawler
+from src.services.web_crawler import CrawledPage, RobotsChecker, WebCrawler
 
 
 # テスト用HTMLサンプル
@@ -166,7 +167,7 @@ class TestWebCrawlerValidation:
 
     def test_ac31_non_http_scheme_rejected(self) -> None:
         """AC31: http/https 以外のスキームが拒否されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with pytest.raises(ValueError, match="許可されていないスキーム"):
             crawler.validate_url("file:///etc/passwd")
@@ -176,25 +177,25 @@ class TestWebCrawlerValidation:
 
     def test_valid_url_passes(self) -> None:
         """有効なURLが検証を通過すること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://example.com/page")
         assert result == "https://example.com/page"
 
     def test_http_scheme_allowed(self) -> None:
         """http スキームも許可されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("http://example.com/page")
         assert result == "http://example.com/page"
 
     def test_any_domain_allowed(self) -> None:
         """任意のドメインが許可されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://any-domain.com/page")
         assert result == "https://any-domain.com/page"
 
     def test_localhost_rejected(self) -> None:
         """SSRF対策: localhostへのアクセスが拒否されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with pytest.raises(ValueError, match="localhost"):
             crawler.validate_url("http://localhost/admin")
@@ -204,7 +205,7 @@ class TestWebCrawlerValidation:
 
     def test_loopback_ip_rejected(self) -> None:
         """SSRF対策: ループバックIP (127.0.0.1) へのアクセスが拒否されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with pytest.raises(ValueError, match="ループバックアドレス"):
             crawler.validate_url("http://127.0.0.1/admin")
@@ -214,7 +215,7 @@ class TestWebCrawlerValidation:
 
     def test_private_ip_rejected(self) -> None:
         """SSRF対策: プライベートIP (RFC1918) へのアクセスが拒否されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # 10.0.0.0/8
         with pytest.raises(ValueError, match="プライベートIPアドレス"):
@@ -230,7 +231,7 @@ class TestWebCrawlerValidation:
 
     def test_link_local_ip_rejected(self) -> None:
         """SSRF対策: リンクローカルIP (169.254.0.0/16) へのアクセスが拒否されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # AWS metadata endpoint
         with pytest.raises(ValueError, match="リンクローカルアドレス"):
@@ -238,19 +239,19 @@ class TestWebCrawlerValidation:
 
     def test_ac36_validate_url_strips_fragment(self) -> None:
         """AC36: validate_url() がURLフラグメントを除去すること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://example.com/page#section1")
         assert result == "https://example.com/page"
 
     def test_ac36_validate_url_strips_fragment_with_path(self) -> None:
         """AC36: パス付きURLのフラグメントも除去されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://example.com/path/to/page#anchor")
         assert result == "https://example.com/path/to/page"
 
     def test_ac36_validate_url_without_fragment_unchanged(self) -> None:
         """AC36: フラグメントのないURLはそのまま返されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://example.com/page")
         assert result == "https://example.com/page"
 
@@ -260,7 +261,7 @@ class TestWebCrawlerTextExtraction:
 
     def test_extract_text_from_article(self) -> None:
         """<article> タグから本文を抽出すること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         title, text = crawler._extract_text(SAMPLE_HTML_WITH_ARTICLE)
 
         assert title == "テスト記事"
@@ -275,7 +276,7 @@ class TestWebCrawlerTextExtraction:
 
     def test_extract_text_from_main(self) -> None:
         """<main> タグから本文を抽出すること（<article> がない場合）."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         title, text = crawler._extract_text(SAMPLE_HTML_WITH_MAIN)
 
         assert title == "メインコンテンツ"
@@ -284,7 +285,7 @@ class TestWebCrawlerTextExtraction:
 
     def test_extract_text_from_body(self) -> None:
         """<body> から本文を抽出すること（<article>, <main> がない場合）."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         title, text = crawler._extract_text(SAMPLE_HTML_BODY_ONLY)
 
         assert title == "ボディのみ"
@@ -297,7 +298,7 @@ class TestWebCrawlerCrawlIndexPage:
     @pytest.mark.asyncio
     async def test_ac12_crawl_index_page_extracts_urls(self) -> None:
         """AC12: リンク集ページからURLリストを抽出できること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -321,7 +322,7 @@ class TestWebCrawlerCrawlIndexPage:
     @pytest.mark.asyncio
     async def test_ac13_url_pattern_filtering(self) -> None:
         """AC13: URLパターン（正規表現）によるフィルタリングが機能すること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -339,7 +340,7 @@ class TestWebCrawlerCrawlIndexPage:
     @pytest.mark.asyncio
     async def test_ac41_crawl_index_page_skips_external_domain_links(self) -> None:
         """AC41: 外部ドメインのリンクがスキップされること（クロール範囲の制御）."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # 外部ドメインへのリンクを含むHTML
         html_with_external_links = """
@@ -372,7 +373,7 @@ class TestWebCrawlerCrawlIndexPage:
     @pytest.mark.asyncio
     async def test_ac37_crawl_index_page_deduplicates_fragment_urls(self) -> None:
         """AC37: アンカー違いの同一ページURLが重複除去されること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # アンカー違いのリンクを含むHTML
         html_with_fragments = """
@@ -402,7 +403,7 @@ class TestWebCrawlerCrawlIndexPage:
     @pytest.mark.asyncio
     async def test_ac34_max_crawl_pages_limit(self) -> None:
         """AC34: 1回のクロールで取得するページ数が max_pages で制限されること."""
-        crawler = WebCrawler(max_pages=2)
+        crawler = WebCrawler(max_pages=2, respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -419,7 +420,7 @@ class TestWebCrawlerCrawlPage:
     @pytest.mark.asyncio
     async def test_ac14_crawl_page_extracts_text(self) -> None:
         """AC14: 単一ページの本文テキストを取得できること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -436,7 +437,7 @@ class TestWebCrawlerCrawlPage:
     @pytest.mark.asyncio
     async def test_crawl_page_returns_none_on_http_error(self) -> None:
         """HTTPエラー時に None を返すこと."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -449,7 +450,7 @@ class TestWebCrawlerCrawlPage:
     @pytest.mark.asyncio
     async def test_crawl_page_returns_none_on_scheme_validation_failure(self) -> None:
         """スキーム検証失敗時に None を返すこと."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         page = await crawler.crawl_page("file:///etc/passwd")
 
@@ -458,7 +459,7 @@ class TestWebCrawlerCrawlPage:
     @pytest.mark.asyncio
     async def test_crawl_page_strips_fragment_from_url(self) -> None:
         """crawl_page() がフラグメント除去済みURLをCrawledPage.urlに格納すること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -472,7 +473,7 @@ class TestWebCrawlerCrawlPage:
     @pytest.mark.asyncio
     async def test_crawl_page_rejects_redirect(self) -> None:
         """SSRF対策: リダイレクト応答を拒否すること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -489,7 +490,7 @@ class TestWebCrawlerCrawlIndexPageRedirect:
     @pytest.mark.asyncio
     async def test_crawl_index_page_rejects_redirect(self) -> None:
         """SSRF対策: インデックスページのリダイレクト応答を拒否すること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -506,7 +507,7 @@ class TestWebCrawlerCrawlPages:
     @pytest.mark.asyncio
     async def test_ac15_crawl_pages_isolates_errors(self) -> None:
         """AC15: 複数ページを並行クロールし、ページ単位のエラーを隔離すること."""
-        crawler = WebCrawler(crawl_delay=0)
+        crawler = WebCrawler(crawl_delay=0, respect_robots_txt=False)
 
         # 特定のURLを失敗させる（並行実行でも順序非依存）
         fail_url = "https://example.com/article/2"
@@ -560,7 +561,7 @@ class TestWebCrawlerCrawlPages:
     @pytest.mark.asyncio
     async def test_ac35_crawl_delay_between_requests(self) -> None:
         """AC35: 同一ドメインへの連続リクエスト間に crawl_delay の待機が挿入されること."""
-        crawler = WebCrawler(crawl_delay=0.1)
+        crawler = WebCrawler(crawl_delay=0.1, respect_robots_txt=False)
 
         with patch(
             "src.services.web_crawler.aiohttp.ClientSession",
@@ -584,7 +585,7 @@ class TestWebCrawlerCrawlPages:
     @pytest.mark.asyncio
     async def test_crawl_pages_empty_list(self) -> None:
         """空のURLリストに対して空のリストを返すこと."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
         pages = await crawler.crawl_pages([])
         assert pages == []
 
@@ -599,6 +600,7 @@ class TestWebCrawlerConcurrency:
         crawler = WebCrawler(
             max_concurrent=max_concurrent,
             crawl_delay=0,
+            respect_robots_txt=False,
         )
 
         # 同時実行数を追跡
@@ -686,7 +688,7 @@ class TestWebCrawlerEncodingDetection:
     @pytest.mark.asyncio
     async def test_ac14_shift_jis_encoding_detected(self) -> None:
         """AC14: Shift_JISエンコードされたHTMLが正しくデコードされること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # Shift_JISでエンコードされたバイト列を作成
         shift_jis_bytes = SAMPLE_HTML_SHIFT_JIS.encode("shift_jis")
@@ -705,7 +707,7 @@ class TestWebCrawlerEncodingDetection:
     @pytest.mark.asyncio
     async def test_ac14_utf8_encoding_detected(self) -> None:
         """AC14: UTF-8エンコードされたHTMLが正しくデコードされること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # UTF-8でエンコードされたバイト列を作成
         utf8_bytes = SAMPLE_HTML_WITH_ARTICLE.encode("utf-8")
@@ -723,7 +725,7 @@ class TestWebCrawlerEncodingDetection:
     @pytest.mark.asyncio
     async def test_ac14_euc_jp_encoding_detected(self) -> None:
         """AC14: EUC-JPエンコードされたHTMLが正しくデコードされること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # EUC-JPでエンコードされたバイト列を作成
         euc_jp_bytes = SAMPLE_HTML_EUC_JP.encode("euc_jp")
@@ -742,7 +744,7 @@ class TestWebCrawlerEncodingDetection:
     @pytest.mark.asyncio
     async def test_ac14_encoding_detection_fallback(self) -> None:
         """AC14: エンコーディング検出に失敗した場合、UTF-8でフォールバックすること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # 無効なバイト列（UTF-8として解釈できない部分を含む）
         # 0x80-0xFFの単独バイトはUTF-8として不正
@@ -761,7 +763,7 @@ class TestWebCrawlerEncodingDetection:
     @pytest.mark.asyncio
     async def test_ac14_crawl_index_page_with_shift_jis(self) -> None:
         """AC14: crawl_index_pageでもShift_JISが正しくデコードされること."""
-        crawler = WebCrawler()
+        crawler = WebCrawler(respect_robots_txt=False)
 
         # Shift_JISでエンコードされたリンク集ページ
         shift_jis_index = """
@@ -786,3 +788,351 @@ class TestWebCrawlerEncodingDetection:
         assert len(urls) == 2
         assert "https://example.com/article/1" in urls
         assert "https://example.com/article/2" in urls
+
+
+# robots.txt テスト用のサンプル
+SAMPLE_ROBOTS_TXT = """\
+User-agent: AIAssistantBot
+Disallow: /private/
+Disallow: /admin/
+Crawl-delay: 5
+
+User-agent: *
+Disallow: /secret/
+"""
+
+SAMPLE_ROBOTS_TXT_WILDCARD_ONLY = """\
+User-agent: *
+Disallow: /blocked/
+"""
+
+
+class MockRobotsSession:
+    """robots.txt リクエストとページリクエストの両方を処理するモックセッション."""
+
+    def __init__(
+        self,
+        robots_txt: str = "",
+        robots_status: int = 200,
+        page_html: str = SAMPLE_HTML_WITH_ARTICLE,
+        page_status: int = 200,
+    ) -> None:
+        self._robots_txt = robots_txt
+        self._robots_status = robots_status
+        self._page_html = page_html
+        self._page_status = page_status
+
+    async def __aenter__(self) -> "MockRobotsSession":
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        pass
+
+    def get(self, url: str, **kwargs: object) -> "MockRobotsContextManager":  # noqa: ARG002
+        if url.endswith("/robots.txt"):
+            return MockRobotsContextManager(self._robots_status, self._robots_txt)
+        return MockRobotsContextManager(self._page_status, self._page_html)
+
+
+class MockRobotsContextManager:
+    """robots.txt 対応モックコンテキストマネージャ."""
+
+    def __init__(self, status: int, text: str) -> None:
+        self._status = status
+        self._text = text
+
+    async def __aenter__(self) -> MockResponse:
+        return MockResponse(self._status, self._text)
+
+    async def __aexit__(self, *args: object) -> None:
+        pass
+
+
+class TestRobotsChecker:
+    """RobotsChecker のテスト."""
+
+    @pytest.mark.asyncio
+    async def test_can_fetch_allowed_url(self) -> None:
+        """許可されたURLに対して True を返すこと."""
+        checker = RobotsChecker()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
+        ):
+            result = await checker.can_fetch("https://example.com/public/page", timeout)
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_can_fetch_disallowed_url(self) -> None:
+        """Disallow 指定されたURLに対して False を返すこと."""
+        checker = RobotsChecker()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
+        ):
+            result = await checker.can_fetch("https://example.com/private/data", timeout)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_can_fetch_wildcard_disallow(self) -> None:
+        """ワイルドカード User-agent の Disallow が適用されること."""
+        checker = RobotsChecker()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT_WILDCARD_ONLY),
+        ):
+            result = await checker.can_fetch("https://example.com/blocked/page", timeout)
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_crawl_delay_parsed(self) -> None:
+        """Crawl-delay が正しくパースされること."""
+        checker = RobotsChecker()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
+        ):
+            delay = await checker.get_crawl_delay("https://example.com/page", timeout)
+
+        assert delay == 5
+
+    @pytest.mark.asyncio
+    async def test_crawl_delay_none_when_not_specified(self) -> None:
+        """Crawl-delay 未指定時は None を返すこと."""
+        checker = RobotsChecker()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT_WILDCARD_ONLY),
+        ):
+            delay = await checker.get_crawl_delay("https://example.com/page", timeout)
+
+        assert delay is None
+
+    @pytest.mark.asyncio
+    async def test_ac74_fail_open_on_fetch_error(self) -> None:
+        """AC74: robots.txt の取得に失敗した場合、フェイルオープンでクロールを許可すること."""
+        checker = RobotsChecker()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            side_effect=aiohttp.ClientError("Connection refused"),
+        ):
+            result = await checker.can_fetch("https://example.com/private/data", timeout)
+
+        # 取得失敗 → 全て許可（フェイルオープン）
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_ac74_fail_open_on_404(self) -> None:
+        """AC74: robots.txt が 404 の場合、全てのクロールを許可すること."""
+        checker = RobotsChecker()
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_status=404),
+        ):
+            result = await checker.can_fetch("https://example.com/any/path", timeout)
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_ac75_cache_hit(self) -> None:
+        """AC75: robots.txt がキャッシュされ、TTL 内は再取得されないこと."""
+        checker = RobotsChecker(cache_ttl=3600)
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        mock_session = MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=mock_session,
+        ) as mock_cls:
+            # 1回目: 取得される
+            await checker.can_fetch("https://example.com/page1", timeout)
+            first_call_count = mock_cls.call_count
+
+            # 2回目: キャッシュヒット（再取得されない）
+            await checker.can_fetch("https://example.com/page2", timeout)
+            second_call_count = mock_cls.call_count
+
+        # 同じドメインなのでキャッシュヒット → セッション作成回数が増えない
+        assert second_call_count == first_call_count
+
+    @pytest.mark.asyncio
+    async def test_ac75_cache_expiry(self) -> None:
+        """AC75: キャッシュ TTL 超過後は再取得されること."""
+        checker = RobotsChecker(cache_ttl=0)  # TTL=0 で即時期限切れ
+        timeout = aiohttp.ClientTimeout(total=10)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
+        ) as mock_cls:
+            # 1回目
+            await checker.can_fetch("https://example.com/page1", timeout)
+            first_call_count = mock_cls.call_count
+
+            # 2回目: TTL=0 なのでキャッシュ期限切れ → 再取得
+            await checker.can_fetch("https://example.com/page2", timeout)
+            second_call_count = mock_cls.call_count
+
+        assert second_call_count > first_call_count
+
+    def test_robots_url_generation(self) -> None:
+        """robots.txt URL が正しく生成されること."""
+        assert (
+            RobotsChecker._robots_url("https://example.com/page/1")
+            == "https://example.com/robots.txt"
+        )
+        assert (
+            RobotsChecker._robots_url("http://example.com:8080/path")
+            == "http://example.com:8080/robots.txt"
+        )
+
+    def test_cache_key_generation(self) -> None:
+        """キャッシュキーがスキーム+ホスト+ポートで生成されること."""
+        key1 = RobotsChecker._cache_key("https://example.com/page1")
+        key2 = RobotsChecker._cache_key("https://example.com/page2")
+        key3 = RobotsChecker._cache_key("http://example.com/page1")
+
+        # 同じドメイン・スキームのURLは同じキャッシュキー
+        assert key1 == key2
+        # 異なるスキームは異なるキャッシュキー
+        assert key1 != key3
+
+
+class TestWebCrawlerRobotsTxt:
+    """WebCrawler robots.txt 統合テスト."""
+
+    @pytest.mark.asyncio
+    async def test_ac71_crawl_page_skips_disallowed_url(self) -> None:
+        """AC71: robots.txt で Disallow されたパスのクロールがスキップされること."""
+        crawler = WebCrawler(respect_robots_txt=True)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(
+                robots_txt=SAMPLE_ROBOTS_TXT,
+                page_html=SAMPLE_HTML_WITH_ARTICLE,
+            ),
+        ):
+            # Disallow: /private/ → スキップされる
+            page = await crawler.crawl_page("https://example.com/private/data")
+
+        assert page is None
+
+    @pytest.mark.asyncio
+    async def test_ac71_crawl_page_allows_permitted_url(self) -> None:
+        """AC71: robots.txt で許可されたパスはクロールされること."""
+        crawler = WebCrawler(respect_robots_txt=True)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(
+                robots_txt=SAMPLE_ROBOTS_TXT,
+                page_html=SAMPLE_HTML_WITH_ARTICLE,
+            ),
+        ):
+            page = await crawler.crawl_page("https://example.com/public/page")
+
+        assert page is not None
+        assert "これは記事の本文です" in page.text
+
+    @pytest.mark.asyncio
+    async def test_ac72_crawl_page_ignores_robots_when_disabled(self) -> None:
+        """AC72: respect_robots_txt=False の場合、robots.txt を無視してクロールすること."""
+        crawler = WebCrawler(respect_robots_txt=False)
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
+        ):
+            # Disallow されたパスでもクロールされる
+            page = await crawler.crawl_page("https://example.com/private/data")
+
+        assert page is not None
+
+    @pytest.mark.asyncio
+    async def test_ac71_crawl_index_page_filters_disallowed_urls(self) -> None:
+        """AC71: crawl_index_page で Disallow されたURLがフィルタリングされること."""
+        crawler = WebCrawler(respect_robots_txt=True)
+
+        # /private/ と /admin/ はDisallow
+        html_with_mixed_links = """
+        <!DOCTYPE html>
+        <html>
+        <head><title>リンク集</title></head>
+        <body>
+            <a href="/public/page1">公開ページ1</a>
+            <a href="/private/secret">非公開ページ</a>
+            <a href="/admin/dashboard">管理画面</a>
+            <a href="/public/page2">公開ページ2</a>
+        </body>
+        </html>
+        """
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(
+                robots_txt=SAMPLE_ROBOTS_TXT,
+                page_html=html_with_mixed_links,
+            ),
+        ):
+            urls = await crawler.crawl_index_page("https://example.com/index")
+
+        # /private/ と /admin/ はフィルタリングされる
+        assert len(urls) == 2
+        assert "https://example.com/public/page1" in urls
+        assert "https://example.com/public/page2" in urls
+        assert not any("/private/" in url for url in urls)
+        assert not any("/admin/" in url for url in urls)
+
+    @pytest.mark.asyncio
+    async def test_ac73_crawl_delay_from_robots_txt(self) -> None:
+        """AC73: robots.txt の Crawl-delay が設定値より大きい場合、そちらが採用されること."""
+        # crawl_delay=1.0 だが、robots.txt の Crawl-delay=5
+        crawler = WebCrawler(
+            crawl_delay=1.0,
+            respect_robots_txt=True,
+        )
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
+        ):
+            delay = await crawler._get_effective_crawl_delay("https://example.com/page")
+
+        # robots.txt の 5 秒が採用される
+        assert delay == 5
+
+    @pytest.mark.asyncio
+    async def test_ac73_configured_delay_when_larger(self) -> None:
+        """AC73: 設定値が robots.txt の Crawl-delay より大きい場合、設定値が採用されること."""
+        crawler = WebCrawler(
+            crawl_delay=10.0,
+            respect_robots_txt=True,
+        )
+
+        with patch(
+            "src.services.web_crawler.aiohttp.ClientSession",
+            return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
+        ):
+            delay = await crawler._get_effective_crawl_delay("https://example.com/page")
+
+        # 設定値の 10 秒が採用される
+        assert delay == 10.0

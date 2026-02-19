@@ -58,8 +58,9 @@ def rag_service(
     return RAGKnowledgeService(
         vector_store=mock_vector_store,
         web_crawler=mock_web_crawler,
-        chunk_size=500,
-        chunk_overlap=50,
+        chunk_size=200,
+        chunk_overlap=30,
+        similarity_threshold=None,
     )
 
 
@@ -619,30 +620,41 @@ class TestRAGDebugLog:
     """RAG検索結果のログ出力テスト (AC1-4, f9-rag.md)."""
 
     @pytest.fixture
-    def mock_settings_log_enabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """ログ出力有効の設定をモックする."""
-        mock_settings = MagicMock()
-        mock_settings.rag_debug_log_enabled = True
-        monkeypatch.setattr(
-            "src.config.settings.get_settings",
-            lambda: mock_settings,
+    def rag_service_log_enabled(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+    ) -> RAGKnowledgeService:
+        """デバッグログ有効なRAGKnowledgeServiceを作成する."""
+        return RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            debug_log_enabled=True,
         )
 
     @pytest.fixture
-    def mock_settings_log_disabled(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """ログ出力無効の設定をモックする."""
-        mock_settings = MagicMock()
-        mock_settings.rag_debug_log_enabled = False
-        monkeypatch.setattr(
-            "src.config.settings.get_settings",
-            lambda: mock_settings,
+    def rag_service_log_disabled(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+    ) -> RAGKnowledgeService:
+        """デバッグログ無効なRAGKnowledgeServiceを作成する."""
+        return RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            debug_log_enabled=False,
         )
 
     async def test_ac1_retrieve_logs_query(
         self,
-        rag_service: RAGKnowledgeService,
+        rag_service_log_enabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
-        mock_settings_log_enabled: None,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """AC1: RAG_DEBUG_LOG_ENABLED=true の場合、検索クエリがINFOログに出力されること."""
@@ -657,7 +669,7 @@ class TestRAGDebugLog:
 
         # Act
         with caplog.at_level(logging.INFO, logger="src.services.rag_knowledge"):
-            await rag_service.retrieve("しれんのしろ アイテム", n_results=5)
+            await rag_service_log_enabled.retrieve("しれんのしろ アイテム", n_results=5)
 
         # Assert
         # ハイブリッド検索統合後、ログメッセージに "(vector only)" が追加された
@@ -665,9 +677,8 @@ class TestRAGDebugLog:
 
     async def test_ac2_retrieve_logs_results(
         self,
-        rag_service: RAGKnowledgeService,
+        rag_service_log_enabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
-        mock_settings_log_enabled: None,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """AC2: 各検索結果の distance、source_url がINFOログに出力されること.
@@ -691,7 +702,7 @@ class TestRAGDebugLog:
 
         # Act
         with caplog.at_level(logging.INFO, logger="src.services.rag_knowledge"):
-            await rag_service.retrieve("test query", n_results=5)
+            await rag_service_log_enabled.retrieve("test query", n_results=5)
 
         # Assert - INFOレベルではdistanceとsourceのみ（テキストは含まない）
         assert "RAG result 1: distance=0.234" in caplog.text
@@ -703,9 +714,8 @@ class TestRAGDebugLog:
 
     async def test_ac3_retrieve_logs_full_text_debug(
         self,
-        rag_service: RAGKnowledgeService,
+        rag_service_log_enabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
-        mock_settings_log_enabled: None,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """AC3: 各検索結果の全文がDEBUGログに出力されること."""
@@ -721,7 +731,7 @@ class TestRAGDebugLog:
 
         # Act
         with caplog.at_level(logging.DEBUG, logger="src.services.rag_knowledge"):
-            await rag_service.retrieve("test query", n_results=5)
+            await rag_service_log_enabled.retrieve("test query", n_results=5)
 
         # Assert
         assert "RAG result 1 full text:" in caplog.text
@@ -729,9 +739,8 @@ class TestRAGDebugLog:
 
     async def test_ac4_retrieve_no_log_when_disabled(
         self,
-        rag_service: RAGKnowledgeService,
+        rag_service_log_disabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
-        mock_settings_log_disabled: None,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         """AC4: RAG_DEBUG_LOG_ENABLED=false の場合、ログが出力されないこと."""
@@ -746,7 +755,7 @@ class TestRAGDebugLog:
 
         # Act
         with caplog.at_level(logging.DEBUG, logger="src.services.rag_knowledge"):
-            await rag_service.retrieve("test query", n_results=5)
+            await rag_service_log_disabled.retrieve("test query", n_results=5)
 
         # Assert
         assert "RAG retrieve:" not in caplog.text
@@ -1145,22 +1154,22 @@ class TestSimilarityThreshold:
 
     async def test_retrieve_passes_threshold_to_search(
         self,
-        rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
-        monkeypatch: pytest.MonkeyPatch,
+        mock_web_crawler: MagicMock,
     ) -> None:
-        """retrieve() が settings から閾値を読み取り search() に渡すこと."""
-        from unittest.mock import patch
-
+        """retrieve() がコンストラクタで受け取った閾値を search() に渡すこと."""
         # Arrange
-        mock_settings = MagicMock()
-        mock_settings.rag_debug_log_enabled = False
-        mock_settings.rag_similarity_threshold = 0.5
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=0.5,
+        )
         mock_vector_store.search.return_value = []
 
         # Act
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            await rag_service.retrieve("test query", n_results=5)
+        await service.retrieve("test query", n_results=5)
 
         # Assert: search() に similarity_threshold が渡される
         mock_vector_store.search.assert_called_once_with(
@@ -1173,22 +1182,15 @@ class TestSimilarityThreshold:
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """閾値が設定されていない場合は None を渡すこと."""
-        from unittest.mock import patch
-
         # Arrange
-        mock_settings = MagicMock()
-        mock_settings.rag_debug_log_enabled = False
-        mock_settings.rag_similarity_threshold = None
         mock_vector_store.search.return_value = []
 
         # Act
-        with patch("src.config.settings.get_settings", return_value=mock_settings):
-            await rag_service.retrieve("test query", n_results=5)
+        await rag_service.retrieve("test query", n_results=5)
 
-        # Assert: search() に None が渡される
+        # Assert: search() に None が渡される（rag_service の similarity_threshold=None）
         mock_vector_store.search.assert_called_once_with(
             "test query",
             n_results=5,
@@ -1223,6 +1225,9 @@ class TestSafeBrowsingIntegration:
         return RAGKnowledgeService(
             vector_store=mock_vector_store,
             web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
             safe_browsing_client=mock_safe_browsing_client,
         )
 

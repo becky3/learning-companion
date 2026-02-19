@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -89,6 +90,73 @@ def calculate_precision_recall(
     )
 
 
+def calculate_ndcg(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+    k: int | None = None,
+) -> float:
+    """NDCG（Normalized Discounted Cumulative Gain）を計算する.
+
+    Binary relevance（正解なら1、不正解なら0）でDCGを計算し、
+    理想的なランキングのIDCGで正規化する。
+
+    Args:
+        retrieved_sources: RAG検索で取得されたソースURLリスト（順序あり）
+        expected_sources: 期待されるソースURLリスト（正解データ）
+        k: 上位k件までで計算（Noneの場合は全件）
+
+    Returns:
+        NDCGスコア（0.0〜1.0）
+    """
+    if not expected_sources:
+        return 1.0 if not retrieved_sources else 0.0
+
+    expected_set = set(expected_sources)
+    items = retrieved_sources[:k] if k is not None else retrieved_sources
+
+    # DCG計算: Σ rel(i) / log2(i+1)  (i は 1-indexed)
+    dcg = 0.0
+    for i, source in enumerate(items):
+        if source in expected_set:
+            dcg += 1.0 / math.log2(i + 2)  # i+2 because i is 0-indexed, log2(rank+1)
+
+    # IDCG計算: 理想ランキング（全正解が上位に来た場合）
+    ideal_count = min(len(expected_set), len(items)) if items else 0
+    idcg = sum(1.0 / math.log2(i + 2) for i in range(ideal_count))
+
+    if idcg == 0.0:
+        return 0.0
+
+    return dcg / idcg
+
+
+def calculate_mrr(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+) -> float:
+    """MRR（Mean Reciprocal Rank）を計算する.
+
+    最初に出現する正解の逆数を返す。正解がなければ0.0。
+
+    Args:
+        retrieved_sources: RAG検索で取得されたソースURLリスト（順序あり）
+        expected_sources: 期待されるソースURLリスト（正解データ）
+
+    Returns:
+        Reciprocal Rank（0.0〜1.0）
+    """
+    if not expected_sources:
+        return 1.0 if not retrieved_sources else 0.0
+
+    expected_set = set(expected_sources)
+
+    for i, source in enumerate(retrieved_sources):
+        if source in expected_set:
+            return 1.0 / (i + 1)
+
+    return 0.0
+
+
 def check_negative_sources(
     retrieved_sources: list[str],
     negative_sources: list[str],
@@ -116,6 +184,8 @@ class QueryEvaluationResult:
     precision: float
     recall: float
     f1: float
+    ndcg: float
+    mrr: float
     retrieved_sources: list[str]
     expected_sources: list[str]
     negative_violations: list[str]  # 検出された禁止ソース
@@ -129,6 +199,8 @@ class EvaluationReport:
     average_precision: float
     average_recall: float
     average_f1: float
+    average_ndcg: float
+    average_mrr: float
     negative_source_violations: list[str]  # 違反があったクエリIDリスト
     query_results: list[QueryEvaluationResult] = field(default_factory=list)
 
@@ -142,6 +214,7 @@ class EvaluationDatasetQuery:
     expected_sources: list[str]
     negative_sources: list[str] = field(default_factory=list)
     expected_keywords: list[str] = field(default_factory=list)
+    category: str = ""
     description: str = ""
     notes: str = ""
 
@@ -171,6 +244,7 @@ def load_evaluation_dataset(dataset_path: str) -> list[EvaluationDatasetQuery]:
                 expected_sources=q.get("expected_sources", []),
                 negative_sources=q.get("negative_sources", []),
                 expected_keywords=q.get("expected_keywords", []),
+                category=q.get("category", ""),
                 description=q.get("description", ""),
                 notes=q.get("notes", ""),
             )
@@ -203,6 +277,8 @@ async def evaluate_retrieval(
             average_precision=0.0,
             average_recall=0.0,
             average_f1=0.0,
+            average_ndcg=0.0,
+            average_mrr=0.0,
             negative_source_violations=[],
             query_results=[],
         )
@@ -211,6 +287,8 @@ async def evaluate_retrieval(
     total_precision = 0.0
     total_recall = 0.0
     total_f1 = 0.0
+    total_ndcg = 0.0
+    total_mrr = 0.0
     negative_violations: list[str] = []
 
     for dataset_query in queries:
@@ -225,6 +303,16 @@ async def evaluate_retrieval(
 
         # Precision/Recall計算
         pr_result = calculate_precision_recall(
+            retrieved_sources=retrieved_sources,
+            expected_sources=dataset_query.expected_sources,
+        )
+
+        # NDCG/MRR計算
+        ndcg = calculate_ndcg(
+            retrieved_sources=retrieved_sources,
+            expected_sources=dataset_query.expected_sources,
+        )
+        mrr = calculate_mrr(
             retrieved_sources=retrieved_sources,
             expected_sources=dataset_query.expected_sources,
         )
@@ -250,6 +338,8 @@ async def evaluate_retrieval(
             precision=pr_result.precision,
             recall=pr_result.recall,
             f1=pr_result.f1,
+            ndcg=ndcg,
+            mrr=mrr,
             retrieved_sources=retrieved_sources,
             expected_sources=dataset_query.expected_sources,
             negative_violations=violations,
@@ -259,13 +349,17 @@ async def evaluate_retrieval(
         total_precision += pr_result.precision
         total_recall += pr_result.recall
         total_f1 += pr_result.f1
+        total_ndcg += ndcg
+        total_mrr += mrr
 
         logger.debug(
-            "Query %s: precision=%.3f, recall=%.3f, f1=%.3f",
+            "Query %s: precision=%.3f, recall=%.3f, f1=%.3f, ndcg=%.3f, mrr=%.3f",
             dataset_query.id,
             pr_result.precision,
             pr_result.recall,
             pr_result.f1,
+            ndcg,
+            mrr,
         )
 
     # 平均計算
@@ -273,13 +367,18 @@ async def evaluate_retrieval(
     avg_precision = total_precision / num_queries
     avg_recall = total_recall / num_queries
     avg_f1 = total_f1 / num_queries
+    avg_ndcg = total_ndcg / num_queries
+    avg_mrr = total_mrr / num_queries
 
     logger.info(
-        "Evaluation complete: %d queries, avg_precision=%.3f, avg_recall=%.3f, avg_f1=%.3f",
+        "Evaluation complete: %d queries, avg_precision=%.3f, avg_recall=%.3f, "
+        "avg_f1=%.3f, avg_ndcg=%.3f, avg_mrr=%.3f",
         num_queries,
         avg_precision,
         avg_recall,
         avg_f1,
+        avg_ndcg,
+        avg_mrr,
     )
 
     return EvaluationReport(
@@ -287,6 +386,8 @@ async def evaluate_retrieval(
         average_precision=avg_precision,
         average_recall=avg_recall,
         average_f1=avg_f1,
+        average_ndcg=avg_ndcg,
+        average_mrr=avg_mrr,
         negative_source_violations=negative_violations,
         query_results=query_results,
     )

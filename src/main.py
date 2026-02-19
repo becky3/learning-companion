@@ -92,6 +92,7 @@ async def main() -> None:
         # アシスタント設定
         assistant = load_assistant_config()
         system_prompt = assistant.get("personality", "")
+        slack_format = assistant.get("slack_format_instruction", "")
 
         # サービスごとのLLMプロバイダー（設定に基づいて選択）
         chat_llm = get_provider_for_service(settings, settings.chat_llm_provider)
@@ -117,6 +118,8 @@ async def main() -> None:
             web_crawler = WebCrawler(
                 max_pages=settings.rag_max_crawl_pages,
                 crawl_delay=settings.rag_crawl_delay_sec,
+                respect_robots_txt=settings.rag_respect_robots_txt,
+                robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
             )
             # Safe Browsing クライアント（URL安全性チェック）
             safe_browsing_client = create_safe_browsing_client(settings)
@@ -129,6 +132,7 @@ async def main() -> None:
                 bm25_index = BM25Index(
                     k1=settings.rag_bm25_k1,
                     b=settings.rag_bm25_b,
+                    persist_dir=settings.bm25_persist_dir,
                 )
                 logger.info("BM25インデックス初期化完了")
 
@@ -137,9 +141,13 @@ async def main() -> None:
                 web_crawler,
                 chunk_size=settings.rag_chunk_size,
                 chunk_overlap=settings.rag_chunk_overlap,
+                similarity_threshold=settings.rag_similarity_threshold,
                 safe_browsing_client=safe_browsing_client,
                 bm25_index=bm25_index,
                 hybrid_search_enabled=settings.rag_hybrid_search_enabled,
+                vector_weight=settings.rag_vector_weight,
+                min_combined_score=settings.rag_min_combined_score,
+                debug_log_enabled=settings.rag_debug_log_enabled,
             )
             if settings.rag_hybrid_search_enabled:
                 logger.info("RAG有効: ハイブリッド検索（ベクトル＋BM25）が利用可能")
@@ -178,6 +186,7 @@ async def main() -> None:
             mcp_manager=mcp_manager,
             thread_history_service=thread_history_service,
             rag_service=rag_service,
+            slack_format_instruction=slack_format,
         )
 
         # ユーザー情報抽出サービス

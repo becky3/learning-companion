@@ -88,11 +88,33 @@ flowchart TB
         QUERY["クエリ"] --> HYBRID["HybridSearchEngine"]
         HYBRID --> VECTOR_SEARCH["VectorStore.search()"]
         HYBRID --> BM25_SEARCH["BM25Index.search()"]
-        VECTOR_SEARCH --> RRF["RRF統合"]
-        BM25_SEARCH --> RRF
-        RRF --> RESULTS["検索結果"]
+        VECTOR_SEARCH --> NORM["min-max正規化"]
+        BM25_SEARCH --> NORM
+        NORM --> CC["CC統合<br/>(Convex Combination)"]
+        CC --> RESULTS["検索結果"]
     end
 ```
+
+### 検索パラメータチューニングガイド
+
+ハイブリッド検索の精度は以下のパラメータの組み合わせで決まる。
+
+| パラメータ | 環境変数 | 型 | 目安値 | 説明 |
+|-----------|---------|---|-------|------|
+| α (vector_weight) | `RAG_VECTOR_WEIGHT` | float | 0.8〜0.95 | ベクトル検索スコアの重み（1−α が BM25 の重み） |
+| n_results | `RAG_RETRIEVAL_COUNT` | int | 3〜5 | 返却結果の最大数。少ないほど精度重視、多いほど再現率重視 |
+| threshold | `RAG_SIMILARITY_THRESHOLD` | float\|None | None / 0.5〜0.7 | cosine 距離の閾値。None で無効 |
+| k1 | `RAG_BM25_K1` | float | 1.5〜3.0 | BM25 の用語頻度飽和パラメータ。大きいほど高頻度語を重視 |
+| b | `RAG_BM25_B` | float | 0.3〜0.75 | BM25 の文書長正規化パラメータ。大きいほど短い文書を優遇 |
+| min_combined_score | `RAG_MIN_COMBINED_SCORE` | float\|None | 0.6〜0.8 | combined_score の下限閾値。None で無効 |
+| chunk_size | `RAG_CHUNK_SIZE` | int | 150〜300 | チャンク最大文字数。小さいほどピンポイント検索向き |
+| chunk_overlap | `RAG_CHUNK_OVERLAP` | int | 20〜50 | チャンク間のオーバーラップ文字数 |
+
+> **パラメータ間の相互作用**:
+>
+> - α を高くすると意味的検索が優勢になるが、固有名詞のような表層一致には BM25（1−α）が有効
+> - n_results を増やすと再現率は上がるが、無関係なチャンクが混入しやすくなる。min_combined_score と併用して低品質結果を除外するのが効果的
+> - chunk_size を小さくすると検索精度は上がりやすいが、文脈が失われる可能性がある
 
 ---
 
@@ -190,7 +212,7 @@ bot: エラー: ページの取り込みに失敗しました。
 dependencies = [
     "chromadb>=0.5,<1",
     "beautifulsoup4>=4.12,<5",
-    "rank-bm25>=0.2,<1",
+    "bm25s>=0.3,<1",
     "fugashi>=1.3,<2",
     "unidic-lite>=1.0,<2",
 ]
@@ -231,7 +253,10 @@ ai-assistant/
 │   │   ├── rag_test_pages/         # テストページ
 │   │   ├── rag_evaluation_dataset.json
 │   │   ├── rag_chunking_evaluation.json
-│   │   └── rag_test_documents.json
+│   │   ├── rag_test_documents.json
+│   │   └── rag_evaluation_extended/  # 拡充評価データ（Wikipedia）
+│   │       ├── rag_test_documents_extended.json
+│   │       └── rag_evaluation_dataset_extended.json
 │   ├── test_embedding.py
 │   ├── test_chunker.py
 │   ├── test_vector_store.py
@@ -247,6 +272,11 @@ ai-assistant/
 │   ├── test_rag_evaluation.py
 │   ├── test_safe_browsing.py
 │   └── test_slack_rag_handlers.py
+├── scripts/
+│   ├── parameter_sweep.py           # パラメータスイープスクリプト
+│   ├── embedding_prefix_comparison.py # Embeddingプレフィックスあり/なし比較
+│   ├── collect_evaluation_data.py   # Wikipedia APIデータ収集スクリプト
+│   └── eval_data_config.json        # 収集対象トピック設定
 ├── reports/
 │   └── rag-evaluation/
 │       ├── baseline.json           # ベースライン（リポジトリ管理）
@@ -272,10 +302,18 @@ class EmbeddingProvider(abc.ABC):
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """テキストリストをベクトルリストに変換する."""
 
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """ドキュメント用Embedding（デフォルトはembed()に委譲）."""
+
+    async def embed_query(self, text: str) -> list[float]:
+        """クエリ用Embedding（デフォルトはembed()に委譲）."""
+
     @abc.abstractmethod
     async def is_available(self) -> bool:
         """プロバイダーが利用可能かチェックする."""
 ```
+
+`embed_documents()` / `embed_query()` は concrete メソッド（abstract ではない）。デフォルトでは `embed()` に委譲するため、既存サブクラスの変更は不要。
 
 **`LLMProvider` と別階層にする理由**:
 
@@ -292,13 +330,18 @@ class LMStudioEmbedding(EmbeddingProvider):
     仕様: docs/specs/f9-rag.md
     """
 
+    DOCUMENT_PREFIX = "search_document: "
+    QUERY_PREFIX = "search_query: "
+
     def __init__(
         self,
         base_url: str = "http://localhost:1234/v1",
         model: str = "nomic-embed-text",
+        prefix_enabled: bool = False,
     ) -> None:
         self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
         self._model = model
+        self._prefix_enabled = prefix_enabled
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await self._client.embeddings.create(
@@ -306,10 +349,20 @@ class LMStudioEmbedding(EmbeddingProvider):
         )
         return [item.embedding for item in response.data]
 
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        # prefix_enabled=True 時は "search_document: " を付加
+        ...
+
+    async def embed_query(self, text: str) -> list[float]:
+        # prefix_enabled=True 時は "search_query: " を付加
+        ...
+
     async def is_available(self) -> bool:
         # モデル一覧取得で疎通確認
         ...
 ```
+
+`prefix_enabled` パラメータ（デフォルト: `False`）により、nomic-embed-text のタスク固有プレフィックスを制御する。`embed()` 自体は変更なし（後方互換性）。
 
 #### OpenAI Embedding (`src/embedding/openai_embedding.py`)
 
@@ -484,6 +537,7 @@ class BM25Index:
         self,
         k1: float = 1.5,  # 用語頻度の飽和パラメータ
         b: float = 0.75,  # 文書長の正規化パラメータ
+        persist_dir: str | None = None,  # 永続化ディレクトリ（Noneでインメモリ）
     ) -> None: ...
 
     def add_documents(
@@ -503,6 +557,31 @@ class BM25Index:
         """ソースURL指定でドキュメントを削除する."""
 ```
 
+#### 永続化
+
+Bot再起動時にBM25インデックスを復元するため、ディスクへの自動保存/ロード機能を提供する。
+
+**設定**:
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `BM25_PERSIST_DIR` | str | `./bm25_index` | BM25インデックスの永続化ディレクトリ |
+
+**ディレクトリ構造**:
+
+```
+bm25_index/
+├── metadata.json          # doc_ids, documents, doc_source_map, version
+└── bm25s/                 # bm25s ネイティブファイル
+```
+
+**動作**:
+
+- `persist_dir` 指定時: `__init__` でディスクからロード、`add_documents()` / `delete_by_source()` 後に自動保存（本番は `BM25_PERSIST_DIR` 設定値を使用、デフォルト: `./bm25_index`）
+- `persist_dir=None` 明示時: 従来のインメモリ動作（テスト・評価CLI用）
+- **アトミック書き込み**: 一時ディレクトリ → リネームで書き込み中の破損を防止
+- **フェイルセーフ**: データ破損・バージョン不一致時は空インデックスで起動（警告ログ出力）
+
 **日本語トークナイザ**:
 
 ```python
@@ -517,6 +596,22 @@ def tokenize_japanese(text: str) -> list[str]:
 
 ### ハイブリッド検索 (`src/rag/hybrid_search.py`)
 
+#### データ型
+
+```python
+@dataclass
+class HybridSearchResult:
+    """ハイブリッド検索結果."""
+    doc_id: str
+    text: str
+    metadata: dict[str, str | int]
+    vector_distance: float | None  # ベクトル検索での距離（Noneの場合はBM25のみでヒット）
+    bm25_score: float | None       # BM25スコア（Noneの場合はベクトル検索のみでヒット）
+    combined_score: float          # CC で統合されたスコア
+```
+
+#### HybridSearchEngineクラス
+
 ```python
 class HybridSearchEngine:
     """ベクトル検索とBM25を組み合わせたハイブリッド検索.
@@ -529,7 +624,6 @@ class HybridSearchEngine:
         vector_store: VectorStore,
         bm25_index: BM25Index,
         vector_weight: float = 0.5,
-        rrf_k: int = 60,
     ) -> None: ...
 
     async def search(
@@ -537,28 +631,62 @@ class HybridSearchEngine:
         query: str,
         n_results: int = 5,
         similarity_threshold: float | None = None,
+        min_combined_score: float | None = None,
     ) -> list[HybridSearchResult]:
         """ハイブリッド検索を実行する.
 
-        1. ベクトル検索で候補を取得
-        2. BM25検索で候補を取得
-        3. RRF（Reciprocal Rank Fusion）でスコアを統合
-        4. 統合スコアでソート
+        1. ベクトル検索で候補を取得（fetch_count件）
+        2. BM25検索で候補を取得（fetch_count件）
+        3. 各スコアをmin-max正規化（0〜1に変換）
+        4. Convex Combination（CC）で重み付き加算
+        5. 統合スコアでソート
+        6. min_combined_score 未満の結果を除外
         """
 ```
 
-**Reciprocal Rank Fusion (RRF)**:
+**Convex Combination (CC) + min-max 正規化**:
 
 ```python
-def reciprocal_rank_fusion(
-    rankings: list[list[str]],
-    k: int = 60,
-) -> dict[str, float]:
-    """RRFでスコアを統合する.
+def min_max_normalize(scores: list[float]) -> list[float]:
+    """スコアをmin-max正規化する（0〜1に変換）.
 
-    RRF_score(d) = Σ 1 / (k + rank(d))
+    - 全スコアが同値の場合は全て1.0を返す
+    - 空リストの場合は空リストを返す
+    """
+
+def convex_combination(
+    norm_vector_scores: dict[str, float],
+    norm_bm25_scores: dict[str, float],
+    vector_weight: float = 0.5,
+) -> dict[str, float]:
+    """正規化済みスコアをCCで統合する.
+
+    combined_score(d) = α * norm_vector(d) + (1 - α) * norm_bm25(d)
+
+    - α: vector_weight（デフォルト: 0.5）
+    - 片方の手法にしか出現しないドキュメントは、出現しない側のスコアを0として計算
+    - BM25ゼロヒット時: combined_score = α * norm_vector（自然にα倍に減衰）
     """
 ```
+
+**RRFからCCに変更した理由**:
+
+- RRFは順位のみで統合し、スコアの大きさ（基数情報）を捨てる。0.99と0.51の差も同順位なら同じ扱い
+- CCは正規化スコアの重み付き加算で、スコアの大きさを保持する
+- Bruch et al. (arXiv:2210.11934) でCCがRRFより優れることが実証済み
+- プロダクション実績: Weaviate v1.24（デフォルト変更、6%改善）、Elasticsearch 8.18+（Linear Retriever追加）、OpenSearch（min-max + 算術平均が最良と検証）
+
+**BM25ゼロヒット時の挙動**:
+
+CCの構造により、BM25がゼロヒットの場合は `combined_score = α * norm_vector + 0` となり、最大スコアが α に制限される。α=0.5 なら最大0.5で、最終スコア閾値と組み合わせることで無関係な結果を排除できる。追加のペナルティパラメータは導入しない。
+
+**ベクトル検索全滅時の挙動（CC自然減衰の対称性）**:
+
+上記の逆パターンとして、ベクトル検索で全ドキュメントが閾値を超過した場合（similarity_threshold 設定時）やベクトル検索に全くヒットしなかった場合、BM25のみでヒットしたドキュメントは `combined_score = 0 + (1-α) * norm_bm25` となる。α=0.5 なら最大0.5で、BM25ゼロヒット時と対称的に自然減衰する。
+
+この挙動は意図的な設計であり、追加のハードフィルタ（BM25-only ドキュメントの除外等）は導入しない。キーワード検索が有効に機能するケース（固有名詞検索等）をブロックしないためである。ノイズクエリの制御は `vector_weight`（α）の調整で対応する。α を大きくすると BM25-only ヒットの最大スコアが (1-α) に下がり、ノイズが自然に抑制される。
+
+**fetch_count**: 正規化の安定性のため、`max(n_results * 3, 30)` で下限を30に設定。ベクトル検索単体の閾値フィルタリング（最低20件）より多いのは、min-max正規化で外れ値の影響を緩和するために十分なサンプル数が必要なため。
 
 ### Webクローラー (`src/services/web_crawler.py`)
 
@@ -628,6 +756,36 @@ class WebCrawler:
 
 - **ページ数上限**: `RAG_MAX_CRAWL_PAGES`（デフォルト: 50）
 - **リクエスト間隔**: `RAG_CRAWL_DELAY_SEC`（デフォルト: 1.0秒）
+- **robots.txt 遵守**: `RAG_RESPECT_ROBOTS_TXT`（デフォルト: `true`）
+
+### robots.txt 解析・遵守
+
+サイト運営者の意図を尊重するため、クロール前に対象サイトの `robots.txt` を取得・解析し、Disallow 指定されたパスのクロールをスキップする。
+
+**実装方式**:
+
+- Python 標準ライブラリ `urllib.robotparser.RobotFileParser` を使用（外部依存なし）
+- `robots.txt` の取得は `aiohttp` で非同期に行い、取得した内容を `RobotFileParser.parse()` に渡す
+- User-Agent は `AIAssistantBot` を使用（`*` にもフォールバック）
+
+**機能**:
+
+- クロール前に対象サイトの `robots.txt` を取得・解析
+- Disallow 指定されたパスはクロールをスキップ（`can_fetch()` で判定）
+- `Crawl-delay` の遵守: `robots.txt` の `Crawl-delay` と設定値（`RAG_CRAWL_DELAY_SEC`）のうち大きい方を採用
+- `robots.txt` のキャッシュ: ドメイン単位でキャッシュし、TTL（`RAG_ROBOTS_TXT_CACHE_TTL`）で制御
+
+**設定項目**:
+
+| 設定名 | 型 | デフォルト | 説明 |
+|--------|---|----------|------|
+| `RAG_RESPECT_ROBOTS_TXT` | bool | `true` | robots.txt 遵守の有効/無効 |
+| `RAG_ROBOTS_TXT_CACHE_TTL` | int | `3600` | robots.txt キャッシュTTL（秒） |
+
+**エラーハンドリング**:
+
+- `robots.txt` の取得に失敗した場合（タイムアウト、HTTP エラー等）はクロールを許可する（フェイルオープン）
+- ログに警告を出力する
 
 **HTML本文抽出ロジック（BeautifulSoup4使用）**:
 
@@ -664,10 +822,16 @@ class RAGKnowledgeService:
         self,
         vector_store: VectorStore,
         web_crawler: WebCrawler,
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
+        *,
+        chunk_size: int,
+        chunk_overlap: int,
+        similarity_threshold: float | None,
+        safe_browsing_client: SafeBrowsingClient | None = None,
         bm25_index: BM25Index | None = None,
         hybrid_search_enabled: bool = False,
+        vector_weight: float = 1.0,
+        min_combined_score: float | None = None,
+        debug_log_enabled: bool = False,
     ) -> None: ...
 
     async def ingest_from_index(
@@ -690,7 +854,7 @@ class RAGKnowledgeService:
     async def retrieve(self, query: str, n_results: int = 5) -> RAGRetrievalResult:
         """関連知識を検索し、結果を返す.
 
-        ハイブリッド検索有効時は BM25 + ベクトル検索を RRF で統合。
+        ハイブリッド検索有効時は BM25 + ベクトル検索を CC（Convex Combination）で統合。
         無効時はベクトル検索のみ。
         """
 
@@ -757,6 +921,29 @@ def calculate_precision_recall(
 ) -> PrecisionRecallResult:
     """Precision/Recall を計算する."""
 
+def calculate_ndcg(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+    k: int | None = None,
+) -> float:
+    """NDCG@K（Normalized Discounted Cumulative Gain）を計算する.
+
+    ランキング順序の品質を評価する指標。上位に正解が来るほど高スコア。
+    - k未指定時は全件で計算
+    - 正解が全て上位に来ていれば1.0
+    """
+
+def calculate_mrr(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+) -> float:
+    """MRR（Mean Reciprocal Rank）を計算する.
+
+    最初の正解が何位に来るかの逆数。
+    - 1位に正解があれば1.0、2位なら0.5、3位なら0.333...
+    - 正解がなければ0.0
+    """
+
 async def evaluate_retrieval(
     rag_service: RAGKnowledgeService,
     dataset_path: str,
@@ -768,37 +955,53 @@ async def evaluate_retrieval(
 ### 評価CLIツール (`src/rag/cli.py`)
 
 ```bash
-# 基本実行
-python -m src.rag.cli evaluate
-
-# オプション指定
+# 評価実行（chunk-size, chunk-overlap, vector-weight は必須）
 python -m src.rag.cli evaluate \
+  --chunk-size 200 \
+  --chunk-overlap 30 \
+  --vector-weight 0.6 \
   --dataset tests/fixtures/rag_evaluation_dataset.json \
-  --output-dir reports/rag-evaluation \
-  --baseline-file reports/rag-evaluation/baseline.json \
-  --persist-dir ./test_chroma_db \
+  --output-dir .tmp/rag-evaluation \
+  --baseline-file .tmp/rag-evaluation/baseline.json \
+  --persist-dir .tmp/test_chroma_db \
   --n-results 5 \
   --threshold 0.5 \
   --fail-on-regression
 
-# テスト用ChromaDB初期化
+# テスト用ChromaDB初期化（chunk-size, chunk-overlap は必須）
 python -m src.rag.cli init-test-db \
-  --persist-dir ./test_chroma_db \
+  --chunk-size 200 \
+  --chunk-overlap 30 \
+  --persist-dir .tmp/test_chroma_db \
   --fixture tests/fixtures/rag_test_documents.json
 ```
 
-**CLIオプション**:
+**CLIオプション（evaluate）**:
 
-| オプション | デフォルト | 説明 |
-|-----------|----------|------|
-| `--dataset` | `tests/fixtures/rag_evaluation_dataset.json` | 評価データセットのパス |
-| `--output-dir` | `reports/rag-evaluation` | レポート出力ディレクトリ |
-| `--baseline-file` | `None` | ベースラインJSONファイルのパス |
-| `--n-results` | `5` | 各クエリで取得する結果数 |
-| `--threshold` | `None` | 類似度閾値 |
-| `--fail-on-regression` | `False` | リグレッション検出時に exit code 1 で終了 |
-| `--regression-threshold` | `0.1` | F1スコアの低下がこの値を超えたらリグレッション判定 |
-| `--save-baseline` | `False` | 現在の結果をベースラインとして保存 |
+| オプション | 必須 | デフォルト | 説明 |
+|-----------|------|----------|------|
+| `--chunk-size` | **必須** | — | チャンクサイズ |
+| `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
+| `--vector-weight` | **必須** | — | ベクトル検索の重み α（0.0〜1.0） |
+| `--dataset` | | `tests/fixtures/rag_evaluation_dataset.json` | 評価データセットのパス |
+| `--output-dir` | | `.tmp/rag-evaluation` | レポート出力ディレクトリ |
+| `--baseline-file` | | `None` | ベースラインJSONファイルのパス |
+| `--n-results` | | `5` | 各クエリで取得する結果数 |
+| `--threshold` | | `None` | 類似度閾値 |
+| `--fixture` | | `tests/fixtures/rag_test_documents.json` | BM25インデックス構築用フィクスチャ |
+| `--persist-dir` | | `None` | ChromaDB永続化ディレクトリ |
+| `--fail-on-regression` | | `False` | リグレッション検出時に exit code 1 で終了 |
+| `--regression-threshold` | | `0.1` | F1スコアの低下がこの値を超えたらリグレッション判定 |
+| `--save-baseline` | | `False` | 現在の結果をベースラインとして保存 |
+
+**CLIオプション（init-test-db）**:
+
+| オプション | 必須 | デフォルト | 説明 |
+|-----------|------|----------|------|
+| `--chunk-size` | **必須** | — | チャンクサイズ |
+| `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
+| `--persist-dir` | | `.tmp/test_chroma_db` | ChromaDB永続化ディレクトリ |
+| `--fixture` | | `tests/fixtures/rag_test_documents.json` | テストドキュメントフィクスチャ |
 
 **出力ファイル**: `report.json`, `report.md`, `baseline.json`
 
@@ -831,26 +1034,32 @@ class Settings(BaseSettings):
     embedding_provider: Literal["local", "online"] = "local"
     embedding_model_local: str = "nomic-embed-text"
     embedding_model_online: str = "text-embedding-3-small"
+    embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
     chromadb_persist_dir: str = "./chroma_db"
-    rag_chunk_size: int = 500
-    rag_chunk_overlap: int = 50
-    rag_retrieval_count: int = 5
+    rag_chunk_size: int = 200
+    rag_chunk_overlap: int = 30
+    rag_retrieval_count: int = 3
     rag_max_crawl_pages: int = 50
     rag_crawl_delay_sec: float = 1.0
     rag_crawl_progress_interval: int = 5
 
+    # robots.txt
+    rag_respect_robots_txt: bool = True
+    rag_robots_txt_cache_ttl: int = 3600
+
     # ハイブリッド検索
     rag_hybrid_search_enabled: bool = False
-    rag_vector_weight: float = 0.5
-    rag_bm25_k1: float = 1.5
-    rag_bm25_b: float = 0.75
-    rag_rrf_k: int = 60
+    rag_vector_weight: float = 0.90
+    rag_bm25_k1: float = 2.5
+    rag_bm25_b: float = 0.50
+    rag_min_combined_score: float | None = 0.75
+    bm25_persist_dir: str = "./bm25_index"
 
     # 類似度閾値
     rag_similarity_threshold: float | None = None
 
     # デバッグ・可視化
-    rag_debug_log_enabled: bool = True
+    rag_debug_log_enabled: bool = False  # 本番ではPII漏洩リスクのためデフォルト無効
     rag_show_sources: bool = False
 ```
 
@@ -954,10 +1163,10 @@ class Settings(BaseSettings):
 
 - [ ] **AC52**: BM25インデックスの追加・検索・削除ができること
 - [ ] **AC53**: 日本語テキストのトークナイズができること
-- [ ] **AC54**: RRFによるスコア統合ができること
+- [ ] **AC54**: Convex Combination（CC）+ min-max正規化によるスコア統合ができること
 - [ ] **AC55**: `RAG_HYBRID_SEARCH_ENABLED=false` 時は従来のベクトル検索のみ動作すること
-- [ ] **AC56**: 重み設定でベクトル検索とBM25の比率を調整できること
-- [ ] **AC57**: `HybridSearchResult` がベクトル検索スコア、BM25スコア、RRFスコアを保持できること
+- [ ] **AC56**: `vector_weight`（α）でベクトル検索とBM25の比率を調整できること
+- [ ] **AC57**: `HybridSearchResult` がベクトル検索スコア、BM25スコア、統合スコア（`combined_score`）を保持できること
 
 ### デバッグ・可視化
 
@@ -967,6 +1176,12 @@ class Settings(BaseSettings):
 - [ ] **AC61**: ソースURLは重複なく表示されること
 - [ ] **AC62**: `RAG_SHOW_SOURCES=false` の場合、ソース情報が表示されないこと
 
+### 評価メトリクス（NDCG/MRR）
+
+- [ ] **AC76**: NDCG@K（Normalized Discounted Cumulative Gain）が計算できること
+- [ ] **AC77**: MRR（Mean Reciprocal Rank）が計算できること
+- [ ] **AC78**: 評価レポートにNDCG@K・MRRが含まれること
+
 ### 評価CLIツール
 
 - [ ] **AC63**: `python -m src.rag.cli evaluate` で評価が実行できること
@@ -974,6 +1189,20 @@ class Settings(BaseSettings):
 - [ ] **AC65**: ベースライン比較でリグレッション検出ができること
 - [ ] **AC66**: `--fail-on-regression` 指定時、リグレッション検出で exit code 1 になること
 - [ ] **AC67**: `init-test-db` コマンドでテスト用ChromaDBを初期化できること
+
+### robots.txt 遵守
+
+- [ ] **AC71**: `RAG_RESPECT_ROBOTS_TXT=true` の場合、Disallow 指定されたパスのクロールがスキップされること
+- [ ] **AC72**: `RAG_RESPECT_ROBOTS_TXT=false` の場合、robots.txt を無視してクロールすること
+- [ ] **AC73**: robots.txt の `Crawl-delay` が `RAG_CRAWL_DELAY_SEC` より大きい場合、`Crawl-delay` の値が採用されること
+- [ ] **AC74**: robots.txt の取得に失敗した場合、フェイルオープンでクロールを許可すること
+- [ ] **AC75**: robots.txt がドメイン単位でキャッシュされ、TTL 内は再取得されないこと
+
+### BM25インデックス永続化
+
+- [ ] **AC79**: `persist_dir` 指定時、`add_documents()` / `delete_by_source()` 後にインデックスがディスクに保存され、新インスタンスで復元できること
+- [ ] **AC80**: `persist_dir=None` の場合、従来のインメモリ動作と同一であること
+- [ ] **AC81**: 破損データやバージョン不一致時に空インデックスで起動し、エラーで停止しないこと
 
 ### テストケース
 
@@ -1043,7 +1272,7 @@ class Settings(BaseSettings):
 1. コンテンツタイプ検出
 2. テーブルチャンキング・見出しチャンキング
 3. BM25インデックス
-4. ハイブリッド検索（RRF統合）
+4. ハイブリッド検索（スコア統合）
 5. RAGKnowledgeServiceへの統合
 
 ### Phase 3: 自動評価パイプライン (#177)
@@ -1052,6 +1281,14 @@ class Settings(BaseSettings):
 2. リグレッション検出
 3. テスト用ChromaDB初期化
 4. test-runnerサブエージェントでの自動実行
+
+### Phase 4: ハイブリッド検索統合手法の改善 (#501)
+
+1. 評価テスト拡充（テストケース 8→17〜18件、NDCG/MRR 計算ロジック追加）
+2. RRF でベースライン取得
+3. CC（Convex Combination）+ min-max 正規化への移行（`hybrid_search.py` 全面書き換え）
+4. Before/After 評価
+5. パラメータスイープ（α の最適値探索）
 
 ---
 
@@ -1063,7 +1300,7 @@ class Settings(BaseSettings):
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
 5. **LLMコンテキストウィンドウ**: `RAG_RETRIEVAL_COUNT` で検索件数を制限
 6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
-7. **robots.txt**: 初期実装では `robots.txt` の解析・遵守は行わない（将来対応予定）
+7. **robots.txt**: `RAG_RESPECT_ROBOTS_TXT=true`（デフォルト）で `robots.txt` を遵守する。Python 標準ライブラリ `urllib.robotparser` を使用
 8. **BM25は少数ドキュメントでの評価に不向き**: IDF計算の特性上、テストには十分なドキュメント数が必要
 9. **辞書サイズ**: `unidic-lite` は約50MB。本番環境でのディスク使用量に注意
 10. **ベースライン管理**: ベースラインファイルはリポジトリにコミットし、チーム全体で共有
@@ -1074,17 +1311,27 @@ class Settings(BaseSettings):
 |-------|------|
 | #157 | ドメイン許可リストをSlackから動的管理 |
 | #159 | URL安全性チェック（Google Safe Browsing API） |
-| #160 | robots.txt の解析・遵守 |
+| ~~#160~~ | ~~robots.txt の解析・遵守~~（実装済み） |
 
 ## 関連ドキュメント
 
 - ガイド: [docs/guides/rag-overview.md](../guides/rag-overview.md) — RAGシステムの概要（初心者向け）
-- レトロ: [docs/retro/f9-rag.md](../retro/f9-rag.md)
+- ガイド: [docs/guides/rag-evaluation-data.md](../guides/rag-evaluation-data.md) — RAG評価データ収集・管理ガイド
+- ジャーナル（レトロ変換）: `memory/journal/20260217-062709-retro-f9-rag.md`
 
 ## 変更履歴
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-19 | スイープ確定パラメータを settings.py デフォルト値に反映（`rag_vector_weight` 1.0→0.90, `rag_bm25_k1` 1.5→2.5, `rag_bm25_b` 0.75→0.50, `rag_retrieval_count` 5→3）、`rag_min_combined_score` 新規追加、検索パラメータチューニングガイドセクション追加（#535） |
+| 2026-02-19 | チャンクサイズ縮小（`rag_chunk_size` 500→200, `rag_chunk_overlap` 50→30）、`RAGKnowledgeService` コンストラクタを必須引数化（`similarity_threshold` / `vector_weight` / `debug_log_enabled` 追加、内部 `get_settings()` 参照廃止）、評価CLI の環境変数ハック廃止、`init_test_db` / BM25インデックス構築を `_ingest_crawled_page` / `_smart_chunk` 経由に統一（#522） |
+| 2026-02-19 | パラメータスイープ再実行（拡充データ101件+プレフィックス有効）で `RAG_VECTOR_WEIGHT` 推奨値を 0.5→1.0 に更新（#518） |
+| 2026-02-19 | Embeddingプレフィックス検証: `embed_documents()` / `embed_query()` メソッド追加、`EMBEDDING_PREFIX_ENABLED` 設定追加（#517） |
+| 2026-02-18 | 評価CLIに `--vector-weight` オプション追加、CC自然減衰の対称性を記述（#509） |
+| 2026-02-18 | BM25インデックスの永続化機能を追加（#497） |
+| 2026-02-18 | ハイブリッド検索の統合手法を RRF → CC（Convex Combination）+ min-max 正規化に変更、NDCG/MRR 評価指標を追加（#501） |
+| 2026-02-18 | BM25ライブラリを rank-bm25 から bm25s に差し替え（#329） |
+| 2026-02-17 | robots.txt 解析・遵守機能を追加（#160） |
 | 2026-02-12 | 4つの仕様書を統合・整理（旧: f9-rag-knowledge.md, f9-rag-evaluation.md, f9-rag-chunking-hybrid.md, f9-rag-auto-evaluation.md） |
 | 2026-02-11 | クロール進捗フィードバック機能を追加（#158） |
 | 2026-02-10 | PR #211 レビュー対応: 土台実装のみであることをアーキテクチャセクションに明記 |
