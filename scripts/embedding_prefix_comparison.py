@@ -124,6 +124,7 @@ async def build_and_evaluate(
     fixture_path: str,
     dataset_path: str,
     persist_dir: str,
+    hybrid: bool = False,
 ) -> ComparisonResult:
     """指定設定でインデックス構築→評価を実行."""
     # 環境変数で prefix_enabled を制御
@@ -144,15 +145,15 @@ async def build_and_evaluate(
         logger.info("[%s] Indexing %d documents...", label, len(chunks))
         await vector_store.add_documents(chunks)
 
-        # BM25インデックス構築
-        bm25_index = _build_bm25_index(fixture_path)
+        # BM25インデックス構築（ハイブリッドモード時のみ）
+        bm25_index = _build_bm25_index(fixture_path) if hybrid else None
 
         # RAGサービス構築
         rag_service = RAGKnowledgeService(
             vector_store=vector_store,
             web_crawler=WebCrawler(),
             bm25_index=bm25_index,
-            hybrid_search_enabled=True,
+            hybrid_search_enabled=hybrid,
         )
 
         # 評価実行
@@ -211,30 +212,36 @@ async def main_async(args: argparse.Namespace) -> None:
     """メイン処理."""
     dataset_path = args.dataset
     fixture_path = args.fixture
+    hybrid = args.hybrid
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     no_prefix_dir = str(OUTPUT_DIR / "chroma_db_no_prefix")
     with_prefix_dir = str(OUTPUT_DIR / "chroma_db_with_prefix")
 
+    mode_label = "hybrid" if hybrid else "vector-only"
+    logger.info("Search mode: %s", mode_label)
+
     results: list[ComparisonResult] = []
 
     # プレフィックスなし
     result_no_prefix = await build_and_evaluate(
-        label="no_prefix",
+        label=f"no_prefix ({mode_label})",
         prefix_enabled=False,
         fixture_path=fixture_path,
         dataset_path=dataset_path,
         persist_dir=no_prefix_dir,
+        hybrid=hybrid,
     )
     results.append(result_no_prefix)
 
     # プレフィックスあり
     result_with_prefix = await build_and_evaluate(
-        label="with_prefix",
+        label=f"with_prefix ({mode_label})",
         prefix_enabled=True,
         fixture_path=fixture_path,
         dataset_path=dataset_path,
         persist_dir=with_prefix_dir,
+        hybrid=hybrid,
     )
     results.append(result_with_prefix)
 
@@ -275,6 +282,12 @@ def main() -> None:
         type=str,
         default=DEFAULT_FIXTURE,
         help=f"テストドキュメントフィクスチャのパス（デフォルト: {DEFAULT_FIXTURE}）",
+    )
+    parser.add_argument(
+        "--hybrid",
+        action="store_true",
+        default=False,
+        help="ハイブリッド検索を有効にする（デフォルト: ベクトル検索のみ）",
     )
     args = parser.parse_args()
     asyncio.run(main_async(args))
