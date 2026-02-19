@@ -32,13 +32,7 @@ bm25_index/
 Thumbs.db
 
 # Claude Code
-.claude/
-!.claude/settings.json
-!.claude/scripts/
-!.claude/skills/
-!.claude/agents/
-!.claude/team-themes/
-!.claude/CLAUDE-auto-progress.md
+.claude/settings.local.json
 
 # Process guard
 bot.pid
