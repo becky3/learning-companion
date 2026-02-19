@@ -42,9 +42,8 @@ uv run python scripts/collect_evaluation_data.py --config scripts/eval_data_conf
 **注意事項:**
 
 - Wikipedia API のレート制限に配慮し、リクエスト間隔はデフォルト1秒
-- User-Agent ヘッダーを設定しています（Wikipedia利用規約準拠）
 - 各ドキュメントは先頭2000文字に制限（サイズ均一化）
-- ライセンス: CC BY-SA 3.0
+- ライセンス: CC BY-SA 4.0
 
 ### 3. テスト用ChromaDBの初期化
 

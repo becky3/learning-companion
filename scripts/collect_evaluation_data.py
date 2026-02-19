@@ -184,12 +184,12 @@ def save_documents(documents: list[dict[str, str]], output_path: Path) -> None:
     ]
 
     output = {
-        "description": "RAG評価用拡充ドキュメント - Wikipedia公開データ (CC BY-SA 3.0)",
+        "description": "RAG評価用拡充ドキュメント - Wikipedia公開データ (CC BY-SA 4.0)",
         "version": "1.0.0",
         "documents": clean_docs,
         "metadata": {
             "created_at": "2026-02-19",
-            "source": "Wikipedia (CC BY-SA 3.0)",
+            "source": "Wikipedia (CC BY-SA 4.0)",
             "total_documents": len(clean_docs),
             "cluster_counts": cluster_counts,
             "language_counts": lang_counts,

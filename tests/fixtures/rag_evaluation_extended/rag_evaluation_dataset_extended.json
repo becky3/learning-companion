@@ -1,5 +1,5 @@
 {
-  "description": "RAG評価用拡充データセット - Wikipedia公開データ (CC BY-SA 3.0)",
+  "description": "RAG評価用拡充データセット - Wikipedia公開データ (CC BY-SA 4.0)",
   "version": "1.0.0",
   "queries": [
     {

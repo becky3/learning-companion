@@ -75,7 +75,12 @@ def load_query_categories(dataset_path: str) -> dict[str, str]:
     """評価データセットJSONからカテゴリマッピングを動的に読み取る."""
     with open(dataset_path, encoding="utf-8") as f:
         data = json.load(f)
-    return {q["id"]: q["category"] for q in data.get("queries", []) if "category" in q}
+    queries = data.get("queries", [])
+    missing = [q.get("id", "<unknown>") for q in queries if "category" not in q]
+    if missing:
+        msg = f"クエリに category が設定されていません: ids={missing}"
+        raise ValueError(msg)
+    return {q["id"]: q["category"] for q in queries}
 
 
 async def run_single_evaluation(
