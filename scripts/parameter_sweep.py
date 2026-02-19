@@ -239,6 +239,8 @@ async def run_phase1(
     alpha_max: float = 1.0,
     alpha_step: float = 0.1,
     n_results: int = 5,
+    k1: float = 1.5,
+    b: float = 0.75,
 ) -> list[SweepResult]:
     """Phase 1: α スイープ."""
     alphas: list[float] = []
@@ -249,7 +251,7 @@ async def run_phase1(
     results: list[SweepResult] = []
 
     for alpha in alphas:
-        logger.info("Phase 1: α=%.1f ...", alpha)
+        logger.info("Phase 1: α=%.2f, k1=%.1f, b=%.2f ...", alpha, k1, b)
         result = await run_single_evaluation(
             vector_weight=alpha,
             threshold=None,
@@ -259,6 +261,8 @@ async def run_phase1(
             chunk_overlap=chunk_overlap,
             n_results=n_results,
             persist_dir=persist_dir,
+            k1=k1,
+            b=b,
         )
         results.append(result)
 
@@ -275,13 +279,15 @@ async def run_phase2(
     persist_dir: str | None = None,
     *,
     n_results: int = 5,
+    k1: float = 1.5,
+    b: float = 0.75,
 ) -> list[SweepResult]:
     """Phase 2: threshold スイープ."""
     thresholds: list[float | None] = [None, 0.4, 0.5, 0.6, 0.7, 0.8]
     results: list[SweepResult] = []
 
     for thresh in thresholds:
-        logger.info("Phase 2: threshold=%s, α=%.1f ...", thresh, best_alpha)
+        logger.info("Phase 2: threshold=%s, α=%.2f, k1=%.1f, b=%.2f ...", thresh, best_alpha, k1, b)
         result = await run_single_evaluation(
             vector_weight=best_alpha,
             threshold=thresh,
@@ -291,6 +297,8 @@ async def run_phase2(
             chunk_overlap=chunk_overlap,
             n_results=n_results,
             persist_dir=persist_dir,
+            k1=k1,
+            b=b,
         )
         results.append(result)
 
@@ -357,6 +365,9 @@ async def run_phase3(
     dataset_path: str, fixture_path: str,
     chunk_size: int, chunk_overlap: int,
     persist_dir: str | None = None,
+    *,
+    k1: float = 1.5,
+    b: float = 0.75,
 ) -> list[SweepResult]:
     """Phase 3: n_results スイープ."""
     n_results_values = [3, 5, 7, 10, 15, 20]
@@ -364,8 +375,8 @@ async def run_phase3(
 
     for n_res in n_results_values:
         logger.info(
-            "Phase 3: n_results=%d, α=%.1f, threshold=%s ...",
-            n_res, best_alpha, best_threshold,
+            "Phase 3: n_results=%d, α=%.2f, threshold=%s, k1=%.1f, b=%.2f ...",
+            n_res, best_alpha, best_threshold, k1, b,
         )
         result = await run_single_evaluation(
             vector_weight=best_alpha,
@@ -376,6 +387,8 @@ async def run_phase3(
             chunk_overlap=chunk_overlap,
             n_results=n_res,
             persist_dir=persist_dir,
+            k1=k1,
+            b=b,
         )
         results.append(result)
 
@@ -434,6 +447,8 @@ async def main_async(args: argparse.Namespace) -> None:
     chunk_overlap = args.chunk_overlap
 
     n_results = args.n_results
+    bm25_k1: float = args.bm25_k1
+    bm25_b: float = args.bm25_b
 
     if args.phase in (1, 0):
         _validate_alpha_range(args)
@@ -445,6 +460,8 @@ async def main_async(args: argparse.Namespace) -> None:
             alpha_max=args.alpha_max,
             alpha_step=args.alpha_step,
             n_results=n_results,
+            k1=bm25_k1,
+            b=bm25_b,
         )
 
         if args.phase == 0:
@@ -455,6 +472,8 @@ async def main_async(args: argparse.Namespace) -> None:
                 chunk_size=chunk_size, chunk_overlap=chunk_overlap,
                 persist_dir=persist_dir,
                 n_results=n_results,
+                k1=bm25_k1,
+                b=bm25_b,
             )
 
             best2 = max(phase2_results, key=lambda r: r.avg_f1)
@@ -463,6 +482,8 @@ async def main_async(args: argparse.Namespace) -> None:
                 dataset_path, fixture_path,
                 chunk_size=chunk_size, chunk_overlap=chunk_overlap,
                 persist_dir=persist_dir,
+                k1=bm25_k1,
+                b=bm25_b,
             )
 
             best3 = max(phase3_results, key=lambda r: r.avg_f1)
@@ -506,6 +527,8 @@ async def main_async(args: argparse.Namespace) -> None:
             chunk_size=chunk_size, chunk_overlap=chunk_overlap,
             persist_dir=persist_dir,
             n_results=n_results,
+            k1=bm25_k1,
+            b=bm25_b,
         )
 
     elif args.phase == 3:
@@ -520,6 +543,8 @@ async def main_async(args: argparse.Namespace) -> None:
             dataset_path, fixture_path,
             chunk_size=chunk_size, chunk_overlap=chunk_overlap,
             persist_dir=persist_dir,
+            k1=bm25_k1,
+            b=bm25_b,
         )
 
     elif args.phase == 4:
@@ -649,6 +674,18 @@ def main() -> None:
         type=int,
         required=True,
         help="チャンクオーバーラップ",
+    )
+    parser.add_argument(
+        "--bm25-k1",
+        type=float,
+        default=1.5,
+        help="BM25 k1パラメータ（デフォルト: 1.5）",
+    )
+    parser.add_argument(
+        "--bm25-b",
+        type=float,
+        default=0.75,
+        help="BM25 bパラメータ（デフォルト: 0.75）",
     )
     args = parser.parse_args()
     asyncio.run(main_async(args))
