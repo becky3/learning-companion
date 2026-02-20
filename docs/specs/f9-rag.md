@@ -22,7 +22,7 @@
 - ユーザーとして、固有名詞（キャラクター名など）で検索したとき、その名前を含む情報を確実に見つけたい
 - 開発者として、RAG検索でどのチャンクがマッチしたかをログで確認したい
 - 開発者として、RAG関連コード変更時に精度テストを実行し、リグレッションを早期発見したい
-- 管理者として、RAG機能の有効/無効を `.env` で制御したい
+- 管理者として、RAG機能の有効/無効を `MCP_ENABLED` と `config/mcp_servers.json` で制御したい
 - 管理者として、Embeddingプロバイダーをローカルとオンラインで切り替えたい
 
 ---
@@ -37,9 +37,12 @@ flowchart TB
         CMD["rag crawl / rag add / rag status / rag delete"]
     end
 
-    subgraph RAG["RAGKnowledgeService（オーケストレーション）"]
-        INGEST["ingest_from_index() / ingest_page()"]
-        RETRIEVE["retrieve() / get_stats()"]
+    subgraph MCP["MCP Server (mcp_servers/rag/)"]
+        TOOLS["rag_search / rag_add / rag_crawl<br/>rag_delete / rag_stats"]
+        subgraph RAG["RAGKnowledgeService（オーケストレーション）"]
+            INGEST["ingest_from_index() / ingest_page()"]
+            RETRIEVE["retrieve() / get_stats()"]
+        end
     end
 
     CRAWLER["WebCrawler"]
@@ -47,7 +50,8 @@ flowchart TB
     VECTOR["VectorStore<br/>(ChromaDB)"]
     EMBED["Embedding Provider<br/>(LM Studio / OpenAI)"]
 
-    Slack --> RAG
+    Slack -->|"MessageRouter → mcp_manager.call_tool()"| MCP
+    TOOLS --> RAG
     RAG --> CRAWLER
     RAG --> CHUNKER
     RAG --> VECTOR
@@ -58,11 +62,12 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    A["1. ユーザーがSlackで質問"] --> B["2. ChatService が<br/>retrieve(質問文) 呼び出し"]
-    B --> C["3. 質問文をEmbedding →<br/>ChromaDBで類似チャンク検索"]
-    C --> D["4. 関連知識を<br/>システムプロンプトに付加"]
-    D --> E["5. LLMが関連知識を<br/>踏まえて応答を生成"]
-    E --> F["6. 応答をSlackに投稿"]
+    A["1. ユーザーがSlackで質問"] --> B["2. LLM がツール一覧から<br/>rag_search を選択"]
+    B --> C["3. MCP経由で<br/>rag_search(質問文) 呼び出し"]
+    C --> D["4. 質問文をEmbedding →<br/>ChromaDBで類似チャンク検索"]
+    D --> E["5. 検索結果をLLMに返却"]
+    E --> F["6. LLMが関連知識を<br/>踏まえて応答を生成"]
+    F --> G["7. 応答をSlackに投稿"]
 ```
 
 ### ハイブリッド検索アーキテクチャ
@@ -141,27 +146,22 @@ flowchart TB
 
 ### 出力例（正常系）
 
-#### rag crawl（リアルタイム進捗表示）
+#### rag crawl
 
 ```
 ユーザー: @bot rag crawl https://example.com/docs
 
 bot: クロールを開始しました... (リンク収集中)
-  └─ [親スレッド内に進捗メッセージを投稿]
-
-  └─ 5ページ取得中...
-  └─ 10ページ取得中...
   └─ 完了: 15ページ / 128チャンク / エラー: 2件
 ```
 
 **進捗フィードバック仕様**:
 
 - **開始メッセージ**: コマンド受信後、即座に「クロールを開始しました... (リンク収集中)」を投稿
-- **進捗メッセージ**: クロール中、一定間隔で進捗状況をスレッド内に投稿
-  - 形式: `└─ {取得済みページ数}ページ取得中...`
-  - 投稿間隔: `RAG_CRAWL_PROGRESS_INTERVAL` ページごと（デフォルト: 5）
 - **完了メッセージ**: 処理完了後、結果サマリーをスレッド内に投稿
   - 形式: `└─ 完了: {ページ数}ページ / {チャンク数}チャンク / エラー: {エラー数}件`
+
+> **Note**: 進捗通知は開始/完了メッセージのみ。ページ単位の進捗コールバックは提供しない。
 
 #### rag add / status / delete
 
@@ -188,16 +188,16 @@ bot: エラー: ページの取り込みに失敗しました。
      原因: HTTP 404 Not Found
 ```
 
-### チャット応答（自動統合）
+### チャット応答（MCP経由の自動検索）
 
 ```
 ユーザー: @bot Pythonのasync/awaitについて教えて
 
-（RAGが有効で、関連知識がある場合）
-→ システムプロンプトに関連チャンクが自動注入される
-→ LLMが取り込み済み知識を踏まえて応答
+（MCP有効で RAG MCP サーバーが登録済みの場合）
+→ LLM がツール一覧から rag_search を選択し、MCP経由で検索
+→ 検索結果を踏まえて応答を生成
 
-（RAGが無効、または関連知識がない場合）
+（MCP無効、または RAG MCP サーバー未登録の場合）
 → 従来通りLLMの学習済み知識のみで応答
 ```
 
@@ -222,39 +222,43 @@ dependencies = [
 
 ```
 ai-assistant/
+├── mcp_servers/
+│   └── rag/                          # RAG MCP サーバー
+│       ├── .env                      # MCP サーバー専用設定（git管理外）
+│       ├── .env.example              # 設定テンプレート
+│       ├── __init__.py
+│       ├── server.py                 # FastMCP エントリポイント（5ツール定義）
+│       ├── config.py                 # RAGSettings（pydantic BaseSettings）
+│       ├── embedding/                # Embeddingプロバイダー
+│       │   ├── __init__.py
+│       │   ├── base.py               # EmbeddingProvider 抽象基底クラス
+│       │   ├── lmstudio_embedding.py # LM Studio経由
+│       │   ├── openai_embedding.py   # OpenAI Embeddings API
+│       │   └── factory.py            # get_embedding_provider()
+│       ├── chunker.py                # テキストチャンキング
+│       ├── content_detector.py       # コンテンツタイプ検出
+│       ├── table_chunker.py          # テーブルチャンキング
+│       ├── heading_chunker.py        # 見出しチャンキング
+│       ├── bm25_index.py             # BM25インデックス
+│       ├── hybrid_search.py          # ハイブリッド検索
+│       ├── vector_store.py           # ChromaDBラッパー
+│       ├── evaluation.py             # 評価メトリクス
+│       ├── cli.py                    # 評価CLIエントリポイント
+│       ├── rag_knowledge.py          # RAGナレッジサービス
+│       ├── web_crawler.py            # Webクローラー
+│       └── safe_browsing.py          # Google Safe Browsing API
 ├── src/
-│   ├── embedding/                  # Embeddingプロバイダー
-│   │   ├── __init__.py
-│   │   ├── base.py                 # EmbeddingProvider 抽象基底クラス
-│   │   ├── lmstudio_embedding.py   # LM Studio経由
-│   │   ├── openai_embedding.py     # OpenAI Embeddings API
-│   │   └── factory.py              # get_embedding_provider()
-│   ├── rag/                        # RAGインフラ
-│   │   ├── __init__.py
-│   │   ├── chunker.py              # テキストチャンキング
-│   │   ├── content_detector.py     # コンテンツタイプ検出
-│   │   ├── table_chunker.py        # テーブルチャンキング
-│   │   ├── heading_chunker.py      # 見出しチャンキング
-│   │   ├── bm25_index.py           # BM25インデックス
-│   │   ├── hybrid_search.py        # ハイブリッド検索
-│   │   ├── vector_store.py         # ChromaDBラッパー
-│   │   ├── evaluation.py           # 評価メトリクス
-│   │   └── cli.py                  # 評価CLIエントリポイント
-│   ├── services/
-│   │   ├── web_crawler.py          # Webクローラー
-│   │   ├── rag_knowledge.py        # RAGナレッジサービス
-│   │   └── safe_browsing.py        # Google Safe Browsing API
-│   ├── config/
-│   │   └── settings.py             # RAG設定
-│   └── slack/
-│       └── handlers.py             # ragコマンドハンドラ
+│   ├── messaging/
+│   │   └── router.py                # ragコマンド → mcp_manager.call_tool() 経由
+│   └── config/
+│       └── settings.py              # MCP基盤設定（RAG設定は mcp_servers/rag/config.py に移動）
 ├── tests/
 │   ├── fixtures/
-│   │   ├── rag_test_pages/         # テストページ
+│   │   ├── rag_test_pages/          # テストページ
 │   │   ├── rag_evaluation_dataset.json
 │   │   ├── rag_chunking_evaluation.json
 │   │   ├── rag_test_documents.json
-│   │   └── rag_evaluation_extended/  # 拡充評価データ（Wikipedia）
+│   │   └── rag_evaluation_extended/ # 拡充評価データ（Wikipedia）
 │   │       ├── rag_test_documents_extended.json
 │   │       └── rag_evaluation_dataset_extended.json
 │   ├── test_embedding.py
@@ -271,25 +275,31 @@ ai-assistant/
 │   ├── test_rag_cli.py
 │   ├── test_rag_evaluation.py
 │   ├── test_safe_browsing.py
+│   ├── test_rag_mcp_server.py       # MCP サーバーのツール公開テスト
 │   └── test_slack_rag_handlers.py
 ├── scripts/
 │   ├── parameter_sweep.py           # パラメータスイープスクリプト
 │   ├── embedding_prefix_comparison.py # Embeddingプレフィックスあり/なし比較
 │   ├── collect_evaluation_data.py   # Wikipedia APIデータ収集スクリプト
 │   └── eval_data_config.json        # 収集対象トピック設定
-├── reports/
+├── tests/fixtures/rag/
+│   └── baseline.json                # ベースライン（リポジトリ管理）
+├── .tmp/
 │   └── rag-evaluation/
-│       ├── baseline.json           # ベースライン（リポジトリ管理）
-│       ├── report.json             # 最新評価結果
-│       └── report.md               # Markdownレポート
+│       ├── report.json              # 最新評価結果
+│       └── report.md                # Markdownレポート
+├── config/
+│   └── mcp_servers.json             # MCP サーバー設定（rag エントリ追加）
 └── .env.example
 ```
 
-### Embeddingプロバイダー (`src/embedding/`)
+> **フラット構造の理由**: `mcp_servers/rag/rag/` の二重ネストを回避。内部は相対 import で参照。`mcp_servers/` は `src/` を import しないルール（CLAUDE.md 参照）に従い、RAG に必要なモジュールはすべて `mcp_servers/rag/` 配下に配置する。
+
+### Embeddingプロバイダー (`mcp_servers/rag/embedding/`)
 
 既存の `LLMProvider` とは入出力が異なるため、独立した `EmbeddingProvider` 階層として実装する。
 
-#### 抽象基底クラス (`src/embedding/base.py`)
+#### 抽象基底クラス (`mcp_servers/rag/embedding/base.py`)
 
 ```python
 class EmbeddingProvider(abc.ABC):
@@ -321,7 +331,7 @@ class EmbeddingProvider(abc.ABC):
 - モデルも別（chat用モデルとembedding用モデル）
 - 既存の `LLMProvider` 実装を変更不要
 
-#### LM Studio Embedding (`src/embedding/lmstudio_embedding.py`)
+#### LM Studio Embedding (`mcp_servers/rag/embedding/lmstudio_embedding.py`)
 
 ```python
 class LMStudioEmbedding(EmbeddingProvider):
@@ -364,15 +374,15 @@ class LMStudioEmbedding(EmbeddingProvider):
 
 `prefix_enabled` パラメータ（デフォルト: `False`）により、nomic-embed-text のタスク固有プレフィックスを制御する。`embed()` 自体は変更なし（後方互換性）。
 
-#### OpenAI Embedding (`src/embedding/openai_embedding.py`)
+#### OpenAI Embedding (`mcp_servers/rag/embedding/openai_embedding.py`)
 
 `AsyncOpenAI(api_key=...)` を使用し、同じインターフェースで OpenAI Embeddings API を呼び出す。
 
-#### ファクトリ関数 (`src/embedding/factory.py`)
+#### ファクトリ関数 (`mcp_servers/rag/embedding/factory.py`)
 
 ```python
 def get_embedding_provider(
-    settings: Settings,
+    settings: RAGSettings,
     provider_setting: Literal["local", "online"],
 ) -> EmbeddingProvider:
     """設定に応じたEmbeddingプロバイダーを返す.
@@ -382,7 +392,7 @@ def get_embedding_provider(
     """
 ```
 
-### テキストチャンキング (`src/rag/chunker.py`)
+### テキストチャンキング (`mcp_servers/rag/chunker.py`)
 
 ```python
 def chunk_text(
@@ -404,7 +414,7 @@ def chunk_text(
 - それでも超える場合は文字数で分割
 - 各チャンクは `chunk_overlap` 文字分オーバーラップさせ、文脈の断絶を軽減
 
-### コンテンツタイプ検出 (`src/rag/content_detector.py`)
+### コンテンツタイプ検出 (`mcp_servers/rag/content_detector.py`)
 
 ```python
 def detect_content_type(text: str) -> ContentType:
@@ -421,7 +431,7 @@ def detect_content_type(text: str) -> ContentType:
 - タブ/複数スペース区切りの列構造（3列以上）
 - 構造化された行が30%以上、または数値行が20%以上
 
-### 見出しベースのチャンキング (`src/rag/heading_chunker.py`)
+### 見出しベースのチャンキング (`mcp_servers/rag/heading_chunker.py`)
 
 ```python
 def chunk_by_headings(
@@ -447,7 +457,7 @@ class HeadingChunk:
     parent_headings: list[str]  # 親見出しの階層（パンくずリスト用）
 ```
 
-### テーブルチャンキング (`src/rag/table_chunker.py`)
+### テーブルチャンキング (`mcp_servers/rag/table_chunker.py`)
 
 ```python
 def chunk_table_data(
@@ -463,7 +473,7 @@ def chunk_table_data(
     """
 ```
 
-### ChromaDB ベクトルストア (`src/rag/vector_store.py`)
+### ChromaDB ベクトルストア (`mcp_servers/rag/vector_store.py`)
 
 #### データ型
 
@@ -524,7 +534,7 @@ class VectorStore:
 - SQLAlchemyモデルは追加しない（ChromaDB自身がSQLiteに永続化するため）
 - Embeddingは `VectorStore` 内で呼び出す（外部から渡す必要なし）
 
-### BM25インデックス (`src/rag/bm25_index.py`)
+### BM25インデックス (`mcp_servers/rag/bm25_index.py`)
 
 ```python
 class BM25Index:
@@ -594,7 +604,7 @@ def tokenize_japanese(text: str) -> list[str]:
     """
 ```
 
-### ハイブリッド検索 (`src/rag/hybrid_search.py`)
+### ハイブリッド検索 (`mcp_servers/rag/hybrid_search.py`)
 
 #### データ型
 
@@ -688,7 +698,7 @@ CCの構造により、BM25がゼロヒットの場合は `combined_score = α *
 
 **fetch_count**: 正規化の安定性のため、`max(n_results * 3, 30)` で下限を30に設定。ベクトル検索単体の閾値フィルタリング（最低20件）より多いのは、min-max正規化で外れ値の影響を緩和するために十分なサンプル数が必要なため。
 
-### Webクローラー (`src/services/web_crawler.py`)
+### Webクローラー (`mcp_servers/rag/web_crawler.py`)
 
 ```python
 @dataclass
@@ -793,7 +803,7 @@ class WebCrawler:
 2. `<article>` → `<main>` → `<body>` の優先順で本文領域を特定
 3. テキストを抽出してクリーンアップ
 
-### URL安全性チェック（Google Safe Browsing API）
+### URL安全性チェック (`mcp_servers/rag/safe_browsing.py`)
 
 マルウェア・フィッシングサイトへのアクセスを防ぐため、Google Safe Browsing APIによる事前判定機能を提供する。
 
@@ -807,7 +817,7 @@ class WebCrawler:
 | `RAG_URL_SAFETY_FAIL_OPEN` | bool | `true` | API障害時にフェイルオープンするか |
 | `RAG_URL_SAFETY_TIMEOUT` | float | `5.0` | APIタイムアウト（秒） |
 
-### RAGナレッジサービス (`src/services/rag_knowledge.py`)
+### RAGナレッジサービス (`mcp_servers/rag/rag_knowledge.py`)
 
 各コンポーネントを統合するオーケストレーションサービス。
 
@@ -836,7 +846,6 @@ class RAGKnowledgeService:
 
     async def ingest_from_index(
         self, index_url: str, url_pattern: str = "",
-        progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
     ) -> dict[str, int]:
         """リンク集ページから一括取り込み.
 
@@ -881,26 +890,13 @@ DEBUG RAG result 1 text: "しれんのしろには以下のアイテムがあり
 - **DEBUG レベル**: テキストプレビュー（先頭100文字）、全文
 - `RAG_DEBUG_LOG_ENABLED=false` でログ出力を無効化可能
 
-#### ソース情報表示
-
-`RAG_SHOW_SOURCES=true` 時、Slack回答末尾にソースURLリストを表示:
-
-```
-（LLMの回答本文）
-
----
-参照元:
-• https://example.com/page1
-• https://example.com/page2
-```
-
 #### 戻り値型
 
 ```python
 @dataclass
 class RAGRetrievalResult:
     """RAG検索結果."""
-    context: str  # フォーマット済みテキスト（システムプロンプト注入用）
+    context: str  # フォーマット済みテキスト
     sources: list[str]  # ユニークなソースURLリスト
 ```
 
@@ -912,7 +908,7 @@ class RAGRetrievalResult:
 
 **動作**: 閾値フィルタリング時は多めに取得（n_results × 3、最低20件）してからフィルタリング。
 
-### 評価メトリクス (`src/rag/evaluation.py`)
+### 評価メトリクス (`mcp_servers/rag/evaluation.py`)
 
 ```python
 def calculate_precision_recall(
@@ -952,24 +948,24 @@ async def evaluate_retrieval(
     """データセットを使ってRAG検索の精度を評価する."""
 ```
 
-### 評価CLIツール (`src/rag/cli.py`)
+### 評価CLIツール (`mcp_servers/rag/cli.py`)
 
 ```bash
 # 評価実行（chunk-size, chunk-overlap, vector-weight は必須）
-python -m src.rag.cli evaluate \
+python -m mcp_servers.rag.cli evaluate \
   --chunk-size 200 \
   --chunk-overlap 30 \
   --vector-weight 0.6 \
   --dataset tests/fixtures/rag_evaluation_dataset.json \
   --output-dir .tmp/rag-evaluation \
-  --baseline-file .tmp/rag-evaluation/baseline.json \
+  --baseline-file tests/fixtures/rag/baseline.json \
   --persist-dir .tmp/test_chroma_db \
   --n-results 5 \
   --threshold 0.5 \
   --fail-on-regression
 
 # テスト用ChromaDB初期化（chunk-size, chunk-overlap は必須）
-python -m src.rag.cli init-test-db \
+python -m mcp_servers.rag.cli init-test-db \
   --chunk-size 200 \
   --chunk-overlap 30 \
   --persist-dir .tmp/test_chroma_db \
@@ -1005,47 +1001,123 @@ python -m src.rag.cli init-test-db \
 
 **出力ファイル**: `report.json`, `report.md`, `baseline.json`
 
-### ChatServiceへの自動統合 (`src/services/chat.py`)
+### MCP サーバー (`mcp_servers/rag/server.py`)
 
-`ThreadHistoryService` や `MCPClientManager` と同じオプショナル注入パターンで統合する。
+FastMCP を使用して 5 つの RAG ツールを公開する。
 
 ```python
-class ChatService:
-    def __init__(
-        self,
-        llm: LLMProvider,
-        session_factory: async_sessionmaker[AsyncSession],
-        system_prompt: str = "",
-        thread_history_service: ThreadHistoryService | None = None,
-        mcp_manager: MCPClientManager | None = None,
-        rag_service: RAGKnowledgeService | None = None,
-    ) -> None: ...
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("rag")
+
+@mcp.tool()
+async def rag_search(query: str, n_results: int | None = None) -> str:
+    """ナレッジベースから関連情報を検索する.
+
+    n_results 未指定時は RAGSettings.rag_retrieval_count を使用。
+
+    Returns:
+        検索結果テキスト。各チャンクを以下の形式で連結:
+
+        ## Source: <ソースURL>
+        <本文テキスト>
+
+        ソースURLが含まれるため、LLM が回答内で自然に参照元を提示できる。
+        結果が0件の場合は「該当する情報が見つかりませんでした」を返す。
+    """
+
+@mcp.tool()
+async def rag_add(url: str) -> str:
+    """単一ページをナレッジベースに取り込む."""
+
+@mcp.tool()
+async def rag_crawl(url: str, pattern: str = "") -> str:
+    """リンク集ページからクロール＆一括取り込み."""
+
+@mcp.tool()
+async def rag_delete(url: str) -> str:
+    """ソースURL指定でナレッジから削除."""
+
+@mcp.tool()
+async def rag_stats() -> str:
+    """ナレッジベースの統計情報を表示."""
 ```
 
-- `rag_service=None` 時は既存動作と完全同一（後方互換性）
-- RAG検索に失敗した場合は例外をキャッチしてログ出力し、通常応答を継続
+#### MCP サーバー設定 (`config/mcp_servers.json`)
 
-### 設定 (`src/config/settings.py`)
+```json
+{
+  "mcpServers": {
+    "weather": { "..." : "..." },
+    "rag": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["mcp_servers/rag/server.py"],
+      "env": {}
+    }
+  }
+}
+```
+
+### MCP経由のRAG統合
+
+`ChatService` は RAG サービスを直接参照しない。LLM が MCP ツール一覧から `rag_search` を自律的に選択し、検索を実行する。
+
+- `ChatService` は `rag_service` 引数を持たない
+- RAG コンテキストのシステムプロンプト自動注入は行わない（LLM が MCP ツール結果を踏まえて応答を生成する）
+- RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
+
+#### Slackコマンドのルーティング (`src/messaging/router.py`)
+
+`rag crawl/add/status/delete` コマンドは引き続き `MessageRouter._parse_rag_command()` でパースし、`mcp_manager.call_tool()` 経由で対応する MCP ツールを呼び出す。
 
 ```python
-class Settings(BaseSettings):
-    # RAG基本設定
-    rag_enabled: bool = False
+# 例: rag add コマンドの処理
+result = await self._mcp_manager.call_tool("rag_add", {"url": url})
+```
+
+- `rag_service`・`rag_crawl_progress_interval` 引数は持たない
+- 進捗通知は開始/完了メッセージのみ
+- RAG 利用可否の判定: `self._mcp_manager is not None`
+  - ツール未登録時は `MCPToolNotFoundError` をキャッチしてユーザーフレンドリーなエラー表示
+
+### RAG 設定 (`mcp_servers/rag/config.py`)
+
+RAG 関連の設定は `mcp_servers/rag/config.py` の `RAGSettings` で管理する。`src/config/settings.py` は RAG 関連設定を持たない（RAG の有無は MCP サーバー設定で決まる）。
+
+**設定の独立性**: MCP サーバーは将来的に別マシンや Docker コンテナで実行される可能性がある。そのため、プロジェクトルートの `.env` は参照せず、MCP サーバー専用の設定ファイル `mcp_servers/rag/.env` から設定を読み込む。
+
+```python
+from pathlib import Path
+from typing import Literal
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
+
+# MCP サーバー専用 .env（プロジェクトルートの .env とは独立）
+_ENV_FILE = Path(__file__).parent / ".env"
+
+class RAGSettings(BaseSettings):
+    # Embedding設定
     embedding_provider: Literal["local", "online"] = "local"
     embedding_model_local: str = "nomic-embed-text"
     embedding_model_online: str = "text-embedding-3-small"
-    embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
+    embedding_prefix_enabled: bool = True
+    lmstudio_base_url: str = DEFAULT_LMSTUDIO_BASE_URL
+    openai_api_key: str = ""
+
+    # ストレージ（MCP サーバー起動 cwd からの相対パス）
     chromadb_persist_dir: str = "./chroma_db"
+    bm25_persist_dir: str = "./bm25_index"
+
+    # チャンキング
     rag_chunk_size: int = 200
     rag_chunk_overlap: int = 30
-    rag_retrieval_count: int = 3
-    rag_max_crawl_pages: int = 50
-    rag_crawl_delay_sec: float = 1.0
-    rag_crawl_progress_interval: int = 5
 
-    # robots.txt
-    rag_respect_robots_txt: bool = True
-    rag_robots_txt_cache_ttl: int = 3600
+    # 検索
+    rag_retrieval_count: int = 3
+    rag_similarity_threshold: float | None = None
 
     # ハイブリッド検索
     rag_hybrid_search_enabled: bool = False
@@ -1053,15 +1125,113 @@ class Settings(BaseSettings):
     rag_bm25_k1: float = 2.5
     rag_bm25_b: float = 0.50
     rag_min_combined_score: float | None = 0.75
-    bm25_persist_dir: str = "./bm25_index"
 
-    # 類似度閾値
-    rag_similarity_threshold: float | None = None
+    # クロール
+    rag_max_crawl_pages: int = 50
+    rag_crawl_delay_sec: float = 1.0
 
-    # デバッグ・可視化
-    rag_debug_log_enabled: bool = False  # 本番ではPII漏洩リスクのためデフォルト無効
-    rag_show_sources: bool = False
+    # robots.txt
+    rag_respect_robots_txt: bool = True
+    rag_robots_txt_cache_ttl: int = 3600
+
+    # URL安全性チェック (Google Safe Browsing API)
+    rag_url_safety_check: bool = False
+    google_safe_browsing_api_key: str = ""
+    rag_url_safety_cache_ttl: int = 300
+    rag_url_safety_fail_open: bool = True
+    rag_url_safety_timeout: float = 5.0
+
+    # デバッグ
+    rag_debug_log_enabled: bool = False
+
+    model_config = SettingsConfigDict(
+        env_file=str(_ENV_FILE),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+def get_settings() -> RAGSettings:
+    return RAGSettings()
 ```
+
+> **バリデーション**: 既存の `Settings` と同等の `Field()` 制約および `model_validator` を移植すること（例: `rag_chunk_overlap >= rag_chunk_size` の検出、`rag_similarity_threshold` の範囲制約等）。上記コード例では簡略化のため省略している。
+>
+> **ストレージの相対パス**: `chromadb_persist_dir`・`bm25_persist_dir` のデフォルト値 `./chroma_db`・`./bm25_index` は MCP サーバーの起動 cwd（通常はプロジェクトルート）からの相対パスとして解決される。Docker やリモート実行時は絶対パスの指定を推奨する。
+>
+> **`mcp_servers.json` の `env` フィールドとの優先順位**: pydantic-settings の仕様により、環境変数 > `.env` ファイルの順で解決される。`mcp_servers.json` の `env` フィールドはプロセスの環境変数として渡されるため、`mcp_servers/rag/.env` より優先される。
+>
+> **`src/config/settings.py`**: RAG 関連設定は持たない。MCP 基盤設定（`mcp_enabled`、`mcp_servers_config` 等）のみ。
+
+#### 設定ファイルの配置
+
+```
+mcp_servers/rag/
+├── .env              # RAG MCP サーバー専用設定（git管理外）
+├── .env.example      # 設定テンプレート
+├── server.py
+├── config.py
+└── ...
+```
+
+**`mcp_servers/rag/.env.example`** の内容:
+
+```bash
+# RAG MCP Server Configuration
+# Copy to .env and edit as needed
+
+# Embedding
+EMBEDDING_PROVIDER=local
+EMBEDDING_MODEL_LOCAL=nomic-embed-text
+EMBEDDING_MODEL_ONLINE=text-embedding-3-small
+EMBEDDING_PREFIX_ENABLED=true
+LMSTUDIO_BASE_URL=http://localhost:1234/v1
+OPENAI_API_KEY=
+
+# Storage
+CHROMADB_PERSIST_DIR=./chroma_db
+BM25_PERSIST_DIR=./bm25_index
+
+# Chunking
+RAG_CHUNK_SIZE=200
+RAG_CHUNK_OVERLAP=30
+
+# Search
+RAG_RETRIEVAL_COUNT=3
+# RAG_SIMILARITY_THRESHOLD=
+
+# Hybrid Search (BM25 + Vector)
+RAG_HYBRID_SEARCH_ENABLED=false
+RAG_VECTOR_WEIGHT=0.90
+RAG_BM25_K1=2.5
+RAG_BM25_B=0.50
+RAG_MIN_COMBINED_SCORE=0.75
+
+# Crawl
+RAG_MAX_CRAWL_PAGES=50
+RAG_CRAWL_DELAY_SEC=1.0
+
+# robots.txt
+RAG_RESPECT_ROBOTS_TXT=true
+RAG_ROBOTS_TXT_CACHE_TTL=3600
+
+# URL Safety Check (Google Safe Browsing API)
+RAG_URL_SAFETY_CHECK=false
+GOOGLE_SAFE_BROWSING_API_KEY=
+RAG_URL_SAFETY_CACHE_TTL=300
+RAG_URL_SAFETY_FAIL_OPEN=true
+RAG_URL_SAFETY_TIMEOUT=5.0
+
+# Debug
+RAG_DEBUG_LOG_ENABLED=false
+```
+
+#### デプロイ方式ごとの設定注入
+
+| デプロイ方式 | 設定注入方法 |
+|-------------|-------------|
+| ローカル開発 | `mcp_servers/rag/.env` ファイル |
+| Docker | Dockerfile の `ENV` / compose の `environment:` / `env_file:` |
+| リモート MCP | MCP サーバー側の環境変数 |
 
 ---
 
@@ -1101,11 +1271,11 @@ class Settings(BaseSettings):
 - [ ] **AC18**: `retrieve()` がクエリに関連するチャンクを検索し、フォーマット済みテキストを返すこと
 - [ ] **AC19**: `retrieve()` で結果がない場合は空文字列を返すこと
 
-### ChatService統合
+### MCP サーバー
 
-- [ ] **AC20**: RAG有効時、チャット応答に関連知識がシステムプロンプトとして自動注入されること
-- [ ] **AC21**: RAG無効時（`rag_enabled=False`）は従来通りの動作をすること
-- [ ] **AC22**: RAG検索に失敗した場合、エラーログを出力し通常応答を継続すること
+- [ ] **AC20**: RAG MCP サーバーが `rag_search` ツールを公開し、LLM から呼び出し可能であること
+- [ ] **AC21**: `MCP_ENABLED=false` 時は RAG 機能が無効となること
+- [ ] **AC22**: RAG管理コマンド（add/crawl/delete/status）が `mcp_manager.call_tool()` 経由で MCP ツールとして動作すること
 
 ### Slackコマンド
 
@@ -1116,7 +1286,7 @@ class Settings(BaseSettings):
 
 ### 設定
 
-- [ ] **AC27**: `RAG_ENABLED` 環境変数でRAG機能のON/OFFを制御できること
+- [ ] **AC27**: RAG の有効/無効が `MCP_ENABLED` と `config/mcp_servers.json` の RAG エントリ登録で制御されること
 - [ ] **AC28**: `EMBEDDING_PROVIDER` で `local` / `online` を切り替えられること
 - [ ] **AC29**: チャンクサイズ・オーバーラップ・検索件数が環境変数で設定可能であること
 
@@ -1146,7 +1316,6 @@ class Settings(BaseSettings):
 ### クロール進捗フィードバック
 
 - [ ] **AC42**: `rag crawl` コマンド実行時、即座に開始メッセージがスレッド内に投稿されること
-- [ ] **AC43**: クロール中、`RAG_CRAWL_PROGRESS_INTERVAL` ページごとに進捗メッセージがスレッド内に投稿されること
 - [ ] **AC44**: クロール完了時、結果サマリーがスレッド内に投稿されること
 - [ ] **AC45**: 進捗メッセージはスレッド内のみに投稿され、チャンネルへの通知は発生しないこと
 
@@ -1172,9 +1341,6 @@ class Settings(BaseSettings):
 
 - [ ] **AC58**: `RAG_DEBUG_LOG_ENABLED=true` の場合、検索クエリと結果がログに出力されること
 - [ ] **AC59**: `RAG_DEBUG_LOG_ENABLED=false` の場合、ログが出力されないこと
-- [ ] **AC60**: `RAG_SHOW_SOURCES=true` の場合、Slack回答末尾にソースURLリストが表示されること
-- [ ] **AC61**: ソースURLは重複なく表示されること
-- [ ] **AC62**: `RAG_SHOW_SOURCES=false` の場合、ソース情報が表示されないこと
 
 ### 評価メトリクス（NDCG/MRR）
 
@@ -1184,7 +1350,7 @@ class Settings(BaseSettings):
 
 ### 評価CLIツール
 
-- [ ] **AC63**: `python -m src.rag.cli evaluate` で評価が実行できること
+- [ ] **AC63**: `python -m mcp_servers.rag.cli evaluate` で評価が実行できること
 - [ ] **AC64**: JSON/Markdown形式のレポートが出力されること
 - [ ] **AC65**: ベースライン比較でリグレッション検出ができること
 - [ ] **AC66**: `--fail-on-regression` 指定時、リグレッション検出で exit code 1 になること
@@ -1220,7 +1386,8 @@ class Settings(BaseSettings):
 - **VectorStore**: `chromadb.EphemeralClient()`（インメモリ）を使用し、ファイルシステム副作用を回避
 - **Webクローラー**: `aiohttp.ClientSession` を `AsyncMock` でモック、HTMLサンプルで本文抽出を検証
 - **RAGナレッジサービス**: VectorStore・WebCrawler をモック化してオーケストレーションを検証
-- **ChatService統合**: RAGKnowledgeService をモック化してコンテキスト注入を検証
+- **MCP サーバー**: weather テストと同パターンで `importlib.import_module("mcp_servers.rag.server")` でツール公開を検証
+- **Slackコマンド（router）**: `mcp_manager.call_tool()` の呼び出しをモック検証（旧 `rag_service` モックから差し替え）
 - **BM25**: テストデータは3件以上用意（IDF計算の特性上、2件だと IDF=0 になる）
 
 ### test-runnerによるRAG精度テスト自動実行
@@ -1229,11 +1396,11 @@ class Settings(BaseSettings):
 
 | 変更ファイル | 精度テストの必要性 |
 |-------------|-------------------|
-| `src/rag/chunker.py`, `heading_chunker.py`, `table_chunker.py` | **必須** |
-| `src/rag/vector_store.py`, `hybrid_search.py`, `bm25_index.py` | **必須** |
-| `src/embedding/**` | **必須** |
-| `src/services/rag_knowledge.py` | 推奨 |
-| `src/rag/cli.py`, `evaluation.py` | 不要（ユニットテストで十分） |
+| `mcp_servers/rag/chunker.py`, `heading_chunker.py`, `table_chunker.py` | **必須** |
+| `mcp_servers/rag/vector_store.py`, `hybrid_search.py`, `bm25_index.py` | **必須** |
+| `mcp_servers/rag/embedding/**` | **必須** |
+| `mcp_servers/rag/rag_knowledge.py` | 推奨 |
+| `mcp_servers/rag/cli.py`, `evaluation.py` | 不要（ユニットテストで十分） |
 
 ---
 
@@ -1290,20 +1457,27 @@ class Settings(BaseSettings):
 4. Before/After 評価
 5. パラメータスイープ（α の最適値探索）
 
+### Phase 5: MCP 全移行 (#547)
+
+1. `mcp-servers/` → `mcp_servers/` ディレクトリリネーム (#561)
+2. 仕様書更新 — 本ドキュメントの MCP 前提への書き換え (#563)
+3. RAG MCP 全移行 — ファイル移動、MCP サーバー実装、`src/` 側の RAG 依存削除 (#564)
+
 ---
 
 ## 注意事項
 
-1. **RAG_ENABLED のデフォルト**: `false`。明示的に有効化しない限り、既存の動作に一切影響しない
-2. **ChromaDBの永続化**: `CHROMADB_PERSIST_DIR` で指定したディレクトリにSQLiteファイルが作成される。`.gitignore` に追加すること
+1. **RAG の有効化**: `MCP_ENABLED=true` かつ `config/mcp_servers.json` に RAG エントリを登録することで有効化される
+2. **ChromaDBの永続化**: `CHROMADB_PERSIST_DIR` で指定したディレクトリにSQLiteファイルが作成される。デフォルトの `chroma_db/` は既に `.gitignore` 済みだが、ディレクトリを変更する場合は適宜 `.gitignore` に追加すること
 3. **Embeddingモデルの整合性**: モデルを変更した場合、既存データとの類似度計算が不正確になるため、コレクションの再構築が必要
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
 5. **LLMコンテキストウィンドウ**: `RAG_RETRIEVAL_COUNT` で検索件数を制限
-6. **既存テストへの影響**: RAGサービスはオプショナル注入のため、既存テストに変更は不要
+6. **既存テストへの影響**: MCP 移行でテストの import パスが `importlib.import_module("mcp_servers.rag.xxx")` に変更される
 7. **robots.txt**: `RAG_RESPECT_ROBOTS_TXT=true`（デフォルト）で `robots.txt` を遵守する。Python 標準ライブラリ `urllib.robotparser` を使用
 8. **BM25は少数ドキュメントでの評価に不向き**: IDF計算の特性上、テストには十分なドキュメント数が必要
 9. **辞書サイズ**: `unidic-lite` は約50MB。本番環境でのディスク使用量に注意
-10. **ベースライン管理**: ベースラインファイルはリポジトリにコミットし、チーム全体で共有
+10. **ベースライン管理**: ベースラインファイルは `tests/fixtures/rag/baseline.json` に配置してリポジトリにコミットし、チーム全体で共有。`.tmp/rag-evaluation/` はローカル一時ファイル用でコミットしない
+11. **`mcp_servers/` の独立性**: `mcp_servers/` は `src/` のモジュールを import しないこと（CLAUDE.md 参照）。RAG に必要なモジュールはすべて `mcp_servers/rag/` 配下に配置する。設定もプロジェクトルートの `.env` を参照せず、`mcp_servers/rag/.env` を使用する
 
 ## 未着手Issue
 
@@ -1317,12 +1491,14 @@ class Settings(BaseSettings):
 
 - ガイド: [docs/guides/rag-overview.md](../guides/rag-overview.md) — RAGシステムの概要（初心者向け）
 - ガイド: [docs/guides/rag-evaluation-data.md](../guides/rag-evaluation-data.md) — RAG評価データ収集・管理ガイド
+- 計画: [Issue #547](https://github.com/becky3/ai-assistant/issues/547) — RAG MCP全移行の親Issue
 - ジャーナル（レトロ変換）: `memory/journal/20260217-062709-retro-f9-rag.md`
 
 ## 変更履歴
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-20 | MCP 前提に仕様書更新: アーキテクチャ図を MCP ツール経由に変更、ディレクトリ構成を `mcp_servers/rag/` に更新、`RAG_ENABLED` 廃止（MCP で制御）、`rag_show_sources` 廃止、ページ単位の進捗コールバック廃止、RAG 設定を `RAGSettings` に移動、MCP サーバー仕様追加（#563） |
 | 2026-02-19 | スイープ確定パラメータを settings.py デフォルト値に反映（`rag_vector_weight` 1.0→0.90, `rag_bm25_k1` 1.5→2.5, `rag_bm25_b` 0.75→0.50, `rag_retrieval_count` 5→3）、`rag_min_combined_score` 新規追加、検索パラメータチューニングガイドセクション追加（#535） |
 | 2026-02-19 | チャンクサイズ縮小（`rag_chunk_size` 500→200, `rag_chunk_overlap` 50→30）、`RAGKnowledgeService` コンストラクタを必須引数化（`similarity_threshold` / `vector_weight` / `debug_log_enabled` 追加、内部 `get_settings()` 参照廃止）、評価CLI の環境変数ハック廃止、`init_test_db` / BM25インデックス構築を `_ingest_crawled_page` / `_smart_chunk` 経由に統一（#522） |
 | 2026-02-19 | パラメータスイープ再実行（拡充データ101件+プレフィックス有効）で `RAG_VECTOR_WEIGHT` 推奨値を 0.5→1.0 に更新（#518） |
