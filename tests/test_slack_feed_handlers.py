@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.services.feed_collector import FeedCollector
-from src.slack.handlers import (
+from src.messaging.router import (
     _handle_feed_add,
     _handle_feed_delete,
     _handle_feed_disable,
     _handle_feed_enable,
-    _handle_feed_export,
+    _handle_feed_export_via_port,
     _handle_feed_import,
     _handle_feed_list,
     _handle_feed_replace,
@@ -643,12 +643,12 @@ async def test_ac17_5_handle_feed_export_no_feeds() -> None:
     collector = AsyncMock(spec=FeedCollector)
     collector.get_all_feeds.return_value = []
 
-    slack_client = AsyncMock()
+    messaging = AsyncMock()
 
-    result = await _handle_feed_export(collector, slack_client, "C123", "1234.5678")
+    result = await _handle_feed_export_via_port(collector, messaging, "1234.5678", "C123")
 
     assert "エクスポートするフィードがありません" in result
-    slack_client.files_upload_v2.assert_not_called()
+    messaging.upload_file.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -661,17 +661,17 @@ async def test_ac17_1_handle_feed_export_success() -> None:
     mock_feed.category = "Tech"
     collector.get_all_feeds.return_value = [mock_feed]
 
-    slack_client = AsyncMock()
+    messaging = AsyncMock()
 
-    result = await _handle_feed_export(collector, slack_client, "C123", "1234.5678")
+    result = await _handle_feed_export_via_port(collector, messaging, "1234.5678", "C123")
 
     assert result == ""
-    slack_client.files_upload_v2.assert_called_once()
-    call_kwargs = slack_client.files_upload_v2.call_args[1]
+    messaging.upload_file.assert_called_once()
+    call_kwargs = messaging.upload_file.call_args[1]
     assert call_kwargs["channel"] == "C123"
-    assert call_kwargs["thread_ts"] == "1234.5678"
+    assert call_kwargs["thread_id"] == "1234.5678"
     assert call_kwargs["filename"] == "feeds.csv"
-    assert "1件" in call_kwargs["initial_comment"]
+    assert "1件" in call_kwargs["comment"]
 
 
 @pytest.mark.asyncio
@@ -682,16 +682,16 @@ async def test_ac17_4_handle_feed_export_all_feeds() -> None:
     disabled_feed = MagicMock(url="https://disabled.com/rss", name="Disabled", category="Other")
     collector.get_all_feeds.return_value = [enabled_feed, disabled_feed]
 
-    slack_client = AsyncMock()
+    messaging = AsyncMock()
 
-    result = await _handle_feed_export(collector, slack_client, "C123", "1234.5678")
+    result = await _handle_feed_export_via_port(collector, messaging, "1234.5678", "C123")
 
     assert result == ""
-    call_kwargs = slack_client.files_upload_v2.call_args[1]
+    call_kwargs = messaging.upload_file.call_args[1]
     csv_content = call_kwargs["content"]
     assert "https://enabled.com/rss" in csv_content
     assert "https://disabled.com/rss" in csv_content
-    assert "2件" in call_kwargs["initial_comment"]
+    assert "2件" in call_kwargs["comment"]
 
 
 @pytest.mark.asyncio
@@ -702,11 +702,11 @@ async def test_ac17_2_handle_feed_export_csv_format() -> None:
     mock_feed.name = "Example Feed"
     collector.get_all_feeds.return_value = [mock_feed]
 
-    slack_client = AsyncMock()
+    messaging = AsyncMock()
 
-    await _handle_feed_export(collector, slack_client, "C123", "1234.5678")
+    await _handle_feed_export_via_port(collector, messaging, "1234.5678", "C123")
 
-    call_kwargs = slack_client.files_upload_v2.call_args[1]
+    call_kwargs = messaging.upload_file.call_args[1]
     csv_content = call_kwargs["content"]
     lines = csv_content.strip().splitlines()
     assert lines[0] == "url,name,category"
@@ -720,10 +720,10 @@ async def test_ac17_6_handle_feed_export_permission_error() -> None:
     mock_feed = MagicMock(url="https://example.com/rss", name="Example Feed", category="Tech")
     collector.get_all_feeds.return_value = [mock_feed]
 
-    slack_client = AsyncMock()
-    slack_client.files_upload_v2.side_effect = Exception("missing_scope: files:write")
+    messaging = AsyncMock()
+    messaging.upload_file.side_effect = Exception("missing_scope: files:write")
 
-    result = await _handle_feed_export(collector, slack_client, "C123", "1234.5678")
+    result = await _handle_feed_export_via_port(collector, messaging, "1234.5678", "C123")
 
     assert "エラー" in result
     assert "files:write" in result

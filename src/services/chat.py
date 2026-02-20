@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -18,7 +19,6 @@ from src.llm.base import LLMProvider, LLMResponse, Message, ToolDefinition, Tool
 if TYPE_CHECKING:
     from src.mcp_bridge.client_manager import MCPClientManager
     from src.services.rag_knowledge import RAGKnowledgeService
-    from src.services.thread_history import ThreadHistoryService
 
 logger = logging.getLogger(__name__)
 
@@ -41,17 +41,17 @@ class ChatService:
         session_factory: async_sessionmaker[AsyncSession],
         system_prompt: str = "",
         mcp_manager: MCPClientManager | None = None,
-        thread_history_service: ThreadHistoryService | None = None,
+        thread_history_fetcher: Callable[[str, str, str], Awaitable[list[Message] | None]] | None = None,
         rag_service: RAGKnowledgeService | None = None,
-        slack_format_instruction: str = "",
+        format_instruction: str = "",
     ) -> None:
         self._llm = llm
         self._session_factory = session_factory
         self._system_prompt = system_prompt
         self._mcp_manager = mcp_manager
-        self._thread_history = thread_history_service
+        self._thread_history_fetcher = thread_history_fetcher
         self._rag_service = rag_service
-        self._slack_format_instruction = slack_format_instruction
+        self._format_instruction = format_instruction
 
     async def respond(
         self,
@@ -79,13 +79,11 @@ class ChatService:
                 logger.exception("Failed to retrieve RAG context")
 
         async with self._session_factory() as session:
-            # スレッド内かつ ThreadHistoryService が利用可能な場合は Slack API から取得
+            # スレッド内かつ thread_history_fetcher が利用可能な場合は外部から取得
             history: list[Message] | None = None
-            if is_in_thread and self._thread_history and channel:
-                history = await self._thread_history.fetch_thread_messages(
-                    channel=channel,
-                    thread_ts=thread_ts,
-                    current_ts=current_ts,
+            if is_in_thread and self._thread_history_fetcher and channel:
+                history = await self._thread_history_fetcher(
+                    channel, thread_ts, current_ts,
                 )
 
             # Slack API から取得できなかった場合は DB フォールバック
@@ -104,12 +102,12 @@ class ChatService:
                     else "以下は質問に関連する参考情報です。回答に役立つ場合は活用してください:\n"
                 )
                 system_content += rag_prefix + rag_context
-            # Slack mrkdwn指示を最後に追加（RAGコンテキストの後）
-            if self._slack_format_instruction:
+            # フォーマット指示を最後に追加（RAGコンテキストの後）
+            if self._format_instruction:
                 system_content = (
-                    system_content + "\n\n" + self._slack_format_instruction
+                    system_content + "\n\n" + self._format_instruction
                     if system_content
-                    else self._slack_format_instruction
+                    else self._format_instruction
                 )
             if system_content:
                 messages.append(Message(role="system", content=system_content))

@@ -93,7 +93,7 @@ async def test_ac2_merge_existing_profile(db_session_factory) -> None:  # type: 
 
 async def test_ac3_async_execution_via_create_task() -> None:
     """AC3: asyncio.create_taskによる非同期実行."""
-    from src.slack.handlers import _safe_extract_profile
+    from src.messaging.router import _safe_extract_profile
 
     profiler = AsyncMock()
     profiler.extract_profile = AsyncMock()
@@ -106,12 +106,12 @@ async def test_ac3_async_execution_via_create_task() -> None:
 
 async def test_ac3_safe_extract_profile_logs_exception() -> None:
     """AC3: 非同期抽出でエラーが発生してもログに記録しクラッシュしない."""
-    from src.slack.handlers import _safe_extract_profile
+    from src.messaging.router import _safe_extract_profile
 
     profiler = AsyncMock()
     profiler.extract_profile.side_effect = RuntimeError("LLM error")
 
-    with patch("src.slack.handlers.logger") as mock_logger:
+    with patch("src.messaging.router.logger") as mock_logger:
         await _safe_extract_profile(profiler, "U1", "hello")
         mock_logger.exception.assert_called_once()
 
@@ -207,30 +207,32 @@ async def test_ac4_get_profile_returns_none_for_empty_arrays(db_session_factory)
 
 async def test_ac4_profile_keyword_handler() -> None:
     """AC4: プロファイル確認キーワードでget_profileが呼ばれる."""
-    from src.slack.handlers import register_handlers
+    from src.messaging.port import IncomingMessage
+    from src.messaging.router import MessageRouter
 
     chat_service = AsyncMock()
     user_profiler = AsyncMock()
     user_profiler.get_profile.return_value = ":bust_in_silhouette: あなたのプロファイル\n..."
 
-    app = AsyncMock()
-    handlers: dict = {}
+    messaging = AsyncMock()
+    router = MessageRouter(
+        messaging=messaging,
+        chat_service=chat_service,
+        user_profiler=user_profiler,
+    )
 
-    def capture_event(event_type: str):  # type: ignore[no-untyped-def]
-        def decorator(func):  # type: ignore[no-untyped-def]
-            handlers[event_type] = func
-            return func
-        return decorator
-
-    app.event = capture_event
-    register_handlers(app, chat_service, user_profiler=user_profiler)
-
-    say = AsyncMock()
-    event = {"user": "U123", "text": "<@UBOT> プロファイルを見せて", "ts": "123.456"}
-    await handlers["app_mention"](event=event, say=say)
+    msg = IncomingMessage(
+        user_id="U123",
+        text="プロファイルを見せて",
+        thread_id="123.456",
+        channel="C1",
+        is_in_thread=False,
+        message_id="123.456",
+    )
+    await router.process_message(msg)
 
     user_profiler.get_profile.assert_called_once_with("U123")
-    say.assert_called_once()
-    assert "プロファイル" in say.call_args[1]["text"]
+    messaging.send_message.assert_called_once()
+    assert "プロファイル" in messaging.send_message.call_args[0][0]
     # chat_service should NOT have been called
     chat_service.respond.assert_not_called()
