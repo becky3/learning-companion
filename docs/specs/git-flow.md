@@ -40,7 +40,7 @@ gitGraph
     checkout main
     merge release/v1.0.0 id: "v1.0.0"
     checkout develop
-    merge main id: "sync-main"
+    merge main id: "sync(main→develop)"
     branch bugfix/fix-typo-#10
     commit id: "fix-1"
     checkout develop
@@ -52,7 +52,7 @@ gitGraph
 | ブランチ | 役割 | マージ元 | 保護 |
 |---------|------|---------|------|
 | `main` | 安定版（本番相当） | `release/*`, `hotfix/*` | 直接プッシュ禁止 |
-| `develop` | 開発統合 | `feature/*`, `bugfix/*`, `main`（リリース後同期） | 直接プッシュ禁止 |
+| `develop` | 開発統合 | `feature/*`, `bugfix/*`, `sync/*`（リリース後同期） | 直接プッシュ禁止 |
 
 ### 作業ブランチ
 
@@ -151,8 +151,10 @@ gh pr create --base release/v0.0.1 --head bugfix/fix-something
 main への squash マージ後、リリースバージョンのタグを付与し、GitHub Release を作成する。
 
 ```bash
-# main の最新コミットにタグを付与
-git tag v{X.Y.Z} main
+# main を最新に更新してからタグを付与
+git checkout main
+git pull --ff-only
+git tag v{X.Y.Z}
 git push origin v{X.Y.Z}
 
 # GitHub Release を作成（GitHub UI または gh CLI）
@@ -173,9 +175,10 @@ git checkout -b sync/main-to-develop-v{X.Y.Z} develop
 
 # main をマージ（コンフリクト解消）
 git merge main
-# コンフリクトがある場合: main 側（--theirs）の内容を採用
-git checkout --theirs -- <conflicted-files>
-git add <conflicted-files>
+# コンフリクトがある場合: ファイルごとに適切な側を採用
+# リリースブランチでのみ変更されたファイル → main 側（--theirs）
+# develop でも並行して変更されたファイル → 手動で内容を確認・統合
+git add <resolved-files>
 git commit --no-edit
 
 # push して PR 作成
@@ -185,7 +188,7 @@ gh pr create --base develop --head sync/main-to-develop-v{X.Y.Z} \
   --body "リリース後の差分反映"
 ```
 
-マージ後、`git diff develop main --stat` で差分がゼロであることを確認する。
+マージ後、`git diff develop..main --stat` で差分がゼロ（main 側にあって develop にない変更が存在しない）であることを確認する。
 
 ### hotfix（緊急修正）
 
@@ -206,7 +209,7 @@ sequenceDiagram
 1. `main` から `hotfix/{修正内容}-#{Issue番号}` を作成
 2. 修正・コミット
 3. `main` に向けてPR作成・マージ
-4. `main` の変更を `develop` にもマージ（`git merge main` または PR）
+4. `main` の変更を `develop` にもマージ（hotfix は通常マージのため `git merge main` で直接反映可。squash マージではないため SHA 不一致が起きない）
 
 ## マージ方式
 
