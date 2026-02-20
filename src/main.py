@@ -1,6 +1,6 @@
 """AI Assistant エントリーポイント
 仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md, docs/specs/f8-thread-support.md,
-      docs/specs/bot-process-guard.md
+      docs/specs/bot-process-guard.md, docs/specs/f11-cli-adapter.md
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from zoneinfo import ZoneInfo
 # ChromaDBテレメトリのエラーログを抑制（常に無効化、ユーザーには不要）
 logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
-import src.slack.handlers as handlers_module
 from src.config.settings import get_settings, load_assistant_config
 from src.process_guard import (
     check_already_running,
@@ -27,6 +26,8 @@ from src.db.session import init_db, get_session_factory
 from src.embedding.factory import get_embedding_provider
 from src.llm.factory import get_provider_for_service
 from src.mcp_bridge.client_manager import MCPClientManager, MCPServerConfig
+from src.messaging.router import MessageRouter
+from src.messaging.slack_adapter import SlackAdapter
 from src.rag.bm25_index import BM25Index
 from src.rag.vector_store import VectorStore
 from src.services.chat import ChatService
@@ -40,6 +41,7 @@ from src.services.user_profiler import UserProfiler
 from src.services.web_crawler import WebCrawler
 from src.services.safe_browsing import create_safe_browsing_client
 from src.slack.app import create_app, socket_mode_handler
+from src.slack.handlers import register_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +86,7 @@ async def main() -> None:
     mcp_manager: MCPClientManager | None = None
     try:
         # 起動時刻を記録 (F7)
-        handlers_module.BOT_START_TIME = datetime.now(tz=ZoneInfo(settings.timezone))
+        bot_start_time = datetime.now(tz=ZoneInfo(settings.timezone))
 
         # DB 初期化
         await init_db()
@@ -92,7 +94,7 @@ async def main() -> None:
         # アシスタント設定
         assistant = load_assistant_config()
         system_prompt = assistant.get("personality", "")
-        slack_format = assistant.get("slack_format_instruction", "")
+        slack_format = assistant.get("format_instruction", "")
 
         # サービスごとのLLMプロバイダー（設定に基づいて選択）
         chat_llm = get_provider_for_service(settings, settings.chat_llm_provider)
@@ -177,6 +179,15 @@ async def main() -> None:
             limit=settings.thread_history_limit,
         )
 
+        # SlackAdapter (F11)
+        slack_adapter = SlackAdapter(
+            slack_client=slack_client,
+            bot_user_id=bot_user_id,
+            thread_history_service=thread_history_service,
+            format_instruction=slack_format,
+            bot_token=settings.slack_bot_token,
+        )
+
         # チャットサービス
         session_factory = get_session_factory()
         chat_service = ChatService(
@@ -184,9 +195,9 @@ async def main() -> None:
             session_factory=session_factory,
             system_prompt=system_prompt,
             mcp_manager=mcp_manager,
-            thread_history_service=thread_history_service,
+            thread_history_fetcher=slack_adapter.fetch_thread_history,
             rag_service=rag_service,
-            slack_format_instruction=slack_format,
+            format_instruction=slack_adapter.get_format_instruction(),
         )
 
         # ユーザー情報抽出サービス
@@ -211,22 +222,30 @@ async def main() -> None:
             summarize_timeout=settings.feed_summarize_timeout,
             collect_days=settings.feed_collect_days,
         )
-        handlers_module.register_handlers(
-            app, chat_service,
+
+        # MessageRouter (F11)
+        router = MessageRouter(
+            messaging=slack_adapter,
+            chat_service=chat_service,
             user_profiler=user_profiler,
             topic_recommender=topic_recommender,
             collector=feed_collector,
             session_factory=session_factory,
-            slack_client=slack_client,
             channel_id=settings.slack_news_channel_id,
             max_articles_per_feed=settings.feed_articles_per_feed,
             feed_card_layout=settings.feed_card_layout,
-            auto_reply_channels=settings.get_auto_reply_channels(),
             bot_token=settings.slack_bot_token,
             timezone=settings.timezone,
             env_name=settings.env_name,
             rag_service=rag_service,
             rag_crawl_progress_interval=settings.rag_crawl_progress_interval,
+            bot_start_time=bot_start_time,
+            slack_client=slack_client,
+        )
+
+        register_handlers(
+            app, router,
+            auto_reply_channels=settings.get_auto_reply_channels(),
         )
 
         # Socket Mode で起動（グレースフルシャットダウン対応）

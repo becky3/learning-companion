@@ -18,6 +18,8 @@ AI Assistantは、Slack上で動作するAIアシスタントである。
 | F7 | ボットステータスコマンド | 稼働環境・ホスト名・稼働時間の表示 | [f7-bot-status.md](f7-bot-status.md) |
 | F8 | ボットのスレッド対応 | Slackスレッド履歴取得によるコンテキスト補完 | [f8-thread-support.md](f8-thread-support.md) |
 | F9 | RAGナレッジ | 外部Webページの知識をベクトルDBに蓄積しチャット応答に活用 | [f9-rag.md](f9-rag.md) |
+| F10 | Slack mrkdwn形式対応 | LLM返信をSlack mrkdwn形式で出力 | [f10-slack-mrkdwn.md](f10-slack-mrkdwn.md) |
+| F11 | CLIアダプター | Slack非依存でCLIからボット動作を確認するPort/Adapterパターン | [f11-cli-adapter.md](f11-cli-adapter.md) |
 
 ## 3. 技術スタック
 

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.slack.handlers import (
+from src.messaging.router import (
     _handle_rag_add,
     _handle_rag_crawl,
     _handle_rag_delete,
@@ -192,28 +192,29 @@ class TestHandleRagCrawlProgressFeedback:
 
     @pytest.mark.asyncio
     async def test_ac42_rag_crawl_posts_start_message(self) -> None:
-        """AC42: rag crawl実行時、即座に開始メッセージがスレッド内に投稿されること."""
+        """AC42: rag crawl実行時、即座に開始メッセージが投稿されること."""
         mock_rag = MagicMock()
         mock_rag.ingest_from_index = AsyncMock(
             return_value={"pages_crawled": 5, "chunks_stored": 20, "errors": 0}
         )
-        mock_say = AsyncMock()
+        mock_messaging = AsyncMock()
 
         await _handle_rag_crawl(
             mock_rag,
             "https://example.com/docs",
             "",
-            say=mock_say,
-            thread_ts="1234567890.123456",
+            messaging=mock_messaging,
+            thread_id="1234567890.123456",
+            channel="C123",
         )
 
         # 開始メッセージが投稿されたことを確認
-        calls = mock_say.call_args_list
+        calls = mock_messaging.send_message.call_args_list
         assert len(calls) >= 1
         first_call = calls[0]
-        assert first_call.kwargs.get("thread_ts") == "1234567890.123456"
-        assert "クロールを開始しました" in first_call.kwargs.get("text", "")
-        assert "リンク収集中" in first_call.kwargs.get("text", "")
+        assert first_call[0][1] == "1234567890.123456"  # thread_id
+        assert "クロールを開始しました" in first_call[0][0]
+        assert "リンク収集中" in first_call[0][0]
 
     @pytest.mark.asyncio
     async def test_ac43_rag_crawl_posts_progress_messages(self) -> None:
@@ -229,62 +230,64 @@ class TestHandleRagCrawlProgressFeedback:
             return {"pages_crawled": 10, "chunks_stored": 50, "errors": 0}
 
         mock_rag.ingest_from_index = mock_ingest
-        mock_say = AsyncMock()
+        mock_messaging = AsyncMock()
 
         await _handle_rag_crawl(
             mock_rag,
             "https://example.com/docs",
             "",
-            say=mock_say,
-            thread_ts="1234567890.123456",
+            messaging=mock_messaging,
+            thread_id="1234567890.123456",
+            channel="C123",
             progress_interval=5,  # 5ページごとに報告
         )
 
         # 全ての呼び出しを取得
-        calls = mock_say.call_args_list
+        calls = mock_messaging.send_message.call_args_list
         # 開始メッセージ + 進捗メッセージ(5, 10) + 完了メッセージ = 4回
         assert len(calls) >= 3  # 最低でも開始 + 進捗 + 完了
 
         # 進捗メッセージの内容を確認（開始と完了以外）
         progress_calls = [
             c for c in calls
-            if "ページ取得中" in c.kwargs.get("text", "")
+            if "ページ取得中" in c[0][0]
         ]
         assert len(progress_calls) == 2  # 5ページ目と10ページ目
         for call in progress_calls:
-            assert call.kwargs.get("thread_ts") == "1234567890.123456"
+            assert call[0][1] == "1234567890.123456"  # thread_id
 
     @pytest.mark.asyncio
     async def test_ac44_rag_crawl_posts_completion_summary(self) -> None:
-        """AC44: クロール完了時、結果サマリーがスレッド内に投稿されること."""
+        """AC44: クロール完了時、結果サマリーが投稿されること."""
         mock_rag = MagicMock()
         mock_rag.ingest_from_index = AsyncMock(
             return_value={"pages_crawled": 15, "chunks_stored": 128, "errors": 2}
         )
-        mock_say = AsyncMock()
+        mock_messaging = AsyncMock()
 
         await _handle_rag_crawl(
             mock_rag,
             "https://example.com/docs",
             "",
-            say=mock_say,
-            thread_ts="1234567890.123456",
+            messaging=mock_messaging,
+            thread_id="1234567890.123456",
+            channel="C123",
         )
 
         # 完了メッセージが投稿されたことを確認
-        calls = mock_say.call_args_list
+        calls = mock_messaging.send_message.call_args_list
         # 最後の呼び出しが完了メッセージ
         last_call = calls[-1]
-        assert last_call.kwargs.get("thread_ts") == "1234567890.123456"
-        completion_text = last_call.kwargs.get("text", "")
+        assert last_call[0][1] == "1234567890.123456"  # thread_id
+        completion_text = last_call[0][0]
         assert "完了" in completion_text
         assert "15ページ" in completion_text
         assert "128チャンク" in completion_text
         assert "エラー: 2件" in completion_text
 
     @pytest.mark.asyncio
-    async def test_ac45_progress_messages_in_thread_only(self) -> None:
-        """AC45: 進捗メッセージはスレッド内のみに投稿され、チャンネルへの通知は発生しないこと."""
+    async def test_ac45_progress_messages_use_consistent_thread(self) -> None:
+        """AC45: 全メッセージが同一のthread_idとchannelを使用すること."""
         mock_rag = MagicMock()
 
         async def mock_ingest(url: str, pattern: str, progress_callback: object = None) -> dict[str, int]:
@@ -293,27 +296,25 @@ class TestHandleRagCrawlProgressFeedback:
             return {"pages_crawled": 10, "chunks_stored": 50, "errors": 0}
 
         mock_rag.ingest_from_index = mock_ingest
-        mock_say = AsyncMock()
+        mock_messaging = AsyncMock()
 
         await _handle_rag_crawl(
             mock_rag,
             "https://example.com/docs",
             "",
-            say=mock_say,
-            thread_ts="1234567890.123456",
+            messaging=mock_messaging,
+            thread_id="1234567890.123456",
+            channel="C123",
             progress_interval=5,
         )
 
-        # 全ての呼び出しでthread_tsが指定されていることを確認
-        for call in mock_say.call_args_list:
-            # thread_tsが指定されている = スレッド内投稿
-            assert call.kwargs.get("thread_ts") == "1234567890.123456", (
-                f"thread_tsが指定されていない呼び出しがあります: {call}"
+        # 全ての呼び出しでthread_idとchannelが一貫していることを確認
+        for call in mock_messaging.send_message.call_args_list:
+            assert call[0][1] == "1234567890.123456", (
+                f"thread_idが一貫していません: {call}"
             )
-            # reply_broadcast=True が指定されていないことを確認
-            # (指定されるとチャンネルにも通知される)
-            assert call.kwargs.get("reply_broadcast") is not True, (
-                f"reply_broadcast=Trueが指定されています: {call}"
+            assert call[0][2] == "C123", (
+                f"channelが一貫していません: {call}"
             )
 
 

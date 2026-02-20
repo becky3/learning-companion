@@ -562,42 +562,41 @@ def test_ac12_6_format_daily_digest_passes_layout() -> None:
 
 
 async def test_ac12_7_manual_deliver_uses_layout() -> None:
-    """AC12.7: 手動配信コマンドで register_handlers の layout が daily_collect_and_deliver に渡される."""
+    """AC12.7: 手動配信コマンドで MessageRouter の layout が daily_collect_and_deliver に渡される."""
     from unittest.mock import patch
 
-    from src.slack.handlers import register_handlers
+    from src.messaging.port import IncomingMessage
+    from src.messaging.router import MessageRouter
 
+    messaging = AsyncMock()
     chat_service = AsyncMock()
     collector = AsyncMock()
     session_factory = AsyncMock()
     slack_client = AsyncMock()
     channel_id = "C_TEST"
 
-    app = AsyncMock()
-    handlers: dict = {}
-
-    def capture_event(event_type: str):  # type: ignore[no-untyped-def]
-        def decorator(func):  # type: ignore[no-untyped-def]
-            handlers[event_type] = func
-            return func
-        return decorator
-
-    app.event = capture_event
-    register_handlers(
-        app, chat_service,
+    router = MessageRouter(
+        messaging=messaging,
+        chat_service=chat_service,
         collector=collector,
         session_factory=session_factory,
-        slack_client=slack_client,
         channel_id=channel_id,
         feed_card_layout="vertical",
+        slack_client=slack_client,
     )
 
-    say = AsyncMock()
-    event = {"user": "U123", "text": "<@UBOT> deliver", "ts": "123.456"}
+    msg = IncomingMessage(
+        user_id="U123",
+        text="deliver",
+        thread_id="123.456",
+        channel="C_TEST",
+        is_in_thread=False,
+        message_id="123.456",
+    )
 
     mock_deliver = AsyncMock()
     with patch("src.scheduler.jobs.daily_collect_and_deliver", mock_deliver):
-        await handlers["app_mention"](event=event, say=say)
+        await router.process_message(msg)
 
     mock_deliver.assert_called_once_with(
         collector, session_factory, slack_client, channel_id,

@@ -25,17 +25,17 @@ async def db_session_factory():  # type: ignore[no-untyped-def]
     await engine.dispose()
 
 
-async def test_ac1_slack_format_instruction_in_assistant_yaml() -> None:
-    """AC1: config/assistant.yaml に slack_format_instruction が定義されている."""
+async def test_ac1_format_instruction_in_assistant_yaml() -> None:
+    """AC1: config/assistant.yaml に format_instruction が定義されている."""
     from src.config.settings import load_assistant_config
 
     config = load_assistant_config()
-    assert "slack_format_instruction" in config
-    assert config["slack_format_instruction"].strip() != ""
+    assert "format_instruction" in config
+    assert config["format_instruction"].strip() != ""
 
 
 async def test_ac2_slack_format_appended_to_system_prompt(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC2: slack_format_instruction がシステムプロンプトの末尾に追加される."""
+    """AC2: format_instruction がシステムプロンプトの末尾に追加される."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
@@ -46,7 +46,7 @@ async def test_ac2_slack_format_appended_to_system_prompt(db_session_factory) ->
         llm=llm,
         session_factory=db_session_factory,
         system_prompt=personality,
-        slack_format_instruction=slack_format,
+        format_instruction=slack_format,
     )
     await service.respond(user_id="U1", text="hi", thread_ts="t1")
 
@@ -58,7 +58,7 @@ async def test_ac2_slack_format_appended_to_system_prompt(db_session_factory) ->
 
 
 async def test_ac3_empty_slack_format_no_effect(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC3: slack_format_instruction が空の場合、システムプロンプトに影響しない."""
+    """AC3: format_instruction が空の場合、システムプロンプトに影響しない."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
@@ -69,7 +69,7 @@ async def test_ac3_empty_slack_format_no_effect(db_session_factory) -> None:  # 
         llm=llm,
         session_factory=db_session_factory,
         system_prompt=personality,
-        slack_format_instruction=slack_format,
+        format_instruction=slack_format,
     )
     await service.respond(user_id="U1", text="hi", thread_ts="t1")
 
