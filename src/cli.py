@@ -92,7 +92,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="ワンショットモード: 指定時は単発メッセージを処理して終了",
     )
+    parser.add_argument(
+        "--db-dir",
+        default=".tmp/.cli_data",
+        help="DB保存先ディレクトリ（デフォルト: .tmp/.cli_data）",
+    )
     return parser.parse_args(argv)
+
+
+def _apply_db_dir(db_dir: str) -> None:
+    """Settings の DB パスを指定ディレクトリ配下に上書きする."""
+    settings = get_settings()
+    db_path = Path(db_dir)
+    db_path.mkdir(parents=True, exist_ok=True)
+    settings.database_url = f"sqlite+aiosqlite:///{db_path / 'ai_assistant.db'}"
+    settings.chromadb_persist_dir = str(db_path / "chroma_db")
+    settings.bm25_persist_dir = str(db_path / "bm25_index")
 
 
 async def _setup(
@@ -256,6 +271,8 @@ async def run_repl(router: MessageRouter, user_id: str) -> None:
 async def async_main(argv: list[str] | None = None) -> None:
     """非同期メインエントリーポイント."""
     args = parse_args(argv)
+    _apply_db_dir(args.db_dir)
+    logger.info("DB dir: %s", args.db_dir)
     router, _adapter, mcp_manager = await _setup(args.user_id)
 
     try:
@@ -275,9 +292,9 @@ def main() -> None:
     """同期エントリーポイント."""
     # Windows cp932 環境でも絵文字・日本語を正しく出力するため UTF-8 に切り替え
     if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
-        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
-        sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     asyncio.run(async_main())
 
 
