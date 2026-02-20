@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import json
 import logging
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -272,6 +273,11 @@ async def async_main(argv: list[str] | None = None) -> None:
 
 def main() -> None:
     """同期エントリーポイント."""
+    # Windows cp932 環境でも絵文字・日本語を正しく出力するため UTF-8 に切り替え
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+        sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     asyncio.run(async_main())
 
 
