@@ -869,7 +869,7 @@ class MessageRouter:
             result = await self._mcp_manager.call_tool(
                 "rag_crawl", {"url": url, "pattern": pattern},
             )
-            response_text = f"└─ {result}"
+            response_text = result if result.startswith("エラー:") else f"└─ {result}"
         except MCPToolNotFoundError:
             response_text = "エラー: RAGクロールツールが利用できません。"
         except Exception:

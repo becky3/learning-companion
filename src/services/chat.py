@@ -116,19 +116,25 @@ class ChatService:
                     messages.insert(0, Message(role="system", content=extra))
 
             # 自動コンテキスト注入（RAG等）
-            rag_sources = await self._inject_auto_context(messages, text)
+            rag_sources, auto_applied = await self._inject_auto_context(messages, text)
 
-            final_response = await self._run_tool_loop(messages, tools)
+            final_response = await self._run_tool_loop(
+                messages, tools, applied_instructions=auto_applied,
+            )
             return await self._save_and_return(
                 session, user_id, thread_ts, text, final_response.content,
                 rag_sources=rag_sources,
             )
 
     async def _run_tool_loop(
-        self, messages: list[Message], tools: list[ToolDefinition]
+        self,
+        messages: list[Message],
+        tools: list[ToolDefinition],
+        *,
+        applied_instructions: set[str] | None = None,
     ) -> LLMResponse:
         """ツール呼び出しループを実行する."""
-        applied_instructions: set[str] = set()
+        applied_instructions = applied_instructions if applied_instructions is not None else set()
         for _ in range(TOOL_LOOP_MAX_ITERATIONS):
             response = await self._llm.complete_with_tools(messages, tools)
 
@@ -181,18 +187,19 @@ class ChatService:
 
     async def _inject_auto_context(
         self, messages: list[Message], user_text: str
-    ) -> list[str]:
+    ) -> tuple[list[str], set[str]]:
         """auto_context_tool で設定されたツールを自動呼び出しし、結果をシステムプロンプトに注入する.
 
         Returns:
-            検索結果に含まれるソースURLのリスト
+            (検索結果に含まれるソースURLのリスト, 適用済みresponse_instructionのセット)
         """
         sources: list[str] = []
+        applied: set[str] = set()
         if not self._mcp_manager:
-            return sources
+            return sources, applied
         auto_tools = self._mcp_manager.get_auto_context_tools()
         if not auto_tools:
-            return sources
+            return sources, applied
 
         for tool_name in auto_tools:
             try:
@@ -227,15 +234,17 @@ class ChatService:
             else:
                 messages.insert(0, Message(role="system", content=context_block))
 
-            # 対応する response_instruction も適用
+            # 対応する response_instruction も適用（重複防止）
             instruction = self._mcp_manager.get_response_instruction(tool_name)
-            if instruction and messages and messages[0].role == "system":
-                messages[0] = Message(
-                    role="system",
-                    content=messages[0].content + "\n\n" + instruction,
-                )
+            if instruction and instruction not in applied:
+                applied.add(instruction)
+                if messages and messages[0].role == "system":
+                    messages[0] = Message(
+                        role="system",
+                        content=messages[0].content + "\n\n" + instruction,
+                    )
 
-        return sources
+        return sources, applied
 
     async def _execute_tool_with_timeout(
         self, tool_name: str, arguments: dict[str, object]
