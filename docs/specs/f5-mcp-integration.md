@@ -49,11 +49,11 @@ MCPサーバーは将来的に別リポジトリに切り出すことを前提�
 
 **設計原則**:
 
-- MCPサーバーはトップレベルの `mcp-servers/` ディレクトリに配置する（`src/` の外）
+- MCPサーバーはトップレベルの `mcp_servers/` ディレクトリに配置する（`src/` の外）
 - MCPサーバーのコードは `src/` 配下のモジュールを一切 import しないこと
 - MCPサーバーとホストアプリはMCPプロトコルのみで通信する（直接のPython import禁止）
 
-**分離時の作業**: `mcp-servers/{サーバー名}/` をそのまま別リポジトリに移動し、独自の `pyproject.toml` を追加するだけで完了する想定。
+**分離時の作業**: `mcp_servers/{サーバー名}/` をそのまま別リポジトリに移動し、独自の `pyproject.toml` を追加するだけで完了する想定。
 
 ## ユーザーストーリー
 
@@ -120,7 +120,7 @@ ai-assistant/
 │   ├── llm/                     # LLMプロバイダー（tool_use 拡張）
 │   └── services/
 │       └── chat.py              # ツール呼び出しループ追加
-├── mcp-servers/                 # MCPサーバー群（トップレベル、将来分離対象）
+├── mcp_servers/                 # MCPサーバー群（トップレベル、将来分離対象）
 │   └── weather/
 │       └── server.py            # 天気予報MCPサーバー
 ├── config/
@@ -203,7 +203,7 @@ MCPサーバー → (MCP SDK) → MCPClientManager → ToolDefinition → LLMPro
 {"name": td.name, "description": td.description, "input_schema": td.input_schema}
 ```
 
-### MCPサーバー: 天気予報 (`mcp-servers/weather/server.py`)
+### MCPサーバー: 天気予報 (`mcp_servers/weather/server.py`)
 
 天気予報APIから情報を取得するMCPサーバーを実装する。
 
@@ -248,7 +248,7 @@ MCPサーバーの接続設定を外部ファイルで管理する。
     "weather": {
       "transport": "stdio",
       "command": "python",
-      "args": ["mcp-servers/weather/server.py"],
+      "args": ["mcp_servers/weather/server.py"],
       "env": {}
     }
   }
@@ -451,7 +451,7 @@ class Settings(BaseSettings):
 |---------|------|
 | `src/mcp_bridge/__init__.py` | MCPクライアントモジュール |
 | `src/mcp_bridge/client_manager.py` | MCPクライアント管理 + `MCPServerConfig` |
-| `mcp-servers/weather/server.py` | 天気予報MCPサーバー |
+| `mcp_servers/weather/server.py` | 天気予報MCPサーバー |
 | `config/mcp_servers.json` | MCPサーバー接続設定 |
 | `tests/test_mcp_client_manager.py` | MCPクライアントのテスト |
 | `tests/test_weather_server.py` | 天気予報サーバーのテスト |
@@ -561,7 +561,7 @@ class Settings(BaseSettings):
 
 ### Step 2: MCPサーバー（天気予報）
 
-1. `mcp-servers/weather/server.py` を作成
+1. `mcp_servers/weather/server.py` を作成
 2. 天気予報API連携を実装
 3. テスト作成
 

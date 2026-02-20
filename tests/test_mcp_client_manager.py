@@ -73,7 +73,7 @@ async def test_ac4_client_manager_connects_and_lists_tools() -> None:
             name="weather",
             transport="stdio",
             command="python",
-            args=["mcp-servers/weather/server.py"],
+            args=["mcp_servers/weather/server.py"],
         )
         await manager.initialize([config])
 
@@ -109,7 +109,7 @@ async def test_ac5_client_manager_calls_tool() -> None:
             name="weather",
             transport="stdio",
             command="python",
-            args=["mcp-servers/weather/server.py"],
+            args=["mcp_servers/weather/server.py"],
         )
         await manager.initialize([config])
 
