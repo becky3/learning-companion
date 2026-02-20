@@ -13,8 +13,8 @@ import pytest
 
 
 @pytest.mark.asyncio
-async def test_rag_server_exposes_five_tools() -> None:
-    """RAG MCPサーバーが5つのツールを公開すること."""
+async def test_ac20_rag_server_exposes_five_tools() -> None:
+    """AC20: RAG MCPサーバーが5つのツールを公開すること."""
     mod = import_module("mcp_servers.rag.server")
     server = mod.mcp
 
@@ -26,8 +26,8 @@ async def test_rag_server_exposes_five_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_rag_server_tool_count() -> None:
-    """RAG MCPサーバーのツール数が正確に5であること."""
+async def test_ac20_rag_server_tool_count() -> None:
+    """AC20: RAG MCPサーバーのツール数が正確に5であること."""
     mod = import_module("mcp_servers.rag.server")
     server = mod.mcp
 

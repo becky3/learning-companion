@@ -236,7 +236,7 @@ class TestRagCrawlViaMcp:
             assert channel == "C123"
 
     @pytest.mark.asyncio
-    async def test_crawl_calls_mcp_with_pattern(self) -> None:
+    async def test_ac23_crawl_with_pattern(self) -> None:
         """rag_crawl MCPツールにURL+パターンが渡されること."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(
@@ -253,8 +253,8 @@ class TestRagCrawlViaMcp:
         )
 
     @pytest.mark.asyncio
-    async def test_crawl_no_url(self) -> None:
-        """URL未指定時のエラーメッセージ."""
+    async def test_ac23_crawl_no_url_error(self) -> None:
+        """AC23: URL未指定時のエラーメッセージ."""
         mcp = MagicMock()
         adapter, router = _make_router(mcp_manager=mcp)
 
@@ -265,8 +265,8 @@ class TestRagCrawlViaMcp:
         assert "URLを指定" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_crawl_invalid_scheme(self) -> None:
-        """無効なURLスキーム時のエラーメッセージ."""
+    async def test_ac31_crawl_invalid_scheme_error(self) -> None:
+        """AC31: 無効なURLスキーム時のエラーメッセージ."""
         mcp = MagicMock()
         adapter, router = _make_router(mcp_manager=mcp)
 
@@ -278,8 +278,8 @@ class TestRagCrawlViaMcp:
         assert "無効なURLスキーム" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_crawl_tool_not_found(self) -> None:
-        """MCPToolNotFoundError時のエラーメッセージ."""
+    async def test_ac22_crawl_tool_not_found_error(self) -> None:
+        """AC22: MCPToolNotFoundError時のエラーメッセージ."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(side_effect=MCPToolNotFoundError("not found"))
         adapter, router = _make_router(mcp_manager=mcp)
@@ -298,8 +298,8 @@ class TestRagAddViaMcp:
     """rag add コマンドのテスト（MCP経由）."""
 
     @pytest.mark.asyncio
-    async def test_success(self) -> None:
-        """ページ追加成功時のレスポンス."""
+    async def test_ac24_add_page_success(self) -> None:
+        """AC24: ページ追加成功時のレスポンス."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(
             return_value="ページを取り込みました: https://example.com/page (5チャンク)"
@@ -316,8 +316,8 @@ class TestRagAddViaMcp:
         assert "取り込みました" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_no_url(self) -> None:
-        """URL未指定時のエラーメッセージ."""
+    async def test_ac24_add_no_url_error(self) -> None:
+        """AC24: URL未指定時のエラーメッセージ."""
         mcp = MagicMock()
         adapter, router = _make_router(mcp_manager=mcp)
 
@@ -327,8 +327,8 @@ class TestRagAddViaMcp:
         assert "URLを指定" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_invalid_scheme(self) -> None:
-        """無効なURLスキーム時のエラーメッセージ."""
+    async def test_ac31_add_invalid_scheme_error(self) -> None:
+        """AC31: 無効なURLスキーム時のエラーメッセージ."""
         mcp = MagicMock()
         adapter, router = _make_router(mcp_manager=mcp)
 
@@ -339,8 +339,8 @@ class TestRagAddViaMcp:
         assert "無効なURLスキーム" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_tool_not_found(self) -> None:
-        """MCPToolNotFoundError時のエラーメッセージ."""
+    async def test_ac22_add_tool_not_found_error(self) -> None:
+        """AC22: MCPToolNotFoundError時のエラーメッセージ."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(side_effect=MCPToolNotFoundError("not found"))
         adapter, router = _make_router(mcp_manager=mcp)
@@ -357,8 +357,8 @@ class TestRagStatusViaMcp:
     """rag status コマンドのテスト（MCP経由）."""
 
     @pytest.mark.asyncio
-    async def test_success(self) -> None:
-        """ステータス取得成功時のレスポンス."""
+    async def test_ac25_status_success(self) -> None:
+        """AC25: ステータス取得成功時のレスポンス."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(
             return_value="ナレッジベース統計:\n  総チャンク数: 100\n  ソースURL数: 10"
@@ -372,8 +372,8 @@ class TestRagStatusViaMcp:
         assert "10" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_exception(self) -> None:
-        """例外発生時のエラーメッセージ."""
+    async def test_ac25_status_exception_error(self) -> None:
+        """AC25: 例外発生時のエラーメッセージ."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(side_effect=Exception("connection error"))
         adapter, router = _make_router(mcp_manager=mcp)
@@ -387,8 +387,8 @@ class TestRagDeleteViaMcp:
     """rag delete コマンドのテスト（MCP経由）."""
 
     @pytest.mark.asyncio
-    async def test_success(self) -> None:
-        """削除成功時のレスポンス."""
+    async def test_ac26_delete_success(self) -> None:
+        """AC26: 削除成功時のレスポンス."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(
             return_value="削除しました: https://example.com/page (5チャンク)"
@@ -405,8 +405,8 @@ class TestRagDeleteViaMcp:
         assert "削除しました" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_no_url(self) -> None:
-        """URL未指定時のエラーメッセージ."""
+    async def test_ac26_delete_no_url_error(self) -> None:
+        """AC26: URL未指定時のエラーメッセージ."""
         mcp = MagicMock()
         adapter, router = _make_router(mcp_manager=mcp)
 
@@ -416,8 +416,8 @@ class TestRagDeleteViaMcp:
         assert "URLを指定" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_invalid_scheme(self) -> None:
-        """無効なURLスキーム時のエラーメッセージ."""
+    async def test_ac31_delete_invalid_scheme_error(self) -> None:
+        """AC31: 無効なURLスキーム時のエラーメッセージ."""
         mcp = MagicMock()
         adapter, router = _make_router(mcp_manager=mcp)
 
@@ -428,8 +428,8 @@ class TestRagDeleteViaMcp:
         assert "無効なURLスキーム" in adapter.sent_messages[0][0]
 
     @pytest.mark.asyncio
-    async def test_tool_not_found(self) -> None:
-        """MCPToolNotFoundError時のエラーメッセージ."""
+    async def test_ac22_delete_tool_not_found_error(self) -> None:
+        """AC22: MCPToolNotFoundError時のエラーメッセージ."""
         mcp = MagicMock()
         mcp.call_tool = AsyncMock(side_effect=MCPToolNotFoundError("not found"))
         adapter, router = _make_router(mcp_manager=mcp)
