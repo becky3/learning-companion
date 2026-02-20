@@ -60,6 +60,7 @@ uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdo
 - エラーハンドリング（except pass の有無）
 - バリデーション漏れ（境界値: 0, 負数, 空文字列）
 - セキュリティ（コマンドインジェクション、XSS等）
+- README.md 更新漏れ（機能追加・環境変数追加・依存関係変更時）
 
 分類（Critical/Warning/Suggestion）は参考情報であり、判断に誤りが含まれる場合もある。各指摘について対応すべきかそれぞれ判断し、修正する。
 
