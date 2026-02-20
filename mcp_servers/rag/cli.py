@@ -96,6 +96,7 @@ def main() -> None:
     )
     eval_parser.add_argument(
         "--persist-dir",
+        required=True,
         help="ChromaDB永続化ディレクトリ",
     )
     eval_parser.add_argument(
@@ -203,8 +204,8 @@ async def create_rag_service(
     *,
     chunk_size: int,
     chunk_overlap: int,
+    persist_dir: str,
     threshold: float | None = None,
-    persist_dir: str | None = None,
     bm25_index: "BM25Index | None" = None,
     vector_weight: float = 0.6,
     min_combined_score: float | None = None,
@@ -216,8 +217,8 @@ async def create_rag_service(
     Args:
         chunk_size: チャンクサイズ
         chunk_overlap: チャンクオーバーラップ
+        persist_dir: ChromaDB永続化ディレクトリ
         threshold: 類似度閾値（Noneの場合はフィルタリングなし）
-        persist_dir: ChromaDB永続化ディレクトリ（未指定時は settings から取得）
         bm25_index: BM25インデックス（指定時はハイブリッド検索を有効化）
         vector_weight: ベクトル検索の重み α
         min_combined_score: combined_scoreの下限閾値（None=フィルタなし）
@@ -234,11 +235,9 @@ async def create_rag_service(
     settings = get_settings()
     embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
 
-    # persist_dir は基盤設定のため settings フォールバックを許容
-    chroma_persist_dir = persist_dir or settings.chromadb_persist_dir
     vector_store = VectorStore(
         embedding_provider=embedding_provider,
-        persist_directory=chroma_persist_dir,
+        persist_directory=persist_dir,
     )
 
     # WebCrawlerはダミー（評価時は使用しない）

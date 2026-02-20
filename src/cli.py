@@ -91,18 +91,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _apply_db_dir(db_dir: str) -> None:
-    """Settings の DB パスを指定ディレクトリ配下に上書きする."""
+def _apply_db_dir(db_dir: str) -> dict[str, str]:
+    """Settings の DB パスを指定ディレクトリ配下に上書きする.
+
+    SQLite は settings を直接書き換える。
+    ChromaDB / BM25 のパスは戻り値で返し、呼び出し元が MCP サーバーの
+    env に注入して setup 時に伝搬する。
+
+    Returns:
+        MCP サーバーに渡す環境変数の dict
+    """
     settings = get_settings()
     db_path = Path(db_dir)
     db_path.mkdir(parents=True, exist_ok=True)
     settings.database_url = f"sqlite+aiosqlite:///{db_path / 'ai_assistant.db'}"
 
+    return {
+        "CHROMADB_PERSIST_DIR": str(db_path / "chroma_db"),
+        "BM25_PERSIST_DIR": str(db_path / "bm25_index"),
+    }
+
 
 async def _setup(
     user_id: str,
+    mcp_extra_env: dict[str, str] | None = None,
 ) -> tuple[MessageRouter, CliAdapter, MCPClientManager | None]:
-    """サービス群を初期化してMessageRouterを返す."""
+    """サービス群を初期化してMessageRouterを返す.
+
+    Args:
+        user_id: CLI ユーザー ID
+        mcp_extra_env: MCP サーバーに追加で渡す環境変数（DB パス等）
+    """
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
 
@@ -121,6 +140,9 @@ async def _setup(
     if settings.mcp_enabled:
         mcp_manager = MCPClientManager()
         server_configs = _load_mcp_server_configs(settings.mcp_servers_config)
+        if mcp_extra_env:
+            for config in server_configs:
+                config.env.update(mcp_extra_env)
         await mcp_manager.initialize(server_configs)
 
     cli_adapter = CliAdapter(user_id=user_id)
@@ -225,9 +247,9 @@ async def run_repl(router: MessageRouter, user_id: str) -> None:
 async def async_main(argv: list[str] | None = None) -> None:
     """非同期メインエントリーポイント."""
     args = parse_args(argv)
-    _apply_db_dir(args.db_dir)
+    mcp_extra_env = _apply_db_dir(args.db_dir)
     logger.info("DB dir: %s", args.db_dir)
-    router, _adapter, mcp_manager = await _setup(args.user_id)
+    router, _adapter, mcp_manager = await _setup(args.user_id, mcp_extra_env=mcp_extra_env)
 
     try:
         if args.message is not None:
