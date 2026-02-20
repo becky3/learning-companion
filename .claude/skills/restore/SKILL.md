@@ -31,7 +31,7 @@ Claude Code のシステムプロンプトに `You have a persistent auto memory
 
 #### 2a. 引数ありの場合
 
-`$ARGUMENTS` をキャラクター名として採用する。そのキャラクターの作品名・ジャンルも特定する。
+`$ARGUMENTS` をキャラクター名として採用する。作品名・ジャンルは AI の一般知識から特定する。不明な場合は作品名を「不明」、ジャンルを「不明」として扱い、スキルの実行はエラーとしない。
 
 #### 2b. 引数なしの場合（ランダム選出）
 
@@ -42,15 +42,17 @@ Claude Code のシステムプロンプトに `You have a persistent auto memory
    ```
 
 2. 直近30件からキャラクター名一覧を把握する
-3. `$MEMORY_DIR/character.md` のジャンルリストに従い、**その30件に含まれないキャラクター**を選出する
+3. `$MEMORY_DIR/character.md` のジャンルリストに従い（ファイルが存在しない場合はジャンル制約なし）、**その30件に含まれないキャラクター**を選出する
 4. 選出条件: 開発能力に向いたキャラクター
 
 #### 2c. 履歴更新
 
-選出したキャラクターを `character-history.jsonl` に追記する:
+選出したキャラクターを `character-history.jsonl` に追記する。JSON の値にエスケープが必要な文字が含まれる可能性があるため、`printf` で安全に生成する:
 
 ```bash
-echo '{"character":"キャラ名","work":"作品名","genre":"ジャンル","datetime":"ISO8601形式"}' >> "$MEMORY_DIR/character-history.jsonl"
+NOW=$(date +%Y-%m-%dT%H:%M:%S%z)
+printf '{"character":"%s","work":"%s","genre":"%s","datetime":"%s"}\n' \
+  "キャラ名" "作品名" "ジャンル" "$NOW" >> "$MEMORY_DIR/character-history.jsonl"
 ```
 
 追記後、ファイルが30行を超えた場合は切り詰める:
@@ -105,3 +107,4 @@ ls -1 "$MEMORY_DIR/journal/"*.md 2>/dev/null | sort -r | head -n 1
 - ジャーナルが0件の場合: MEMORY.md の情報のみで報告
 - MEMORY.md が存在しない場合: ジャーナルの情報のみで報告
 - `character-history.jsonl` が存在しない場合: 空として扱い、制約なしでランダム選出する
+- `character.md` が存在しない場合: ジャンル制約なしで、直近30件に含まれない開発向きキャラクターをランダム選出する
