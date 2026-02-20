@@ -5,9 +5,9 @@ nomic-embed-text のタスク固有プレフィックス（search_document: / se
 
 Usage:
     # テスト用ChromaDBの初期化（初回のみ）
-    uv run python -m src.rag.cli init-test-db \
+    uv run python -m mcp_servers.rag.cli init-test-db \
       --persist-dir .tmp/prefix-comparison/chroma_db_no_prefix
-    uv run python -m src.rag.cli init-test-db \
+    uv run python -m mcp_servers.rag.cli init-test-db \
       --persist-dir .tmp/prefix-comparison/chroma_db_with_prefix
 
     # 比較実行

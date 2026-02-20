@@ -8,7 +8,7 @@ Phase 5: Phase 4 のベスト k1/b で min_combined_score をスイープ
 
 Usage:
     # テスト用ChromaDBの初期化（初回のみ）
-    uv run python -m src.rag.cli init-test-db --persist-dir .tmp/rag-evaluation/chroma_db_test
+    uv run python -m mcp_servers.rag.cli init-test-db --persist-dir .tmp/rag-evaluation/chroma_db_test
 
     # 全Phase自動実行
     uv run python scripts/parameter_sweep.py \
@@ -111,7 +111,7 @@ async def run_single_evaluation(
     chunk_size: int,
     chunk_overlap: int,
     n_results: int = 5,
-    persist_dir: str | None = None,
+    persist_dir: str = DEFAULT_PERSIST_DIR,
     k1: float = 1.5,
     b: float = 0.75,
     min_combined_score: float | None = None,
@@ -254,7 +254,7 @@ def print_results_table(results: list[SweepResult], phase: int) -> None:
 async def run_phase1(
     dataset_path: str, fixture_path: str,
     chunk_size: int, chunk_overlap: int,
-    persist_dir: str | None = None,
+    persist_dir: str,
     *,
     alpha_min: float = 0.0,
     alpha_max: float = 1.0,
@@ -297,7 +297,7 @@ async def run_phase1(
 async def run_phase2(
     best_alpha: float, dataset_path: str, fixture_path: str,
     chunk_size: int, chunk_overlap: int,
-    persist_dir: str | None = None,
+    persist_dir: str,
     *,
     n_results: int = 5,
     k1: float = 1.5,
@@ -394,7 +394,7 @@ async def run_phase3(
     best_alpha: float, best_threshold: float | None,
     dataset_path: str, fixture_path: str,
     chunk_size: int, chunk_overlap: int,
-    persist_dir: str | None = None,
+    persist_dir: str,
     *,
     k1: float = 1.5,
     b: float = 0.75,
@@ -434,7 +434,7 @@ async def run_phase4(
     best_n_results: int,
     dataset_path: str, fixture_path: str,
     chunk_size: int, chunk_overlap: int,
-    persist_dir: str | None = None,
+    persist_dir: str,
 ) -> list[SweepResult]:
     """Phase 4: BM25 k1/b グリッドサーチ."""
     k1_values = [0.5, 1.0, 1.5, 2.0, 2.5]
@@ -474,7 +474,7 @@ async def run_phase5(
     best_k1: float, best_b: float,
     dataset_path: str, fixture_path: str,
     chunk_size: int, chunk_overlap: int,
-    persist_dir: str | None = None,
+    persist_dir: str,
 ) -> list[SweepResult]:
     """Phase 5: min_combined_score スイープ."""
     min_score_values: list[float | None] = [
