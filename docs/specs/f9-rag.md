@@ -193,11 +193,11 @@ bot: エラー: ページの取り込みに失敗しました。
 ```
 ユーザー: @bot Pythonのasync/awaitについて教えて
 
-（MCP有効で RAG MCPサーバーが登録済みの場合）
+（MCP有効で RAG MCP サーバーが登録済みの場合）
 → LLM がツール一覧から rag_search を選択し、MCP経由で検索
 → 検索結果を踏まえて応答を生成
 
-（MCP無効、または RAG MCPサーバー未登録の場合）
+（MCP無効、または RAG MCP サーバー未登録の場合）
 → 従来通りLLMの学習済み知識のみで応答
 ```
 
@@ -223,7 +223,7 @@ dependencies = [
 ```
 ai-assistant/
 ├── mcp_servers/
-│   └── rag/                          # RAG MCPサーバー
+│   └── rag/                          # RAG MCP サーバー
 │       ├── .env                      # MCP サーバー専用設定（git管理外）
 │       ├── .env.example              # 設定テンプレート
 │       ├── __init__.py
@@ -1089,6 +1089,8 @@ RAG 関連の設定は `mcp_servers/rag/config.py` の `RAGSettings` で管理�
 
 ```python
 from pathlib import Path
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
@@ -1459,7 +1461,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 1. `mcp-servers/` → `mcp_servers/` ディレクトリリネーム (#561)
 2. 仕様書更新 — 本ドキュメントの MCP 前提への書き換え (#563)
-3. RAG MCP 全移行 — ファイル移動、MCPサーバー実装、`src/` 側の RAG 依存削除 (#564)
+3. RAG MCP 全移行 — ファイル移動、MCP サーバー実装、`src/` 側の RAG 依存削除 (#564)
 
 ---
 
