@@ -282,9 +282,10 @@ ai-assistant/
 │   ├── embedding_prefix_comparison.py # Embeddingプレフィックスあり/なし比較
 │   ├── collect_evaluation_data.py   # Wikipedia APIデータ収集スクリプト
 │   └── eval_data_config.json        # 収集対象トピック設定
+├── tests/fixtures/rag/
+│   └── baseline.json                # ベースライン（リポジトリ管理）
 ├── .tmp/
 │   └── rag-evaluation/
-│       ├── baseline.json            # ベースライン
 │       ├── report.json              # 最新評価結果
 │       └── report.md                # Markdownレポート
 ├── config/
@@ -961,7 +962,7 @@ python -m mcp_servers.rag.cli evaluate \
   --vector-weight 0.6 \
   --dataset tests/fixtures/rag_evaluation_dataset.json \
   --output-dir .tmp/rag-evaluation \
-  --baseline-file .tmp/rag-evaluation/baseline.json \
+  --baseline-file tests/fixtures/rag/baseline.json \
   --persist-dir .tmp/test_chroma_db \
   --n-results 5 \
   --threshold 0.5 \
@@ -1018,6 +1019,15 @@ async def rag_search(query: str, n_results: int | None = None) -> str:
     """ナレッジベースから関連情報を検索する.
 
     n_results 未指定時は RAGSettings.rag_retrieval_count を使用。
+
+    Returns:
+        検索結果テキスト。各チャンクを以下の形式で連結:
+
+        ## Source: <ソースURL>
+        <本文テキスト>
+
+        ソースURLが含まれるため、LLM が回答内で自然に参照元を提示できる。
+        結果が0件の場合は「該当する情報が見つかりませんでした」を返す。
     """
 
 @mcp.tool()
@@ -1061,7 +1071,8 @@ MCP移行により、`ChatService` は RAG サービスを直接参照しない�
 - RAG コンテキストの自動注入コード（システムプロンプトへの付加）を**削除**
 - RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
 - `rag_show_sources` は不要化（LLM が MCP ツールの結果を踏まえて自然にソース情報を含める）
-- **`RAG_ENABLED` の廃止**: `src/config/settings.py` から `rag_enabled` フィールドを削除。RAG の有効/無効は本体アプリ側の `MCP_ENABLED` + `config/mcp_servers.json` への rag エントリ登録で制御する（RAG MCP サーバー側の設定ではない）
+- **`RAG_ENABLED` の廃止**: `src/config/settings.py` から `rag_enabled` フィールドを削除。RAG の有効/無効は本体アプリ側の `MCP_ENABLED` + `config/mcp_servers.json` への rag エントリ登録で制御する（RAG MCP サーバー側の設定ではない）。
+  `CLAUDE.md` における `RAG_ENABLED` 記述の更新は実装 PR (#564) で行う
 
 #### Slackコマンドのルーティング (`src/messaging/router.py`)
 
@@ -1484,7 +1495,7 @@ RAG_DEBUG_LOG_ENABLED=false
 ## 注意事項
 
 1. **RAG の有効化**: `MCP_ENABLED=true` かつ `config/mcp_servers.json` に RAG エントリを登録することで有効化される（`RAG_ENABLED` フラグは廃止）
-2. **ChromaDBの永続化**: `CHROMADB_PERSIST_DIR` で指定したディレクトリにSQLiteファイルが作成される。`.gitignore` に追加すること
+2. **ChromaDBの永続化**: `CHROMADB_PERSIST_DIR` で指定したディレクトリにSQLiteファイルが作成される。デフォルトの `chroma_db/` は既に `.gitignore` 済みだが、ディレクトリを変更する場合は適宜 `.gitignore` に追加すること
 3. **Embeddingモデルの整合性**: モデルを変更した場合、既存データとの類似度計算が不正確になるため、コレクションの再構築が必要
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
 5. **LLMコンテキストウィンドウ**: `RAG_RETRIEVAL_COUNT` で検索件数を制限
@@ -1492,7 +1503,7 @@ RAG_DEBUG_LOG_ENABLED=false
 7. **robots.txt**: `RAG_RESPECT_ROBOTS_TXT=true`（デフォルト）で `robots.txt` を遵守する。Python 標準ライブラリ `urllib.robotparser` を使用
 8. **BM25は少数ドキュメントでの評価に不向き**: IDF計算の特性上、テストには十分なドキュメント数が必要
 9. **辞書サイズ**: `unidic-lite` は約50MB。本番環境でのディスク使用量に注意
-10. **ベースライン管理**: ベースラインファイルはリポジトリにコミットし、チーム全体で共有
+10. **ベースライン管理**: ベースラインファイルは `tests/fixtures/rag/baseline.json` に配置してリポジトリにコミットし、チーム全体で共有。`.tmp/rag-evaluation/` はローカル一時ファイル用でコミットしない
 11. **`mcp_servers/` の独立性**: `mcp_servers/` は `src/` のモジュールを import しないこと（CLAUDE.md 参照）。RAG に必要なモジュールはすべて `mcp_servers/rag/` 配下に配置する。設定もプロジェクトルートの `.env` を参照せず、`mcp_servers/rag/.env` を使用する
 
 ## 未着手Issue
@@ -1507,7 +1518,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 - ガイド: [docs/guides/rag-overview.md](../guides/rag-overview.md) — RAGシステムの概要（初心者向け）
 - ガイド: [docs/guides/rag-evaluation-data.md](../guides/rag-evaluation-data.md) — RAG評価データ収集・管理ガイド
-- 計画: `.tmp/plan/547-rag-mcp-migration-plan.md` — RAG MCP全移行の実装計画
+- 計画: [Issue #547](https://github.com/becky3/ai-assistant/issues/547) — RAG MCP全移行の親Issue
 - ジャーナル（レトロ変換）: `memory/journal/20260217-062709-retro-f9-rag.md`
 
 ## 変更履歴
