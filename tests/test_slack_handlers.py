@@ -53,8 +53,8 @@ async def test_ac1_handle_mention_replies_in_thread() -> None:
     assert msg.message_id == "123.456"
 
 
-async def test_ac1_handle_mention_in_thread() -> None:
-    """AC1: スレッド内メンションでは is_in_thread=True が設定される."""
+async def test_ac1b_handle_mention_in_thread() -> None:
+    """AC1b: スレッド内メンションでは is_in_thread=True が設定される."""
     from src.slack.handlers import register_handlers
 
     router = AsyncMock()

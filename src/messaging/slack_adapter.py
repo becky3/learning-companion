@@ -26,13 +26,11 @@ class SlackAdapter(MessagingPort):
         bot_user_id: str,
         thread_history_service: ThreadHistoryService,
         format_instruction: str = "",
-        bot_token: str = "",
     ) -> None:
         self._client = slack_client
         self._bot_user_id = bot_user_id
         self._thread_history = thread_history_service
         self._format_instruction = format_instruction
-        self._bot_token = bot_token
 
     async def send_message(self, text: str, thread_id: str, channel: str) -> None:
         """Slack にメッセージを投稿する."""

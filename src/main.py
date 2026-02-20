@@ -185,7 +185,6 @@ async def main() -> None:
             bot_user_id=bot_user_id,
             thread_history_service=thread_history_service,
             format_instruction=slack_format,
-            bot_token=settings.slack_bot_token,
         )
 
         # チャットサービス

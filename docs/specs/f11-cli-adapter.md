@@ -113,9 +113,10 @@ uv run python -m src.cli --user-id alice
 ### 対応する
 
 - 全キーワードコマンド（chat, status, profile, topic, deliver, feed \*, rag \*）
-- feed collect/test/deliver のテキスト簡易表示（CLIモード）
+- feed deliver/collect/test は Slack 接続時のみサポート（CLI単体モードではエラーメッセージを返却）
 - REPL + ワンショット両モード
 - 会話履歴のDB永続化
+- `--db-dir` オプションによるDB分離（デフォルト: `.tmp/.cli_data/`）
 
 ### 対応しない（将来Issue）
 
