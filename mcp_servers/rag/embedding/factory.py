@@ -6,14 +6,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from src.config.settings import Settings
-from src.embedding.base import EmbeddingProvider
-from src.embedding.lmstudio_embedding import LMStudioEmbedding
-from src.embedding.openai_embedding import OpenAIEmbedding
+from ..config import RAGSettings
+from .base import EmbeddingProvider
+from .lmstudio_embedding import LMStudioEmbedding
+from .openai_embedding import OpenAIEmbedding
 
 
 def get_embedding_provider(
-    settings: Settings,
+    settings: RAGSettings,
     provider_setting: Literal["local", "online"],
 ) -> EmbeddingProvider:
     """設定に応じたEmbeddingプロバイダーを返す.

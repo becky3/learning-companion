@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.services.safe_browsing import (
+from mcp_servers.rag.safe_browsing import (
     CacheEntry,
     SafeBrowsingClient,
     SafeBrowsingResult,
@@ -149,7 +149,7 @@ class TestSafeBrowsingClientAsync:
         mock_response = MockResponse(200, {})  # 空 = 脅威なし
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             result = await client.check_url("https://safe-site.com")
@@ -176,7 +176,7 @@ class TestSafeBrowsingClientAsync:
         )
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             result = await client.check_url("https://phishing-site.com")
@@ -203,7 +203,7 @@ class TestSafeBrowsingClientAsync:
         )
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             urls = ["https://safe.com", "https://malware.com", "https://another-safe.com"]
@@ -228,7 +228,7 @@ class TestSafeBrowsingClientAsync:
         mock_response = MockResponse(200, {})
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             is_safe = await client.is_url_safe("https://safe-site.com")
@@ -247,7 +247,7 @@ class TestSafeBrowsingCache:
         # 最初のリクエスト
         mock_response = MockResponse(200, {})
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ) as mock_session:
             await client.check_url("https://example.com")
@@ -255,7 +255,7 @@ class TestSafeBrowsingCache:
 
         # 2回目のリクエスト（キャッシュヒット）
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ) as mock_session:
             result = await client.check_url("https://example.com")
@@ -274,7 +274,7 @@ class TestSafeBrowsingCache:
 
         # 最初のリクエスト
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             await client.check_url("https://example.com")
@@ -284,7 +284,7 @@ class TestSafeBrowsingCache:
 
         # 2回目のリクエスト（キャッシュミス）
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ) as mock_session:
             result = await client.check_url("https://example.com")
@@ -301,7 +301,7 @@ class TestSafeBrowsingCache:
 
         # キャッシュにエントリを追加
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             await client.check_url("https://example1.com")
@@ -343,7 +343,7 @@ class TestSafeBrowsingErrorHandling:
         mock_response = MockResponse(500, {"error": "Internal Server Error"})
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             result = await client.check_url("https://unknown-site.com")
@@ -359,7 +359,7 @@ class TestSafeBrowsingErrorHandling:
         client = SafeBrowsingClient(api_key="test-key", fail_open=True)
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             side_effect=Exception("Network error"),
         ):
             result = await client.check_url("https://unknown-site.com")
@@ -374,7 +374,7 @@ class TestSafeBrowsingErrorHandling:
         mock_response = MockResponse(500, {"error": "Internal Server Error"})
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             with pytest.raises(SafetyCheckError, match="API障害"):
@@ -386,7 +386,7 @@ class TestSafeBrowsingErrorHandling:
         client = SafeBrowsingClient(api_key="test-key", fail_open=False)
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             side_effect=Exception("Network error"),
         ):
             with pytest.raises(SafetyCheckError, match="API障害"):
@@ -439,7 +439,7 @@ class TestThreatTypes:
         )
 
         with patch(
-            "src.services.safe_browsing.aiohttp.ClientSession",
+            "mcp_servers.rag.safe_browsing.aiohttp.ClientSession",
             return_value=MockClientSession(mock_response),
         ):
             result = await client.check_url("https://bad-site.com")

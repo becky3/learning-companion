@@ -3,7 +3,7 @@
 仕様: docs/specs/f9-rag.md
 """
 
-from src.rag.content_detector import (
+from mcp_servers.rag.content_detector import (
     ContentType,
     detect_content_type,
     split_by_content_type,

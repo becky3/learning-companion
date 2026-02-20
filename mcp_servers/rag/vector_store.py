@@ -14,7 +14,7 @@ import chromadb
 from chromadb.api.types import Embeddings, IncludeEnum
 from chromadb.config import Settings as ChromaSettings
 
-from src.embedding.base import EmbeddingProvider
+from .embedding.base import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 

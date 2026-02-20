@@ -3,7 +3,7 @@
 仕様: docs/specs/f9-rag.md
 """
 
-from src.rag.table_chunker import chunk_table_data
+from mcp_servers.rag.table_chunker import chunk_table_data
 
 
 class TestChunkTableData:

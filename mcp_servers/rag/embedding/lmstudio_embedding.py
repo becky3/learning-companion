@@ -8,8 +8,8 @@ import logging
 
 from openai import AsyncOpenAI
 
-from src.config.settings import DEFAULT_LMSTUDIO_BASE_URL
-from src.embedding.base import EmbeddingProvider
+from ..config import DEFAULT_LMSTUDIO_BASE_URL
+from .base import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 

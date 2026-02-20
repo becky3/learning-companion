@@ -49,11 +49,11 @@ from pathlib import Path
 # プロジェクトルートをパスに追加
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.rag.cli import (
+from mcp_servers.rag.cli import (
     _build_bm25_index_from_fixture,
     create_rag_service,
 )
-from src.rag.evaluation import evaluate_retrieval
+from mcp_servers.rag.evaluation import evaluate_retrieval
 
 # 一時ファイル出力先
 OUTPUT_DIR = Path(".tmp/rag-evaluation")

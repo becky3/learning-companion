@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import aiohttp
 import pytest
 
-from src.services.web_crawler import CrawledPage, RobotsChecker, WebCrawler
+from mcp_servers.rag.web_crawler import CrawledPage, RobotsChecker, WebCrawler
 
 
 # テスト用HTMLサンプル
@@ -301,7 +301,7 @@ class TestWebCrawlerCrawlIndexPage:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, SAMPLE_INDEX_HTML),
         ):
             urls = await crawler.crawl_index_page("https://example.com/articles")
@@ -325,7 +325,7 @@ class TestWebCrawlerCrawlIndexPage:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, SAMPLE_INDEX_HTML),
         ):
             # .html で終わるURLのみ抽出
@@ -358,7 +358,7 @@ class TestWebCrawlerCrawlIndexPage:
         """
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, html_with_external_links),
         ):
             urls = await crawler.crawl_index_page("https://example.com/links")
@@ -390,7 +390,7 @@ class TestWebCrawlerCrawlIndexPage:
         """
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, html_with_fragments),
         ):
             urls = await crawler.crawl_index_page("https://example.com/index")
@@ -406,7 +406,7 @@ class TestWebCrawlerCrawlIndexPage:
         crawler = WebCrawler(max_pages=2, respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, SAMPLE_INDEX_HTML),
         ):
             urls = await crawler.crawl_index_page("https://example.com/articles")
@@ -423,7 +423,7 @@ class TestWebCrawlerCrawlPage:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
         ):
             page = await crawler.crawl_page("https://example.com/article/1")
@@ -440,7 +440,7 @@ class TestWebCrawlerCrawlPage:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(404, "Not Found"),
         ):
             page = await crawler.crawl_page("https://example.com/not-found")
@@ -462,7 +462,7 @@ class TestWebCrawlerCrawlPage:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
         ):
             page = await crawler.crawl_page("https://example.com/article/1#section")
@@ -476,7 +476,7 @@ class TestWebCrawlerCrawlPage:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(302, ""),
         ):
             page = await crawler.crawl_page("https://example.com/redirect")
@@ -493,7 +493,7 @@ class TestWebCrawlerCrawlIndexPageRedirect:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(301, ""),
         ):
             urls = await crawler.crawl_index_page("https://example.com/articles")
@@ -541,7 +541,7 @@ class TestWebCrawlerCrawlPages:
                 pass
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSessionWithErrors(),
         ):
             urls = [
@@ -564,11 +564,11 @@ class TestWebCrawlerCrawlPages:
         crawler = WebCrawler(crawl_delay=0.1, respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
         ):
             with patch(
-                "src.services.web_crawler.asyncio.sleep", new_callable=AsyncMock
+                "mcp_servers.rag.web_crawler.asyncio.sleep", new_callable=AsyncMock
             ) as mock_sleep:
                 # 同一ドメインへの複数リクエスト + 異なるドメインへのリクエスト
                 urls = [
@@ -638,7 +638,7 @@ class TestWebCrawlerConcurrency:
                     current_concurrent -= 1
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSessionWithConcurrencyTracking(),
         ):
             urls = [f"https://example.com/article/{i}" for i in range(5)]
@@ -694,7 +694,7 @@ class TestWebCrawlerEncodingDetection:
         shift_jis_bytes = SAMPLE_HTML_SHIFT_JIS.encode("shift_jis")
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, raw_bytes=shift_jis_bytes),
         ):
             page = await crawler.crawl_page("https://example.com/shift_jis_page")
@@ -713,7 +713,7 @@ class TestWebCrawlerEncodingDetection:
         utf8_bytes = SAMPLE_HTML_WITH_ARTICLE.encode("utf-8")
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, raw_bytes=utf8_bytes),
         ):
             page = await crawler.crawl_page("https://example.com/utf8_page")
@@ -731,7 +731,7 @@ class TestWebCrawlerEncodingDetection:
         euc_jp_bytes = SAMPLE_HTML_EUC_JP.encode("euc_jp")
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, raw_bytes=euc_jp_bytes),
         ):
             page = await crawler.crawl_page("https://example.com/euc_jp_page")
@@ -751,7 +751,7 @@ class TestWebCrawlerEncodingDetection:
         invalid_bytes = b"<html><body>Test content with invalid byte: \x80\xff</body></html>"
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, raw_bytes=invalid_bytes),
         ):
             page = await crawler.crawl_page("https://example.com/invalid_encoding")
@@ -779,7 +779,7 @@ class TestWebCrawlerEncodingDetection:
         shift_jis_bytes = shift_jis_index.encode("shift_jis")
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, raw_bytes=shift_jis_bytes),
         ):
             urls = await crawler.crawl_index_page("https://example.com/index")
@@ -858,7 +858,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
         ):
             result = await checker.can_fetch("https://example.com/public/page", timeout)
@@ -872,7 +872,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
         ):
             result = await checker.can_fetch("https://example.com/private/data", timeout)
@@ -886,7 +886,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT_WILDCARD_ONLY),
         ):
             result = await checker.can_fetch("https://example.com/blocked/page", timeout)
@@ -900,7 +900,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
         ):
             delay = await checker.get_crawl_delay("https://example.com/page", timeout)
@@ -914,7 +914,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT_WILDCARD_ONLY),
         ):
             delay = await checker.get_crawl_delay("https://example.com/page", timeout)
@@ -928,7 +928,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             side_effect=aiohttp.ClientError("Connection refused"),
         ):
             result = await checker.can_fetch("https://example.com/private/data", timeout)
@@ -943,7 +943,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_status=404),
         ):
             result = await checker.can_fetch("https://example.com/any/path", timeout)
@@ -959,7 +959,7 @@ class TestRobotsChecker:
         mock_session = MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=mock_session,
         ) as mock_cls:
             # 1回目: 取得される
@@ -980,7 +980,7 @@ class TestRobotsChecker:
         timeout = aiohttp.ClientTimeout(total=10)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
         ) as mock_cls:
             # 1回目
@@ -1025,7 +1025,7 @@ class TestWebCrawlerRobotsTxt:
         crawler = WebCrawler(respect_robots_txt=True)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(
                 robots_txt=SAMPLE_ROBOTS_TXT,
                 page_html=SAMPLE_HTML_WITH_ARTICLE,
@@ -1042,7 +1042,7 @@ class TestWebCrawlerRobotsTxt:
         crawler = WebCrawler(respect_robots_txt=True)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(
                 robots_txt=SAMPLE_ROBOTS_TXT,
                 page_html=SAMPLE_HTML_WITH_ARTICLE,
@@ -1059,7 +1059,7 @@ class TestWebCrawlerRobotsTxt:
         crawler = WebCrawler(respect_robots_txt=False)
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockClientSession(200, SAMPLE_HTML_WITH_ARTICLE),
         ):
             # Disallow されたパスでもクロールされる
@@ -1087,7 +1087,7 @@ class TestWebCrawlerRobotsTxt:
         """
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(
                 robots_txt=SAMPLE_ROBOTS_TXT,
                 page_html=html_with_mixed_links,
@@ -1112,7 +1112,7 @@ class TestWebCrawlerRobotsTxt:
         )
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
         ):
             delay = await crawler._get_effective_crawl_delay("https://example.com/page")
@@ -1129,7 +1129,7 @@ class TestWebCrawlerRobotsTxt:
         )
 
         with patch(
-            "src.services.web_crawler.aiohttp.ClientSession",
+            "mcp_servers.rag.web_crawler.aiohttp.ClientSession",
             return_value=MockRobotsSession(robots_txt=SAMPLE_ROBOTS_TXT),
         ):
             delay = await crawler._get_effective_crawl_delay("https://example.com/page")

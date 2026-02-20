@@ -6,6 +6,13 @@
       "args": ["mcp_servers/weather/server.py"],
       "env": {},
       "response_instruction": "気温、降水確率などの数値データは省略せず、具体的に回答に含めてください。"
+    },
+    "rag": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["-m", "mcp_servers.rag.server"],
+      "env": {},
+      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。出典（Source URL）がある場合は明示してください。"
     }
   }
 }

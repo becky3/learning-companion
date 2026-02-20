@@ -13,17 +13,17 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urldefrag
 
-from src.rag.chunker import chunk_text
-from src.rag.content_detector import ContentType, detect_content_type
-from src.rag.heading_chunker import chunk_by_headings
-from src.rag.table_chunker import chunk_table_data
-from src.rag.vector_store import DocumentChunk, VectorStore
+from .chunker import chunk_text
+from .content_detector import ContentType, detect_content_type
+from .heading_chunker import chunk_by_headings
+from .table_chunker import chunk_table_data
+from .vector_store import DocumentChunk, VectorStore
 
 if TYPE_CHECKING:
-    from src.rag.bm25_index import BM25Index
-    from src.rag.hybrid_search import HybridSearchEngine
-    from src.services.safe_browsing import SafeBrowsingClient
-    from src.services.web_crawler import CrawledPage, WebCrawler
+    from .bm25_index import BM25Index
+    from .hybrid_search import HybridSearchEngine
+    from .safe_browsing import SafeBrowsingClient
+    from .web_crawler import CrawledPage, WebCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ class RAGKnowledgeService:
 
         # ハイブリッド検索エンジンの初期化
         if hybrid_search_enabled and bm25_index is not None:
-            from src.rag.hybrid_search import HybridSearchEngine
+            from .hybrid_search import HybridSearchEngine
 
             self._hybrid_search_engine = HybridSearchEngine(
                 vector_store=vector_store,

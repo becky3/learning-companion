@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.rag.evaluation import (
+from mcp_servers.rag.evaluation import (
     EvaluationDatasetQuery,
     EvaluationReport,
     PrecisionRecallResult,
@@ -23,7 +23,7 @@ from src.rag.evaluation import (
     evaluate_retrieval,
     load_evaluation_dataset,
 )
-from src.services.rag_knowledge import RAGRetrievalResult
+from mcp_servers.rag.rag_knowledge import RAGRetrievalResult
 
 
 class TestCalculatePrecisionRecall:

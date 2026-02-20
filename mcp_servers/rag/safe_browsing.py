@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 
 if TYPE_CHECKING:
-    from src.config.settings import Settings
+    from .config import RAGSettings
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +364,7 @@ class SafeBrowsingClient:
         return len(expired_keys)
 
 
-def create_safe_browsing_client(settings: Settings) -> SafeBrowsingClient | None:
+def create_safe_browsing_client(settings: RAGSettings) -> SafeBrowsingClient | None:
     """設定に基づいてSafeBrowsingClientを生成する.
 
     Args:

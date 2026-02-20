@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.config.settings import DEFAULT_LMSTUDIO_BASE_URL, Settings
-from src.embedding.base import EmbeddingProvider
-from src.embedding.factory import get_embedding_provider
-from src.embedding.lmstudio_embedding import LMStudioEmbedding
-from src.embedding.openai_embedding import OpenAIEmbedding
+from mcp_servers.rag.config import DEFAULT_LMSTUDIO_BASE_URL, RAGSettings as Settings
+from mcp_servers.rag.embedding.base import EmbeddingProvider
+from mcp_servers.rag.embedding.factory import get_embedding_provider
+from mcp_servers.rag.embedding.lmstudio_embedding import LMStudioEmbedding
+from mcp_servers.rag.embedding.openai_embedding import OpenAIEmbedding
 
 
 def test_ac1_embedding_provider_interface() -> None:

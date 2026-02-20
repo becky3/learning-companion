@@ -9,8 +9,8 @@ import uuid
 
 import pytest
 
-from src.embedding.base import EmbeddingProvider
-from src.rag.vector_store import DocumentChunk, RetrievalResult, VectorStore
+from mcp_servers.rag.embedding.base import EmbeddingProvider
+from mcp_servers.rag.vector_store import DocumentChunk, RetrievalResult, VectorStore
 
 
 class MockEmbeddingProvider(EmbeddingProvider):
@@ -427,7 +427,7 @@ class TestAC38SimilarityThreshold:
         await ephemeral_store.add_documents(chunks)
 
         # Act
-        with caplog.at_level(logging.DEBUG, logger="src.rag.vector_store"):
+        with caplog.at_level(logging.DEBUG, logger="mcp_servers.rag.vector_store"):
             await ephemeral_store.search(
                 "テキスト", n_results=5, similarity_threshold=0.0001
             )

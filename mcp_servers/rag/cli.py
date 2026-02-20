@@ -16,14 +16,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import urldefrag
 
-from src.rag.evaluation import (
+from .evaluation import (
     EvaluationReport,
     evaluate_retrieval,
 )
 
 if TYPE_CHECKING:
-    from src.rag.bm25_index import BM25Index
-    from src.services.rag_knowledge import RAGKnowledgeService
+    from .bm25_index import BM25Index
+    from .rag_knowledge import RAGKnowledgeService
 
 
 class EvaluationParams(TypedDict):
@@ -225,11 +225,11 @@ async def create_rag_service(
     Returns:
         RAGKnowledgeServiceインスタンス
     """
-    from src.config.settings import get_settings
-    from src.embedding.factory import get_embedding_provider
-    from src.rag.vector_store import VectorStore
-    from src.services.rag_knowledge import RAGKnowledgeService
-    from src.services.web_crawler import WebCrawler
+    from .config import get_settings
+    from .embedding.factory import get_embedding_provider
+    from .vector_store import VectorStore
+    from .rag_knowledge import RAGKnowledgeService
+    from .web_crawler import WebCrawler
 
     settings = get_settings()
     embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
@@ -279,8 +279,8 @@ def _build_bm25_index_from_fixture(
     Returns:
         構築済みBM25Indexインスタンス
     """
-    from src.rag.bm25_index import BM25Index
-    from src.services.rag_knowledge import smart_chunk
+    from .bm25_index import BM25Index
+    from .rag_knowledge import smart_chunk
 
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
@@ -606,7 +606,7 @@ async def init_test_db(args: argparse.Namespace) -> None:
     Args:
         args: コマンドライン引数
     """
-    from src.services.web_crawler import CrawledPage
+    from .web_crawler import CrawledPage
 
     logger.info("Initializing test ChromaDB...")
     logger.info("Persist directory: %s", args.persist_dir)

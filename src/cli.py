@@ -27,26 +27,17 @@ from zoneinfo import ZoneInfo
 
 from src.config.settings import get_settings, load_assistant_config
 from src.db.session import get_session_factory, init_db
-from src.embedding.factory import get_embedding_provider
 from src.llm.factory import get_provider_for_service
 from src.mcp_bridge.client_manager import MCPClientManager, MCPServerConfig
 from src.messaging.cli_adapter import CliAdapter
 from src.messaging.port import IncomingMessage
 from src.messaging.router import MessageRouter
-from src.rag.bm25_index import BM25Index
-from src.rag.vector_store import VectorStore
 from src.services.chat import ChatService
 from src.services.feed_collector import FeedCollector
 from src.services.ogp_extractor import OgpExtractor
-from src.services.rag_knowledge import RAGKnowledgeService
-from src.services.safe_browsing import create_safe_browsing_client
 from src.services.summarizer import Summarizer
 from src.services.topic_recommender import TopicRecommender
 from src.services.user_profiler import UserProfiler
-from src.services.web_crawler import WebCrawler
-
-# ChromaDBテレメトリのエラーログを抑制
-logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +97,6 @@ def _apply_db_dir(db_dir: str) -> None:
     db_path = Path(db_dir)
     db_path.mkdir(parents=True, exist_ok=True)
     settings.database_url = f"sqlite+aiosqlite:///{db_path / 'ai_assistant.db'}"
-    settings.chromadb_persist_dir = str(db_path / "chroma_db")
-    settings.bm25_persist_dir = str(db_path / "bm25_index")
 
 
 async def _setup(
@@ -134,39 +123,6 @@ async def _setup(
         server_configs = _load_mcp_server_configs(settings.mcp_servers_config)
         await mcp_manager.initialize(server_configs)
 
-    # RAG初期化（有効時のみ）
-    rag_service: RAGKnowledgeService | None = None
-    if settings.rag_enabled:
-        embedding = get_embedding_provider(settings, settings.embedding_provider)
-        vector_store = VectorStore(embedding, settings.chromadb_persist_dir)
-        web_crawler = WebCrawler(
-            max_pages=settings.rag_max_crawl_pages,
-            crawl_delay=settings.rag_crawl_delay_sec,
-            respect_robots_txt=settings.rag_respect_robots_txt,
-            robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
-        )
-        safe_browsing_client = create_safe_browsing_client(settings)
-        bm25_index: BM25Index | None = None
-        if settings.rag_hybrid_search_enabled:
-            bm25_index = BM25Index(
-                k1=settings.rag_bm25_k1,
-                b=settings.rag_bm25_b,
-                persist_dir=settings.bm25_persist_dir,
-            )
-        rag_service = RAGKnowledgeService(
-            vector_store,
-            web_crawler,
-            chunk_size=settings.rag_chunk_size,
-            chunk_overlap=settings.rag_chunk_overlap,
-            similarity_threshold=settings.rag_similarity_threshold,
-            safe_browsing_client=safe_browsing_client,
-            bm25_index=bm25_index,
-            hybrid_search_enabled=settings.rag_hybrid_search_enabled,
-            vector_weight=settings.rag_vector_weight,
-            min_combined_score=settings.rag_min_combined_score,
-            debug_log_enabled=settings.rag_debug_log_enabled,
-        )
-
     cli_adapter = CliAdapter(user_id=user_id)
 
     session_factory = get_session_factory()
@@ -176,7 +132,6 @@ async def _setup(
         system_prompt=system_prompt,
         mcp_manager=mcp_manager,
         thread_history_fetcher=cli_adapter.fetch_thread_history,
-        rag_service=rag_service,
         format_instruction=cli_adapter.get_format_instruction(),
     )
 
@@ -214,8 +169,7 @@ async def _setup(
         feed_card_layout=settings.feed_card_layout,
         timezone=settings.timezone,
         env_name=settings.env_name,
-        rag_service=rag_service,
-        rag_crawl_progress_interval=settings.rag_crawl_progress_interval,
+        mcp_manager=mcp_manager,
         bot_start_time=bot_start_time,
     )
 
