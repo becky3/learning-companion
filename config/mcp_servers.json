@@ -6,6 +6,15 @@
       "args": ["mcp_servers/weather/server.py"],
       "env": {},
       "response_instruction": "気温、降水確率などの数値データは省略せず、具体的に回答に含めてください。"
+    },
+    "rag": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["-m", "mcp_servers.rag.server"],
+      "env": {},
+      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。ユーザーが特定のトピックについて質問した場合は、まず rag_search ツールで関連情報を検索してから回答してください。ナレッジベースに情報がない場合のみ、あなた自身の知識で回答してください。",
+      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。",
+      "auto_context_tool": "rag_search"
     }
   }
 }

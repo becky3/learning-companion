@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.services.rag_knowledge import RAGKnowledgeService
+    from .rag_knowledge import RAGKnowledgeService
 
 logger = logging.getLogger(__name__)
 

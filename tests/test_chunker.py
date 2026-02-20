@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.rag.chunker import chunk_text
+from mcp_servers.rag.chunker import chunk_text
 
 
 class TestAC5ChunkTextSplitsBySize:

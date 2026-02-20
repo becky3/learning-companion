@@ -8,7 +8,7 @@ import logging
 
 from openai import AsyncOpenAI
 
-from src.embedding.base import EmbeddingProvider
+from .base import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 

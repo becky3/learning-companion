@@ -60,7 +60,7 @@ def _make_router(
     topic_recommender: AsyncMock | None = None,
     collector: AsyncMock | None = None,
     session_factory: AsyncMock | None = None,
-    rag_service: AsyncMock | None = None,
+    mcp_manager: AsyncMock | None = None,
     bot_start_time: datetime | None = None,
 ) -> tuple[MockAdapter, MessageRouter]:
     if adapter is None:
@@ -79,7 +79,7 @@ def _make_router(
         channel_id="C_TEST",
         timezone="Asia/Tokyo",
         env_name="test",
-        rag_service=rag_service,
+        mcp_manager=mcp_manager,
         bot_start_time=bot_start_time,
     )
     return adapter, router
@@ -253,8 +253,10 @@ async def test_chat_error_handling() -> None:
 
 async def test_rag_unknown_subcommand() -> None:
     """rag の不明なサブコマンドでヘルプが表示される."""
-    rag_service = AsyncMock()
-    adapter, router = _make_router(rag_service=rag_service)
+    from unittest.mock import MagicMock
+
+    mcp_manager = MagicMock()
+    adapter, router = _make_router(mcp_manager=mcp_manager)
 
     await router.process_message(_make_msg("rag"))
 
@@ -264,9 +266,13 @@ async def test_rag_unknown_subcommand() -> None:
 
 async def test_rag_status_command() -> None:
     """rag status コマンド."""
-    rag_service = AsyncMock()
-    rag_service.get_stats.return_value = {"total_chunks": 100, "source_count": 5}
-    adapter, router = _make_router(rag_service=rag_service)
+    from unittest.mock import MagicMock
+
+    mcp_manager = MagicMock()
+    mcp_manager.call_tool = AsyncMock(
+        return_value="ナレッジベース統計:\n  総チャンク数: 100\n  ソースURL数: 5"
+    )
+    adapter, router = _make_router(mcp_manager=mcp_manager)
 
     await router.process_message(_make_msg("rag status"))
 

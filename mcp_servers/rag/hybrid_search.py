@@ -11,8 +11,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from src.rag.bm25_index import BM25Index, BM25Result
-    from src.rag.vector_store import RetrievalResult, VectorStore
+    from .bm25_index import BM25Index, BM25Result
+    from .vector_store import RetrievalResult, VectorStore
 
 logger = logging.getLogger(__name__)
 

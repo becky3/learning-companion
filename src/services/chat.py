@@ -18,7 +18,6 @@ from src.llm.base import LLMProvider, LLMResponse, Message, ToolDefinition, Tool
 
 if TYPE_CHECKING:
     from src.mcp_bridge.client_manager import MCPClientManager
-    from src.services.rag_knowledge import RAGKnowledgeService
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,6 @@ class ChatService:
         system_prompt: str = "",
         mcp_manager: MCPClientManager | None = None,
         thread_history_fetcher: Callable[[str, str, str], Awaitable[list[Message] | None]] | None = None,
-        rag_service: RAGKnowledgeService | None = None,
         format_instruction: str = "",
     ) -> None:
         self._llm = llm
@@ -50,7 +48,6 @@ class ChatService:
         self._system_prompt = system_prompt
         self._mcp_manager = mcp_manager
         self._thread_history_fetcher = thread_history_fetcher
-        self._rag_service = rag_service
         self._format_instruction = format_instruction
 
     async def respond(
@@ -63,21 +60,6 @@ class ChatService:
         current_ts: str = "",
     ) -> str:
         """ユーザーメッセージに対する応答を生成し、履歴を保存する."""
-        settings = get_settings()  # キャッシュ済みインスタンスを使用
-
-        # RAGコンテキスト取得（DBセッション外で実行してDB接続保持時間を最小化）
-        rag_context = ""
-        rag_sources: list[str] = []
-        if self._rag_service:
-            try:
-                rag_result = await self._rag_service.retrieve(
-                    text, n_results=settings.rag_retrieval_count
-                )
-                rag_context = rag_result.context
-                rag_sources = rag_result.sources
-            except Exception:
-                logger.exception("Failed to retrieve RAG context")
-
         async with self._session_factory() as session:
             # スレッド内かつ thread_history_fetcher が利用可能な場合は外部から取得
             history: list[Message] | None = None
@@ -92,17 +74,8 @@ class ChatService:
 
             # メッセージリストを構築
             messages: list[Message] = []
-            # system_promptまたはrag_contextがあればシステムメッセージを追加
             system_content = self._system_prompt or ""
-            if rag_context:
-                rag_prefix = (
-                    "\n\n以下は質問に関連する参考情報です。"
-                    "回答に役立つ場合は活用してください:\n"
-                    if system_content
-                    else "以下は質問に関連する参考情報です。回答に役立つ場合は活用してください:\n"
-                )
-                system_content += rag_prefix + rag_context
-            # フォーマット指示を最後に追加（RAGコンテキストの後）
+            # フォーマット指示を追加
             if self._format_instruction:
                 system_content = (
                     system_content + "\n\n" + self._format_instruction
@@ -119,7 +92,6 @@ class ChatService:
                 response = await self._llm.complete(messages)
                 return await self._save_and_return(
                     session, user_id, thread_ts, text, response.content,
-                    rag_sources=rag_sources, show_sources=settings.rag_show_sources,
                 )
 
             # ツール呼び出しループ
@@ -129,20 +101,40 @@ class ChatService:
                 response = await self._llm.complete(messages)
                 return await self._save_and_return(
                     session, user_id, thread_ts, text, response.content,
-                    rag_sources=rag_sources, show_sources=settings.rag_show_sources,
                 )
 
-            final_response = await self._run_tool_loop(messages, tools)
+            # MCPサーバーのシステム指示をシステムプロンプトに追加
+            system_instructions = self._mcp_manager.get_system_instructions()
+            if system_instructions:
+                extra = "\n\n".join(system_instructions)
+                if messages and messages[0].role == "system":
+                    messages[0] = Message(
+                        role="system",
+                        content=messages[0].content + "\n\n" + extra,
+                    )
+                else:
+                    messages.insert(0, Message(role="system", content=extra))
+
+            # 自動コンテキスト注入（RAG等）
+            rag_sources, auto_applied = await self._inject_auto_context(messages, text)
+
+            final_response = await self._run_tool_loop(
+                messages, tools, applied_instructions=auto_applied,
+            )
             return await self._save_and_return(
                 session, user_id, thread_ts, text, final_response.content,
-                rag_sources=rag_sources, show_sources=settings.rag_show_sources,
+                rag_sources=rag_sources,
             )
 
     async def _run_tool_loop(
-        self, messages: list[Message], tools: list[ToolDefinition]
+        self,
+        messages: list[Message],
+        tools: list[ToolDefinition],
+        *,
+        applied_instructions: set[str] | None = None,
     ) -> LLMResponse:
         """ツール呼び出しループを実行する."""
-        applied_instructions: set[str] = set()
+        applied_instructions = applied_instructions if applied_instructions is not None else set()
         for _ in range(TOOL_LOOP_MAX_ITERATIONS):
             response = await self._llm.complete_with_tools(messages, tools)
 
@@ -193,6 +185,67 @@ class ChatService:
                 content=messages[0].content + "\n\n" + instruction,
             )
 
+    async def _inject_auto_context(
+        self, messages: list[Message], user_text: str
+    ) -> tuple[list[str], set[str]]:
+        """auto_context_tool で設定されたツールを自動呼び出しし、結果をシステムプロンプトに注入する.
+
+        Returns:
+            (検索結果に含まれるソースURLのリスト, 適用済みresponse_instructionのセット)
+        """
+        sources: list[str] = []
+        applied: set[str] = set()
+        if not self._mcp_manager:
+            return sources, applied
+        auto_tools = self._mcp_manager.get_auto_context_tools()
+        if not auto_tools:
+            return sources, applied
+
+        for tool_name in auto_tools:
+            try:
+                result = await asyncio.wait_for(
+                    self._mcp_manager.call_tool(tool_name, {"query": user_text}),
+                    timeout=TOOL_CALL_TIMEOUT_SEC,
+                )
+            except Exception:
+                logger.debug("Auto-context tool '%s' failed", tool_name, exc_info=True)
+                continue
+
+            if not result or "該当する情報が見つかりませんでした" in result:
+                continue
+
+            # ソースURLを抽出（"## Source: URL" 形式）
+            for line in result.splitlines():
+                if line.startswith("## Source: "):
+                    url = line[len("## Source: "):].strip()
+                    if url and url not in sources:
+                        sources.append(url)
+
+            # 検索結果をシステムプロンプトに注入
+            context_block = (
+                "以下は質問に関連する参考情報です。"
+                "回答に役立つ場合は活用してください:\n" + result
+            )
+            if messages and messages[0].role == "system":
+                messages[0] = Message(
+                    role="system",
+                    content=messages[0].content + "\n\n" + context_block,
+                )
+            else:
+                messages.insert(0, Message(role="system", content=context_block))
+
+            # 対応する response_instruction も適用（重複防止）
+            instruction = self._mcp_manager.get_response_instruction(tool_name)
+            if instruction and instruction not in applied:
+                applied.add(instruction)
+                if messages and messages[0].role == "system":
+                    messages[0] = Message(
+                        role="system",
+                        content=messages[0].content + "\n\n" + instruction,
+                    )
+
+        return sources, applied
+
     async def _execute_tool_with_timeout(
         self, tool_name: str, arguments: dict[str, object]
     ) -> ToolResult:
@@ -229,22 +282,8 @@ class ChatService:
         assistant_text: str,
         *,
         rag_sources: list[str] | None = None,
-        show_sources: bool = False,
     ) -> str:
-        """ユーザーメッセージとアシスタント応答をDBに保存し、応答テキストを返す.
-
-        Args:
-            session: DBセッション
-            user_id: SlackユーザーID
-            thread_ts: スレッドタイムスタンプ
-            user_text: ユーザーメッセージ
-            assistant_text: アシスタント応答
-            rag_sources: RAG検索で使用したソースURLリスト（オプション）
-            show_sources: ソース情報を表示するかどうか
-
-        Returns:
-            応答テキスト（ソース情報を含む場合あり）
-        """
+        """ユーザーメッセージとアシスタント応答をDBに保存し、応答テキストを返す."""
         session.add(Conversation(
             slack_user_id=user_id,
             thread_ts=thread_ts,
@@ -260,8 +299,10 @@ class ChatService:
         await session.commit()
 
         # ソース情報を追記（設定有効時のみ）
-        if show_sources and rag_sources:
-            sources_text = "\n---\n参照元:\n" + "\n".join(f"• {url}" for url in rag_sources)
+        if rag_sources and get_settings().rag_show_sources:
+            sources_text = "\n---\n参照元:\n" + "\n".join(
+                f"• {url}" for url in rag_sources
+            )
             return assistant_text + sources_text
 
         return assistant_text

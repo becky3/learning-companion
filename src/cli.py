@@ -27,26 +27,17 @@ from zoneinfo import ZoneInfo
 
 from src.config.settings import get_settings, load_assistant_config
 from src.db.session import get_session_factory, init_db
-from src.embedding.factory import get_embedding_provider
 from src.llm.factory import get_provider_for_service
 from src.mcp_bridge.client_manager import MCPClientManager, MCPServerConfig
 from src.messaging.cli_adapter import CliAdapter
 from src.messaging.port import IncomingMessage
 from src.messaging.router import MessageRouter
-from src.rag.bm25_index import BM25Index
-from src.rag.vector_store import VectorStore
 from src.services.chat import ChatService
 from src.services.feed_collector import FeedCollector
 from src.services.ogp_extractor import OgpExtractor
-from src.services.rag_knowledge import RAGKnowledgeService
-from src.services.safe_browsing import create_safe_browsing_client
 from src.services.summarizer import Summarizer
 from src.services.topic_recommender import TopicRecommender
 from src.services.user_profiler import UserProfiler
-from src.services.web_crawler import WebCrawler
-
-# ChromaDBテレメトリのエラーログを抑制
-logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +63,9 @@ def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
             args=server_def.get("args", []),
             env=server_def.get("env", {}),
             url=server_def.get("url", ""),
+            system_instruction=server_def.get("system_instruction", ""),
             response_instruction=server_def.get("response_instruction", ""),
+            auto_context_tool=server_def.get("auto_context_tool", ""),
         ))
     return configs
 
@@ -100,20 +93,37 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _apply_db_dir(db_dir: str) -> None:
-    """Settings の DB パスを指定ディレクトリ配下に上書きする."""
+def _apply_db_dir(db_dir: str) -> dict[str, str]:
+    """Settings の DB パスを指定ディレクトリ配下に上書きする.
+
+    SQLite は settings を直接書き換える。
+    ChromaDB / BM25 のパスは戻り値で返し、呼び出し元が MCP サーバーの
+    env に注入して setup 時に伝搬する。
+
+    Returns:
+        MCP サーバーに渡す環境変数の dict
+    """
     settings = get_settings()
     db_path = Path(db_dir)
     db_path.mkdir(parents=True, exist_ok=True)
     settings.database_url = f"sqlite+aiosqlite:///{db_path / 'ai_assistant.db'}"
-    settings.chromadb_persist_dir = str(db_path / "chroma_db")
-    settings.bm25_persist_dir = str(db_path / "bm25_index")
+
+    return {
+        "CHROMADB_PERSIST_DIR": str(db_path / "chroma_db"),
+        "BM25_PERSIST_DIR": str(db_path / "bm25_index"),
+    }
 
 
 async def _setup(
     user_id: str,
+    mcp_extra_env: dict[str, str] | None = None,
 ) -> tuple[MessageRouter, CliAdapter, MCPClientManager | None]:
-    """サービス群を初期化してMessageRouterを返す."""
+    """サービス群を初期化してMessageRouterを返す.
+
+    Args:
+        user_id: CLI ユーザー ID
+        mcp_extra_env: MCP サーバーに追加で渡す環境変数（DB パス等）
+    """
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
 
@@ -132,40 +142,10 @@ async def _setup(
     if settings.mcp_enabled:
         mcp_manager = MCPClientManager()
         server_configs = _load_mcp_server_configs(settings.mcp_servers_config)
+        if mcp_extra_env:
+            for config in server_configs:
+                config.env.update(mcp_extra_env)
         await mcp_manager.initialize(server_configs)
-
-    # RAG初期化（有効時のみ）
-    rag_service: RAGKnowledgeService | None = None
-    if settings.rag_enabled:
-        embedding = get_embedding_provider(settings, settings.embedding_provider)
-        vector_store = VectorStore(embedding, settings.chromadb_persist_dir)
-        web_crawler = WebCrawler(
-            max_pages=settings.rag_max_crawl_pages,
-            crawl_delay=settings.rag_crawl_delay_sec,
-            respect_robots_txt=settings.rag_respect_robots_txt,
-            robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
-        )
-        safe_browsing_client = create_safe_browsing_client(settings)
-        bm25_index: BM25Index | None = None
-        if settings.rag_hybrid_search_enabled:
-            bm25_index = BM25Index(
-                k1=settings.rag_bm25_k1,
-                b=settings.rag_bm25_b,
-                persist_dir=settings.bm25_persist_dir,
-            )
-        rag_service = RAGKnowledgeService(
-            vector_store,
-            web_crawler,
-            chunk_size=settings.rag_chunk_size,
-            chunk_overlap=settings.rag_chunk_overlap,
-            similarity_threshold=settings.rag_similarity_threshold,
-            safe_browsing_client=safe_browsing_client,
-            bm25_index=bm25_index,
-            hybrid_search_enabled=settings.rag_hybrid_search_enabled,
-            vector_weight=settings.rag_vector_weight,
-            min_combined_score=settings.rag_min_combined_score,
-            debug_log_enabled=settings.rag_debug_log_enabled,
-        )
 
     cli_adapter = CliAdapter(user_id=user_id)
 
@@ -176,7 +156,6 @@ async def _setup(
         system_prompt=system_prompt,
         mcp_manager=mcp_manager,
         thread_history_fetcher=cli_adapter.fetch_thread_history,
-        rag_service=rag_service,
         format_instruction=cli_adapter.get_format_instruction(),
     )
 
@@ -214,8 +193,7 @@ async def _setup(
         feed_card_layout=settings.feed_card_layout,
         timezone=settings.timezone,
         env_name=settings.env_name,
-        rag_service=rag_service,
-        rag_crawl_progress_interval=settings.rag_crawl_progress_interval,
+        mcp_manager=mcp_manager,
         bot_start_time=bot_start_time,
     )
 
@@ -271,9 +249,9 @@ async def run_repl(router: MessageRouter, user_id: str) -> None:
 async def async_main(argv: list[str] | None = None) -> None:
     """非同期メインエントリーポイント."""
     args = parse_args(argv)
-    _apply_db_dir(args.db_dir)
+    mcp_extra_env = _apply_db_dir(args.db_dir)
     logger.info("DB dir: %s", args.db_dir)
-    router, _adapter, mcp_manager = await _setup(args.user_id)
+    router, _adapter, mcp_manager = await _setup(args.user_id, mcp_extra_env=mcp_extra_env)
 
     try:
         if args.message is not None:

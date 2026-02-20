@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from src.mcp_bridge.client_manager import MCPToolNotFoundError
 from src.messaging.port import IncomingMessage, MessagingPort
 from src.services.chat import ChatService
 from src.services.topic_recommender import TopicRecommender
@@ -27,8 +28,8 @@ from src.services.user_profiler import UserProfiler
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+    from src.mcp_bridge.client_manager import MCPClientManager
     from src.services.feed_collector import FeedCollector
-    from src.services.rag_knowledge import RAGKnowledgeService
 
 logger = logging.getLogger(__name__)
 
@@ -413,138 +414,6 @@ async def _handle_feed_replace(
     return "\n".join(result_lines)
 
 
-# --- RAG ハンドラ群 ---
-
-
-async def _handle_rag_crawl(
-    rag_service: RAGKnowledgeService,
-    url: str,
-    pattern: str,
-    raw_url_token: str = "",
-    messaging: MessagingPort | None = None,
-    thread_id: str = "",
-    channel: str = "",
-    progress_interval: int = 5,
-) -> str:
-    """RAGクロール処理（進捗フィードバック付き）."""
-    if not url:
-        if raw_url_token:
-            return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
-        return "エラー: URLを指定してください。\n例: `@bot rag crawl https://example.com/docs [パターン]`"
-
-    if messaging:
-        try:
-            await messaging.send_message(
-                "クロールを開始しました... (リンク収集中)",
-                thread_id, channel,
-            )
-        except Exception:
-            logger.debug("Failed to post start message", exc_info=True)
-
-    async def progress_callback(crawled: int, total: int) -> None:
-        if messaging and crawled % progress_interval == 0:
-            try:
-                await messaging.send_message(
-                    f"└─ {crawled}ページ取得中...",
-                    thread_id, channel,
-                )
-            except Exception:
-                logger.debug("Failed to post progress message", exc_info=True)
-
-    try:
-        result = await rag_service.ingest_from_index(
-            url, pattern, progress_callback=progress_callback
-        )
-
-        completion_message = (
-            f"└─ 完了: {result['pages_crawled']}ページ / "
-            f"{result['chunks_stored']}チャンク / "
-            f"エラー: {result['errors']}件"
-        )
-        if messaging:
-            try:
-                await messaging.send_message(completion_message, thread_id, channel)
-                return ""
-            except Exception:
-                logger.debug("Failed to post completion message", exc_info=True)
-
-        return (
-            f"クロール完了しました。\n"
-            f"取り込みページ数: {result['pages_crawled']}\n"
-            f"チャンク数: {result['chunks_stored']}\n"
-            f"エラー: {result['errors']}件"
-        )
-    except ValueError as e:
-        return f"エラー: {e}"
-    except re.error as e:
-        return f"エラー: 正規表現パターンが不正です: {e}"
-    except Exception:
-        logger.exception("Failed to crawl: %s", url)
-        return "エラー: クロール中にエラーが発生しました。"
-
-
-async def _handle_rag_add(
-    rag_service: RAGKnowledgeService,
-    url: str,
-    raw_url_token: str = "",
-) -> str:
-    """RAG単一ページ追加処理."""
-    if not url:
-        if raw_url_token:
-            return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
-        return "エラー: URLを指定してください。\n例: `@bot rag add https://example.com/page`"
-
-    try:
-        chunks = await rag_service.ingest_page(url)
-        if chunks > 0:
-            return f"ページを取り込みました: {url} ({chunks}チャンク)"
-        else:
-            return f"エラー: ページの取り込みに失敗しました: {url}"
-    except ValueError as e:
-        return f"エラー: {e}"
-    except Exception:
-        logger.exception("Failed to add page: %s", url)
-        return "エラー: ページの取り込み中にエラーが発生しました。"
-
-
-async def _handle_rag_status(
-    rag_service: RAGKnowledgeService,
-) -> str:
-    """RAGステータス表示処理."""
-    try:
-        stats = await rag_service.get_stats()
-        return (
-            "ナレッジベース統計:\n"
-            f"総チャンク数: {stats['total_chunks']}\n"
-            f"ソースURL数: {stats['source_count']}"
-        )
-    except Exception:
-        logger.exception("Failed to get RAG stats")
-        return "エラー: 統計情報の取得中にエラーが発生しました。"
-
-
-async def _handle_rag_delete(
-    rag_service: RAGKnowledgeService,
-    url: str,
-    raw_url_token: str = "",
-) -> str:
-    """RAGソース削除処理."""
-    if not url:
-        if raw_url_token:
-            return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
-        return "エラー: URLを指定してください。\n例: `@bot rag delete https://example.com/page`"
-
-    try:
-        count = await rag_service.delete_source(url)
-        if count > 0:
-            return f"削除しました: {url} ({count}チャンク)"
-        else:
-            return f"該当するソースが見つかりませんでした: {url}"
-    except Exception:
-        logger.exception("Failed to delete source: %s", url)
-        return "エラー: 削除中にエラーが発生しました。"
-
-
 async def _handle_feed_export_via_port(
     collector: FeedCollector,
     messaging: MessagingPort,
@@ -625,8 +494,7 @@ class MessageRouter:
         bot_token: str | None = None,
         timezone: str = "Asia/Tokyo",
         env_name: str = "",
-        rag_service: RAGKnowledgeService | None = None,
-        rag_crawl_progress_interval: int = 5,
+        mcp_manager: MCPClientManager | None = None,
         bot_start_time: datetime | None = None,
         slack_client: object | None = None,
     ) -> None:
@@ -642,8 +510,7 @@ class MessageRouter:
         self._bot_token = bot_token
         self._timezone = timezone
         self._env_name = env_name
-        self._rag_service = rag_service
-        self._rag_crawl_progress_interval = rag_crawl_progress_interval
+        self._mcp_manager = mcp_manager
         self._bot_start_time = bot_start_time
         self._slack_client = slack_client
 
@@ -685,7 +552,7 @@ class MessageRouter:
             return
 
         # ragコマンド (F9)
-        if self._rag_service is not None and any(
+        if self._mcp_manager is not None and any(
             re.match(rf"^{re.escape(kw)}\b", lower_text) for kw in _RAG_KEYWORDS
         ):
             await self._handle_rag_command(msg, cleaned_text)
@@ -928,25 +795,36 @@ class MessageRouter:
     async def _handle_rag_command(
         self, msg: IncomingMessage, cleaned_text: str
     ) -> None:
-        """ragコマンドのルーティング."""
-        assert self._rag_service is not None
+        """ragコマンドのルーティング（MCP経由）."""
+        assert self._mcp_manager is not None
         thread_id = msg.thread_id
         channel = msg.channel
 
         subcommand, url, pattern, raw_url_token = _parse_rag_command(cleaned_text)
 
         if subcommand == "crawl":
-            response_text = await _handle_rag_crawl(
-                self._rag_service, url, pattern, raw_url_token,
-                messaging=self._messaging, thread_id=thread_id, channel=channel,
-                progress_interval=self._rag_crawl_progress_interval,
+            await self._handle_rag_crawl_mcp(
+                url, pattern, raw_url_token, thread_id, channel,
             )
+            return
         elif subcommand == "add":
-            response_text = await _handle_rag_add(self._rag_service, url, raw_url_token)
+            response_text = await self._call_rag_url_tool(
+                "rag_add", url, raw_url_token,
+                usage_hint="例: `@bot rag add https://example.com/page`",
+            )
         elif subcommand == "status":
-            response_text = await _handle_rag_status(self._rag_service)
+            try:
+                response_text = await self._mcp_manager.call_tool("rag_stats", {})
+            except MCPToolNotFoundError:
+                response_text = "エラー: RAG統計ツールが利用できません。"
+            except Exception:
+                logger.exception("Failed to call rag_stats tool")
+                response_text = "エラー: 統計情報の取得中にエラーが発生しました。"
         elif subcommand == "delete":
-            response_text = await _handle_rag_delete(self._rag_service, url, raw_url_token)
+            response_text = await self._call_rag_url_tool(
+                "rag_delete", url, raw_url_token,
+                usage_hint="例: `@bot rag delete https://example.com/page`",
+            )
         else:
             response_text = (
                 "使用方法:\n"
@@ -958,3 +836,66 @@ class MessageRouter:
 
         if response_text:
             await self._messaging.send_message(response_text, thread_id, channel)
+
+    async def _handle_rag_crawl_mcp(
+        self,
+        url: str,
+        pattern: str,
+        raw_url_token: str,
+        thread_id: str,
+        channel: str,
+    ) -> None:
+        """RAGクロール処理（MCP経由）."""
+        assert self._mcp_manager is not None
+        if not url:
+            if raw_url_token:
+                error = f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
+            else:
+                error = "エラー: URLを指定してください。\n例: `@bot rag crawl https://example.com/docs [パターン]`"
+            await self._messaging.send_message(error, thread_id, channel)
+            return
+
+        # 開始メッセージ送信
+        try:
+            await self._messaging.send_message(
+                "クロールを開始しました... (リンク収集中)",
+                thread_id, channel,
+            )
+        except Exception:
+            logger.debug("Failed to post start message", exc_info=True)
+
+        # MCP ツール呼び出し
+        try:
+            result = await self._mcp_manager.call_tool(
+                "rag_crawl", {"url": url, "pattern": pattern},
+            )
+            response_text = result if result.startswith("エラー:") else f"└─ {result}"
+        except MCPToolNotFoundError:
+            response_text = "エラー: RAGクロールツールが利用できません。"
+        except Exception:
+            logger.exception("Failed to call rag_crawl tool")
+            response_text = "エラー: クロール中にエラーが発生しました。"
+
+        await self._messaging.send_message(response_text, thread_id, channel)
+
+    async def _call_rag_url_tool(
+        self,
+        tool_name: str,
+        url: str,
+        raw_url_token: str,
+        usage_hint: str,
+    ) -> str:
+        """URL必須のRAGツールを呼び出す共通ヘルパー."""
+        assert self._mcp_manager is not None
+        if not url:
+            if raw_url_token:
+                return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
+            return f"エラー: URLを指定してください。\n{usage_hint}"
+
+        try:
+            return await self._mcp_manager.call_tool(tool_name, {"url": url})
+        except MCPToolNotFoundError:
+            return f"エラー: ツール '{tool_name}' が利用できません。"
+        except Exception:
+            logger.exception("Failed to call %s tool", tool_name)
+            return f"エラー: ツール '{tool_name}' の実行中にエラーが発生しました。"

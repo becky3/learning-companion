@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from src.rag.bm25_index import BM25Index, METADATA_FILENAME, tokenize_japanese
+from mcp_servers.rag.bm25_index import BM25Index, METADATA_FILENAME, tokenize_japanese
 
 
 class TestTokenizeJapanese:

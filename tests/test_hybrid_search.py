@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.rag.bm25_index import BM25Result
-from src.rag.hybrid_search import (
+from mcp_servers.rag.bm25_index import BM25Result
+from mcp_servers.rag.hybrid_search import (
     HybridSearchEngine,
     HybridSearchResult,
     convex_combination,
     min_max_normalize,
 )
-from src.rag.vector_store import RetrievalResult
+from mcp_servers.rag.vector_store import RetrievalResult
 
 
 class TestMinMaxNormalize:

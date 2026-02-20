@@ -3,7 +3,7 @@
 仕様: docs/specs/f9-rag.md
 """
 
-from src.rag.heading_chunker import chunk_by_headings
+from mcp_servers.rag.heading_chunker import chunk_by_headings
 
 
 class TestChunkByHeadings:

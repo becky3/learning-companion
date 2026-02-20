@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.rag.bm25_index import BM25Index, BM25Result
-from src.rag.vector_store import RetrievalResult, VectorStore
-from src.services.rag_knowledge import RAGKnowledgeService, RAGRetrievalResult
-from src.services.web_crawler import CrawledPage, WebCrawler
+from mcp_servers.rag.bm25_index import BM25Index, BM25Result
+from mcp_servers.rag.vector_store import RetrievalResult, VectorStore
+from mcp_servers.rag.rag_knowledge import RAGKnowledgeService, RAGRetrievalResult
+from mcp_servers.rag.web_crawler import CrawledPage, WebCrawler
 
 
 @pytest.fixture

@@ -91,9 +91,11 @@ def _make_mock_mcp_manager(
 
     mock_manager.get_available_tools = AsyncMock(return_value=tools)
     mock_manager.call_tool = AsyncMock(return_value=call_result)
-    # get_response_instruction は同期メソッドなので MagicMock を使用する
+    # get_system_instructions / get_response_instruction は同期メソッドなので MagicMock を使用する
     # AsyncMock のままだと呼び出し時にコルーチンが生成されるが await されず
     # RuntimeWarning: coroutine was never awaited が発生する
+    mock_manager.get_system_instructions = MagicMock(return_value=[])
+    mock_manager.get_auto_context_tools = MagicMock(return_value=[])
     mock_manager.get_response_instruction = MagicMock(return_value="")
     return mock_manager
 

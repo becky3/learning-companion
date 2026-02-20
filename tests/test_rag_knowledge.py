@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.rag.vector_store import RetrievalResult, VectorStore
-from src.services.rag_knowledge import RAGKnowledgeService, RAGRetrievalResult
-from src.services.web_crawler import CrawledPage, WebCrawler
+from mcp_servers.rag.vector_store import RetrievalResult, VectorStore
+from mcp_servers.rag.rag_knowledge import RAGKnowledgeService, RAGRetrievalResult
+from mcp_servers.rag.web_crawler import CrawledPage, WebCrawler
 
 
 @pytest.fixture
@@ -331,232 +331,22 @@ class TestGetStats:
         assert result["source_count"] == 10
 
 
-class TestChatServiceIntegration:
-    """ChatService統合のテスト (AC20, AC21, AC22)."""
-
-    async def test_ac20_chat_injects_rag_context(self) -> None:
-        """AC20: RAG有効時、チャット応答に関連知識がシステムプロンプトとして自動注入されること."""
-        # このテストは実際のChatService統合後に実行される
-        # ここではモックを使ったユニットテストを実装
-
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from src.services.chat import ChatService
-
-        # Arrange
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(
-            return_value=MagicMock(content="Response with RAG context")
-        )
-
-        mock_session_factory = MagicMock()
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session_factory.return_value = mock_session
-
-        # execute の戻り値をモック
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-
-        mock_rag_service = MagicMock()
-        mock_rag_service.retrieve = AsyncMock(
-            return_value=RAGRetrievalResult(
-                context="--- 参考情報 1 ---\n出典: https://example.com\nRelevant info",
-                sources=["https://example.com"],
-            )
-        )
-
-        chat_service = ChatService(
-            llm=mock_llm,
-            session_factory=mock_session_factory,
-            system_prompt="You are an assistant.",
-            rag_service=mock_rag_service,
-        )
-
-        # Act - get_settingsをモックして決定的なテストにする
-        mock_settings = MagicMock()
-        mock_settings.rag_retrieval_count = 5
-        mock_settings.rag_show_sources = False  # ソース情報非表示
-        with patch("src.services.chat.get_settings", return_value=mock_settings):
-            response = await chat_service.respond(
-                user_id="U123",
-                text="What is Python?",
-                thread_ts="1234567890.000000",
-            )
-
-        # Assert
-        # モックした rag_retrieval_count=5 が使われる
-        mock_rag_service.retrieve.assert_called_once_with("What is Python?", n_results=5)
-        # LLMに渡されるメッセージを確認
-        call_args = mock_llm.complete.call_args
-        messages = call_args[0][0]
-        system_message = messages[0]
-        assert "参考情報" in system_message.content
-        assert response == "Response with RAG context"
-
-    async def test_ac21_chat_backward_compatible(self) -> None:
-        """AC21: RAG無効時（rag_enabled=False）は従来通りの動作をすること（後方互換性）."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from src.services.chat import ChatService
-
-        # Arrange
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(
-            return_value=MagicMock(content="Normal response")
-        )
-
-        mock_session_factory = MagicMock()
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session_factory.return_value = mock_session
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-
-        # rag_service=None（RAG無効）
-        chat_service = ChatService(
-            llm=mock_llm,
-            session_factory=mock_session_factory,
-            system_prompt="You are an assistant.",
-            rag_service=None,
-        )
-
-        # Act
-        response = await chat_service.respond(
-            user_id="U123",
-            text="Hello",
-            thread_ts="1234567890.000000",
-        )
-
-        # Assert
-        assert response == "Normal response"
-        # システムプロンプトにRAGコンテキストが含まれていないことを確認
-        call_args = mock_llm.complete.call_args
-        messages = call_args[0][0]
-        system_message = messages[0]
-        assert "参考情報" not in system_message.content
-
-    async def test_ac22_rag_failure_graceful(self) -> None:
-        """AC22: RAG検索に失敗した場合、エラーログを出力し通常応答を継続すること."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from src.services.chat import ChatService
-
-        # Arrange
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(
-            return_value=MagicMock(content="Response without RAG")
-        )
-
-        mock_session_factory = MagicMock()
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session_factory.return_value = mock_session
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-
-        mock_rag_service = MagicMock()
-        mock_rag_service.retrieve = AsyncMock(side_effect=Exception("RAG error"))
-
-        chat_service = ChatService(
-            llm=mock_llm,
-            session_factory=mock_session_factory,
-            system_prompt="You are an assistant.",
-            rag_service=mock_rag_service,
-        )
-
-        # Act
-        response = await chat_service.respond(
-            user_id="U123",
-            text="Test query",
-            thread_ts="1234567890.000000",
-        )
-
-        # Assert - エラーが発生しても応答が返ること
-        assert response == "Response without RAG"
-
-
-class TestSlackCommands:
-    """Slackコマンドのテスト (AC23, AC24, AC25, AC26).
-
-    NOTE: handlers.py のRAGコマンドハンドラは実装済みです。
-    以下のプレースホルダーテストは、Slackコマンドの統合テストが
-    必要な場合に実装してください。現在は handlers.py 内の
-    ハンドラ関数が正しく呼び出されることを手動テストで確認済みです。
-    """
-
-    async def test_ac23_rag_crawl_command(self) -> None:
-        """AC23: rag crawl <URL> [パターン] でリンク集ページからの一括取り込みができること."""
-        # RAGKnowledgeService.ingest_from_index() の単体テストは
-        # TestIngestFromIndex で実装済み
-        pytest.skip("Slackイベントのモックを使った統合テストは未実装")
-
-    async def test_ac24_rag_add_command(self) -> None:
-        """AC24: rag add <URL> で単一ページの取り込みができること."""
-        # RAGKnowledgeService.ingest_page() の単体テストは
-        # TestIngestPage で実装済み
-        pytest.skip("Slackイベントのモックを使った統合テストは未実装")
-
-    async def test_ac25_rag_status_command(self) -> None:
-        """AC25: rag status でナレッジベースの統計が表示されること."""
-        # RAGKnowledgeService.get_stats() の単体テストは
-        # TestGetStats で実装済み
-        pytest.skip("Slackイベントのモックを使った統合テストは未実装")
-
-    async def test_ac26_rag_delete_command(self) -> None:
-        """AC26: rag delete <URL> でソースURL指定の削除ができること."""
-        # RAGKnowledgeService.delete_source() の単体テストは
-        # TestDeleteSource で実装済み
-        pytest.skip("Slackイベントのモックを使った統合テストは未実装")
-
-
 class TestConfiguration:
-    """設定のテスト (AC27, AC28, AC29)."""
-
-    def test_ac27_rag_enabled_toggle(self) -> None:
-        """AC27: RAG_ENABLED 環境変数でRAG機能のON/OFFを制御できること."""
-        import os
-        from unittest.mock import patch
-
-        from src.config.settings import Settings
-
-        # RAG_ENABLED=true
-        with patch.dict(os.environ, {"RAG_ENABLED": "true"}):
-            settings = Settings()
-            assert settings.rag_enabled is True
-
-        # RAG_ENABLED=false
-        with patch.dict(os.environ, {"RAG_ENABLED": "false"}):
-            settings = Settings()
-            assert settings.rag_enabled is False
+    """設定のテスト (AC28, AC29) — RAGSettings (mcp_servers/rag/config.py)."""
 
     def test_ac28_embedding_provider_switch(self) -> None:
         """AC28: EMBEDDING_PROVIDER で local / online を切り替えられること."""
         import os
         from unittest.mock import patch
 
-        from src.config.settings import Settings
+        from mcp_servers.rag.config import RAGSettings
 
         with patch.dict(os.environ, {"EMBEDDING_PROVIDER": "local"}):
-            settings = Settings()
+            settings = RAGSettings(_env_file=None)  # type: ignore[call-arg]
             assert settings.embedding_provider == "local"
 
         with patch.dict(os.environ, {"EMBEDDING_PROVIDER": "online"}):
-            settings = Settings()
+            settings = RAGSettings(_env_file=None)  # type: ignore[call-arg]
             assert settings.embedding_provider == "online"
 
     def test_ac29_configurable_parameters(self) -> None:
@@ -564,7 +354,7 @@ class TestConfiguration:
         import os
         from unittest.mock import patch
 
-        from src.config.settings import Settings
+        from mcp_servers.rag.config import RAGSettings
 
         with patch.dict(
             os.environ,
@@ -574,7 +364,7 @@ class TestConfiguration:
                 "RAG_RETRIEVAL_COUNT": "10",
             },
         ):
-            settings = Settings()
+            settings = RAGSettings(_env_file=None)  # type: ignore[call-arg]
             assert settings.rag_chunk_size == 1000
             assert settings.rag_chunk_overlap == 100
             assert settings.rag_retrieval_count == 10
@@ -584,16 +374,16 @@ class TestConfiguration:
         import os
         from unittest.mock import patch
 
-        from src.config.settings import Settings
+        from mcp_servers.rag.config import RAGSettings
 
         # 設定あり
         with patch.dict(os.environ, {"RAG_SIMILARITY_THRESHOLD": "0.5"}):
-            settings = Settings()
+            settings = RAGSettings(_env_file=None)  # type: ignore[call-arg]
             assert settings.rag_similarity_threshold == 0.5
 
         # 設定なし（デフォルト: None）
         with patch.dict(os.environ, {}, clear=True):
-            settings = Settings(_env_file=None)
+            settings = RAGSettings(_env_file=None)  # type: ignore[call-arg]
             assert settings.rag_similarity_threshold is None
 
     def test_similarity_threshold_validation(self) -> None:
@@ -603,17 +393,17 @@ class TestConfiguration:
 
         from pydantic import ValidationError
 
-        from src.config.settings import Settings
+        from mcp_servers.rag.config import RAGSettings
 
         # 負の値は拒否
         with patch.dict(os.environ, {"RAG_SIMILARITY_THRESHOLD": "-0.1"}):
             with pytest.raises(ValidationError):
-                Settings()
+                RAGSettings(_env_file=None)  # type: ignore[call-arg]
 
         # 2.0を超える値は拒否（cosine距離の最大値は2.0）
         with patch.dict(os.environ, {"RAG_SIMILARITY_THRESHOLD": "2.5"}):
             with pytest.raises(ValidationError):
-                Settings()
+                RAGSettings(_env_file=None)  # type: ignore[call-arg]
 
 
 class TestRAGDebugLog:
@@ -668,7 +458,7 @@ class TestRAGDebugLog:
         ]
 
         # Act
-        with caplog.at_level(logging.INFO, logger="src.services.rag_knowledge"):
+        with caplog.at_level(logging.INFO, logger="mcp_servers.rag.rag_knowledge"):
             await rag_service_log_enabled.retrieve("しれんのしろ アイテム", n_results=5)
 
         # Assert
@@ -701,7 +491,7 @@ class TestRAGDebugLog:
         ]
 
         # Act
-        with caplog.at_level(logging.INFO, logger="src.services.rag_knowledge"):
+        with caplog.at_level(logging.INFO, logger="mcp_servers.rag.rag_knowledge"):
             await rag_service_log_enabled.retrieve("test query", n_results=5)
 
         # Assert - INFOレベルではdistanceとsourceのみ（テキストは含まない）
@@ -730,7 +520,7 @@ class TestRAGDebugLog:
         ]
 
         # Act
-        with caplog.at_level(logging.DEBUG, logger="src.services.rag_knowledge"):
+        with caplog.at_level(logging.DEBUG, logger="mcp_servers.rag.rag_knowledge"):
             await rag_service_log_enabled.retrieve("test query", n_results=5)
 
         # Assert
@@ -754,7 +544,7 @@ class TestRAGDebugLog:
         ]
 
         # Act
-        with caplog.at_level(logging.DEBUG, logger="src.services.rag_knowledge"):
+        with caplog.at_level(logging.DEBUG, logger="mcp_servers.rag.rag_knowledge"):
             await rag_service_log_disabled.retrieve("test query", n_results=5)
 
         # Assert
@@ -854,191 +644,6 @@ class TestRAGRetrievalResultSources:
         assert len(result.sources) == 1
         assert "https://example.com/page1" in result.sources
         assert "不明" not in result.sources
-
-
-class TestRAGShowSources:
-    """Slack回答時のソース情報表示テスト (AC5, AC7-9, f9-rag.md)."""
-
-    async def test_ac5_chat_shows_sources(self) -> None:
-        """AC5: RAG_SHOW_SOURCES=true の場合、Slack回答末尾にソースURLリストが表示されること."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from src.services.chat import ChatService
-
-        # Arrange
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(
-            return_value=MagicMock(content="This is the answer.")
-        )
-
-        mock_session_factory = MagicMock()
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session_factory.return_value = mock_session
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-
-        mock_rag_service = MagicMock()
-        mock_rag_service.retrieve = AsyncMock(
-            return_value=RAGRetrievalResult(
-                context="--- 参考情報 1 ---\n出典: https://example.com/page1\nContent",
-                sources=["https://example.com/page1", "https://example.com/page2"],
-            )
-        )
-
-        chat_service = ChatService(
-            llm=mock_llm,
-            session_factory=mock_session_factory,
-            system_prompt="You are an assistant.",
-            rag_service=mock_rag_service,
-        )
-
-        # Act
-        mock_settings = MagicMock()
-        mock_settings.rag_retrieval_count = 5
-        mock_settings.rag_show_sources = True
-        with patch("src.services.chat.get_settings", return_value=mock_settings):
-            response = await chat_service.respond(
-                user_id="U123",
-                text="Test question",
-                thread_ts="1234567890.000000",
-            )
-
-        # Assert
-        assert "This is the answer." in response
-        assert "---" in response
-        assert "参照元:" in response
-        assert "• https://example.com/page1" in response
-        assert "• https://example.com/page2" in response
-
-    async def test_ac7_chat_hides_sources_when_disabled(self) -> None:
-        """AC7: RAG_SHOW_SOURCES=false の場合、ソース情報が表示されないこと（従来動作）."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from src.services.chat import ChatService
-
-        # Arrange
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(
-            return_value=MagicMock(content="This is the answer.")
-        )
-
-        mock_session_factory = MagicMock()
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session_factory.return_value = mock_session
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-
-        mock_rag_service = MagicMock()
-        mock_rag_service.retrieve = AsyncMock(
-            return_value=RAGRetrievalResult(
-                context="--- 参考情報 1 ---\n出典: https://example.com/page1\nContent",
-                sources=["https://example.com/page1"],
-            )
-        )
-
-        chat_service = ChatService(
-            llm=mock_llm,
-            session_factory=mock_session_factory,
-            system_prompt="You are an assistant.",
-            rag_service=mock_rag_service,
-        )
-
-        # Act
-        mock_settings = MagicMock()
-        mock_settings.rag_retrieval_count = 5
-        mock_settings.rag_show_sources = False  # ソース表示無効
-        with patch("src.services.chat.get_settings", return_value=mock_settings):
-            response = await chat_service.respond(
-                user_id="U123",
-                text="Test question",
-                thread_ts="1234567890.000000",
-            )
-
-        # Assert
-        assert response == "This is the answer."
-        assert "参照元:" not in response
-
-    async def test_ac8_backward_compatible(self) -> None:
-        """AC8: 新設定のデフォルト値により、既存の動作に影響がないこと（rag_show_sources=false）."""
-        import os
-
-        from src.config.settings import Settings
-
-        # デフォルト値をテスト（.envファイルと環境変数の影響を排除）
-        # Settingsはenv_file=".env"を読み込むため、環境変数だけでなく
-        # .envファイルの影響も排除する必要がある
-        # 環境変数を削除し、.envファイルも読み込まないようにする
-        env_backup = {
-            k: os.environ.pop(k, None)
-            for k in ["RAG_SHOW_SOURCES", "RAG_DEBUG_LOG_ENABLED"]
-        }
-        try:
-            settings = Settings(_env_file=None)  # .envファイルを読み込まない
-            assert settings.rag_show_sources is False
-            assert settings.rag_debug_log_enabled is False  # デフォルトはFalse
-        finally:
-            # 環境変数を復元
-            for k, v in env_backup.items():
-                if v is not None:
-                    os.environ[k] = v
-
-    async def test_ac9_no_effect_when_rag_disabled(self) -> None:
-        """AC9: RAG無効時（rag_enabled=false）は新機能が動作しないこと."""
-        from unittest.mock import AsyncMock, MagicMock, patch
-
-        from src.services.chat import ChatService
-
-        # Arrange
-        mock_llm = MagicMock()
-        mock_llm.complete = AsyncMock(
-            return_value=MagicMock(content="Normal response")
-        )
-
-        mock_session_factory = MagicMock()
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session_factory.return_value = mock_session
-
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-        mock_session.add = MagicMock()
-
-        # rag_service=None（RAG無効）
-        chat_service = ChatService(
-            llm=mock_llm,
-            session_factory=mock_session_factory,
-            system_prompt="You are an assistant.",
-            rag_service=None,
-        )
-
-        # Act
-        mock_settings = MagicMock()
-        mock_settings.rag_show_sources = True  # 有効でも効果なし
-        with patch("src.services.chat.get_settings", return_value=mock_settings):
-            response = await chat_service.respond(
-                user_id="U123",
-                text="Hello",
-                thread_ts="1234567890.000000",
-            )
-
-        # Assert
-        assert response == "Normal response"
-        assert "参照元:" not in response
 
 
 class TestFragmentNormalization:
@@ -1204,7 +809,7 @@ class TestSafeBrowsingIntegration:
     @pytest.fixture
     def mock_safe_browsing_client(self) -> MagicMock:
         """モックSafeBrowsingClientを作成する."""
-        from src.services.safe_browsing import SafeBrowsingResult
+        from mcp_servers.rag.safe_browsing import SafeBrowsingResult
 
         mock = MagicMock()
         # デフォルトは安全なURL
@@ -1239,7 +844,7 @@ class TestSafeBrowsingIntegration:
         mock_vector_store: MagicMock,
     ) -> None:
         """安全なURLは取り込みが許可されること."""
-        from src.services.safe_browsing import SafeBrowsingResult
+        from mcp_servers.rag.safe_browsing import SafeBrowsingResult
 
         # Arrange
         mock_safe_browsing_client.check_url.return_value = SafeBrowsingResult(
@@ -1268,7 +873,7 @@ class TestSafeBrowsingIntegration:
         mock_safe_browsing_client: MagicMock,
     ) -> None:
         """AC9: rag add で危険なURL指定時、適切なエラーメッセージが返ること."""
-        from src.services.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
+        from mcp_servers.rag.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
 
         # Arrange
         mock_safe_browsing_client.check_url.return_value = SafeBrowsingResult(
@@ -1301,7 +906,7 @@ class TestSafeBrowsingIntegration:
         mock_safe_browsing_client: MagicMock,
     ) -> None:
         """AC10: rag crawl のリンク集内に危険URLがあった場合、そのURLのみスキップされること."""
-        from src.services.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
+        from mcp_servers.rag.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
 
         # Arrange
         urls = [
@@ -1361,7 +966,7 @@ class TestSafeBrowsingIntegration:
         mock_safe_browsing_client: MagicMock,
     ) -> None:
         """AC10: 全URLが危険な場合、クロールがスキップされること."""
-        from src.services.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
+        from mcp_servers.rag.safe_browsing import SafeBrowsingResult, ThreatMatch, ThreatType
 
         # Arrange
         urls = ["https://phishing.com"]

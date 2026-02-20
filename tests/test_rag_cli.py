@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.rag.cli import (
+from mcp_servers.rag.cli import (
     RegressionInfo,
     detect_regression,
     load_baseline,
     write_json_report,
     write_markdown_report,
 )
-from src.rag.evaluation import EvaluationReport, QueryEvaluationResult
+from mcp_servers.rag.evaluation import EvaluationReport, QueryEvaluationResult
 
 
 class TestDetectRegression:
@@ -264,8 +264,8 @@ class TestCLIEvaluate:
 
     @pytest.mark.asyncio
     async def test_ac1_evaluate_command_runs(self, tmp_path: Path) -> None:
-        """AC1: python -m src.rag.cli evaluate で評価が実行できること."""
-        from src.rag.cli import run_evaluation
+        """AC1: python -m mcp_servers.rag.cli evaluate で評価が実行できること."""
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         # モック用の評価レポート
@@ -316,7 +316,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -324,10 +324,10 @@ class TestCLIEvaluate:
             chunk_overlap=30,
         )
 
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
                 with patch(
-                    "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
+                    "mcp_servers.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
                 ):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
@@ -341,7 +341,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac2_dataset_option(self, tmp_path: Path) -> None:
         """AC2: --dataset オプションでデータセットパスを指定できること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -368,7 +368,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -377,9 +377,9 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -393,7 +393,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac3_output_dir_option(self, tmp_path: Path) -> None:
         """AC3: --output-dir オプションでレポート出力先を指定できること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -420,7 +420,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -428,10 +428,10 @@ class TestCLIEvaluate:
             chunk_overlap=30,
         )
 
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
                 with patch(
-                    "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
+                    "mcp_servers.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
                 ):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
@@ -446,7 +446,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac11_fail_on_regression_exit_code(self, tmp_path: Path) -> None:
         """AC11: --fail-on-regression指定時、リグレッション検出でexit code 1になること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -479,7 +479,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=True,
             regression_threshold=0.1,
             save_baseline=False,
@@ -487,10 +487,10 @@ class TestCLIEvaluate:
             chunk_overlap=30,
         )
 
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
                 with patch(
-                    "src.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
+                    "mcp_servers.rag.cli.evaluate_retrieval", new=AsyncMock(return_value=mock_report)
                 ):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
@@ -503,7 +503,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac4_n_results_option(self, tmp_path: Path) -> None:
         """AC4: --n-results オプションがevaluate_retrievalに正しく伝播すること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -531,7 +531,7 @@ class TestCLIEvaluate:
             n_results=custom_n_results,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -540,9 +540,9 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -556,7 +556,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac5_threshold_option(self, tmp_path: Path) -> None:
         """AC5: --threshold オプションがcreate_rag_serviceに正しく伝播すること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -584,7 +584,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=custom_threshold,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -593,9 +593,9 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -609,7 +609,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac8_vector_weight_option(self, tmp_path: Path) -> None:
         """AC8: --vector-weight オプションがcreate_rag_serviceに正しく伝播すること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -636,7 +636,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=custom_vector_weight,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -645,9 +645,9 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -660,7 +660,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac9_chunk_params_propagation(self, tmp_path: Path) -> None:
         """AC9: --chunk-size/--chunk-overlap がcreate_rag_serviceとBM25構築に正しく伝播すること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -685,7 +685,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -695,9 +695,9 @@ class TestCLIEvaluate:
 
         mock_eval = AsyncMock(return_value=mock_report)
         mock_bm25_builder = MagicMock(return_value=MagicMock())
-        with patch("src.rag.cli._build_bm25_index_from_fixture", mock_bm25_builder):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", mock_bm25_builder):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -718,7 +718,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac10_bm25_params_propagation(self, tmp_path: Path) -> None:
         """AC10: --bm25-k1/--bm25-b が_build_bm25_index_from_fixtureに正しく伝播すること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -743,7 +743,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -755,9 +755,9 @@ class TestCLIEvaluate:
 
         mock_eval = AsyncMock(return_value=mock_report)
         mock_bm25_builder = MagicMock(return_value=MagicMock())
-        with patch("src.rag.cli._build_bm25_index_from_fixture", mock_bm25_builder):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", mock_bm25_builder):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -772,7 +772,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac13_params_in_json_report(self, tmp_path: Path) -> None:
         """AC13: レポートに評価パラメータが含まれること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -797,7 +797,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=0.6,
             vector_weight=0.7,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -808,9 +808,9 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -831,7 +831,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac6_persist_dir_option(self, tmp_path: Path) -> None:
         """AC6: --persist-dir オプションがcreate_rag_serviceに正しく伝播すること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -868,9 +868,9 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -885,7 +885,7 @@ class TestCLIEvaluate:
     @pytest.mark.asyncio
     async def test_ac11_min_combined_score_propagation(self, tmp_path: Path) -> None:
         """AC11: --min-combined-score が create_rag_service に正しく伝播すること."""
-        from src.rag.cli import run_evaluation
+        from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
 
         mock_report = EvaluationReport(
@@ -910,7 +910,7 @@ class TestCLIEvaluate:
             n_results=5,
             threshold=None,
             vector_weight=0.6,
-            persist_dir=None,
+            persist_dir=str(tmp_path / "chroma_db"),
             fail_on_regression=False,
             regression_threshold=0.1,
             save_baseline=False,
@@ -920,9 +920,9 @@ class TestCLIEvaluate:
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
-        with patch("src.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
-            with patch("src.rag.cli.create_rag_service") as mock_create_service:
-                with patch("src.rag.cli.evaluate_retrieval", new=mock_eval):
+        with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
+            with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+                with patch("mcp_servers.rag.cli.evaluate_retrieval", new=mock_eval):
                     mock_service = AsyncMock()
                     mock_create_service.return_value = mock_service
 
@@ -940,7 +940,7 @@ class TestCLIInitTestDb:
     @pytest.mark.asyncio
     async def test_init_test_db_creates_chromadb(self, tmp_path: Path) -> None:
         """init-test-dbコマンドでChromaDBが初期化されること."""
-        from src.rag.cli import init_test_db
+        from mcp_servers.rag.cli import init_test_db
         from argparse import Namespace
 
         # テスト用フィクスチャ作成
@@ -965,7 +965,7 @@ class TestCLIInitTestDb:
             chunk_overlap=30,
         )
 
-        with patch("src.rag.cli.create_rag_service") as mock_create_service:
+        with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
             mock_service = AsyncMock()
             mock_service._ingest_crawled_page = AsyncMock(return_value=1)
             mock_create_service.return_value = mock_service

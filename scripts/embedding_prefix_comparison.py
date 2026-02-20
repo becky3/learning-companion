@@ -5,9 +5,9 @@ nomic-embed-text のタスク固有プレフィックス（search_document: / se
 
 Usage:
     # テスト用ChromaDBの初期化（初回のみ）
-    uv run python -m src.rag.cli init-test-db \
+    uv run python -m mcp_servers.rag.cli init-test-db \
       --persist-dir .tmp/prefix-comparison/chroma_db_no_prefix
-    uv run python -m src.rag.cli init-test-db \
+    uv run python -m mcp_servers.rag.cli init-test-db \
       --persist-dir .tmp/prefix-comparison/chroma_db_with_prefix
 
     # 比較実行
@@ -36,12 +36,12 @@ from pathlib import Path
 # プロジェクトルートをパスに追加
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config.settings import get_settings
-from src.embedding.factory import get_embedding_provider
-from src.rag.evaluation import evaluate_retrieval
-from src.rag.vector_store import VectorStore
-from src.services.rag_knowledge import RAGKnowledgeService
-from src.services.web_crawler import CrawledPage, WebCrawler
+from mcp_servers.rag.config import get_settings
+from mcp_servers.rag.embedding.factory import get_embedding_provider
+from mcp_servers.rag.evaluation import evaluate_retrieval
+from mcp_servers.rag.vector_store import VectorStore
+from mcp_servers.rag.rag_knowledge import RAGKnowledgeService
+from mcp_servers.rag.web_crawler import CrawledPage, WebCrawler
 
 OUTPUT_DIR = Path(".tmp/prefix-comparison")
 DEFAULT_DATASET = "tests/fixtures/rag_evaluation_dataset.json"
@@ -117,7 +117,7 @@ async def build_and_evaluate(
 
         # BM25インデックス構築（ハイブリッドモード時のみ）
         # _smart_chunk を使うため RAGKnowledgeService 経由で構築
-        from src.rag.bm25_index import BM25Index
+        from mcp_servers.rag.bm25_index import BM25Index
 
         bm25_index: BM25Index | None = None
         if hybrid:

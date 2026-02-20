@@ -37,7 +37,9 @@ class MCPServerConfig:
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     url: str = ""
+    system_instruction: str = ""  # ツール利用を促すためシステムプロンプトに常時追加する指示
     response_instruction: str = ""  # ツール結果を使った応答時にLLMへ追加する指示
+    auto_context_tool: str = ""  # ユーザークエリで自動呼び出しし結果をコンテキスト注入するツール名
 
 
 class MCPClientManager:
@@ -51,7 +53,9 @@ class MCPClientManager:
         self._sessions: dict[str, ClientSession] = {}
         self._tool_to_server: dict[str, str] = {}
         self._tools: list[ToolDefinition] = []
+        self._system_instructions: list[str] = []  # ツール利用を促す常設指示
         self._server_instructions: dict[str, str] = {}  # server_name → response_instruction
+        self._auto_context_tools: list[str] = []  # 自動コンテキスト注入ツール名
 
     async def initialize(self, server_configs: list[MCPServerConfig]) -> None:
         """設定されたMCPサーバーに接続し、利用可能ツールを取得する.
@@ -69,8 +73,12 @@ class MCPClientManager:
 
             try:
                 await self._connect_stdio_server(config)
+                if config.system_instruction:
+                    self._system_instructions.append(config.system_instruction)
                 if config.response_instruction:
                     self._server_instructions[config.name] = config.response_instruction
+                if config.auto_context_tool:
+                    self._auto_context_tools.append(config.auto_context_tool)
                 logger.info("MCPサーバー '%s' に接続しました。", config.name)
             except Exception:
                 logger.exception(
@@ -111,6 +119,14 @@ class MCPClientManager:
     async def get_available_tools(self) -> list[ToolDefinition]:
         """全サーバーのツールをプロバイダー非依存形式で返す."""
         return list(self._tools)
+
+    def get_system_instructions(self) -> list[str]:
+        """全サーバーのシステム指示を返す."""
+        return list(self._system_instructions)
+
+    def get_auto_context_tools(self) -> list[str]:
+        """自動コンテキスト注入するツール名のリストを返す."""
+        return list(self._auto_context_tools)
 
     def get_response_instruction(self, tool_name: str) -> str:
         """ツール名に対応するサーバーの応答指示を返す."""
@@ -156,4 +172,6 @@ class MCPClientManager:
         self._sessions.clear()
         self._tool_to_server.clear()
         self._tools.clear()
+        self._system_instructions.clear()
         self._server_instructions.clear()
+        self._auto_context_tools.clear()

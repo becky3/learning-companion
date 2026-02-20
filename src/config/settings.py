@@ -9,10 +9,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# LM Studio のデフォルトベースURL（Single Source of Truth）
+
 DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
 
 
@@ -77,55 +77,10 @@ class Settings(BaseSettings):
     # MCP
     mcp_enabled: bool = False
     mcp_servers_config: str = "config/mcp_servers.json"
+    rag_show_sources: bool = False  # RAG参照元URL表示（デバッグ用）
 
     # Thread History
     thread_history_limit: int = Field(default=20, ge=1, le=100)
-
-    # RAG / Embedding
-    rag_enabled: bool = False
-    embedding_provider: Literal["local", "online"] = "local"
-    embedding_model_local: str = "nomic-embed-text"
-    embedding_model_online: str = "text-embedding-3-small"
-    embedding_prefix_enabled: bool = True  # Embeddingプレフィックスの有効化
-    chromadb_persist_dir: str = "./chroma_db"
-    rag_chunk_size: int = Field(default=200, ge=1)
-    rag_chunk_overlap: int = Field(default=30, ge=0)
-    rag_retrieval_count: int = Field(default=3, ge=1)
-    rag_max_crawl_pages: int = Field(default=50, ge=1)
-    rag_crawl_delay_sec: float = Field(default=1.0, ge=0)
-    rag_crawl_progress_interval: int = Field(default=5, ge=1)  # 進捗報告間隔（ページ数）
-    rag_similarity_threshold: float | None = Field(default=None, ge=0.0, le=2.0)  # cosine距離閾値
-    rag_respect_robots_txt: bool = True  # robots.txt 遵守の有効/無効
-    rag_robots_txt_cache_ttl: int = Field(default=3600, ge=0)  # robots.txt キャッシュTTL秒
-
-    # RAG評価・デバッグ (Phase 1)
-    rag_debug_log_enabled: bool = False  # 本番ではPII漏洩リスクのためデフォルト無効
-    rag_show_sources: bool = False
-
-    # RAGハイブリッド検索 (Phase 2)
-    rag_hybrid_search_enabled: bool = False  # ハイブリッド検索の有効/無効
-    rag_vector_weight: float = Field(default=0.90, ge=0.0, le=1.0)  # ベクトル検索の重み
-    rag_bm25_k1: float = Field(default=2.5, gt=0.0)  # BM25の用語頻度パラメータ
-    rag_bm25_b: float = Field(default=0.50, ge=0.0, le=1.0)  # BM25の文書長正規化パラメータ
-    rag_min_combined_score: float | None = Field(default=0.75, ge=0.0, le=1.0)  # combined_scoreの下限閾値（Noneで無効）
-    bm25_persist_dir: str = "./bm25_index"
-
-    # Safe Browsing (URL安全性チェック)
-    rag_url_safety_check: bool = False
-    google_safe_browsing_api_key: str = ""
-    rag_url_safety_cache_ttl: int = Field(default=300, ge=0)  # キャッシュTTL秒 (0=デフォルトTTL使用)
-    rag_url_safety_fail_open: bool = True  # API障害時の動作（True: URLを許可, False: URLを拒否）
-    rag_url_safety_timeout: float = Field(default=5.0, gt=0)  # APIリクエストタイムアウト秒
-
-    @model_validator(mode="after")
-    def validate_chunk_settings(self) -> "Settings":
-        """チャンク設定の相関バリデーション."""
-        if self.rag_chunk_overlap >= self.rag_chunk_size:
-            raise ValueError(
-                f"rag_chunk_overlap ({self.rag_chunk_overlap}) must be less than "
-                f"rag_chunk_size ({self.rag_chunk_size})"
-            )
-        return self
 
     # Logging
     log_level: str = "INFO"

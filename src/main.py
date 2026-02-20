@@ -12,9 +12,6 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-# ChromaDBテレメトリのエラーログを抑制（常に無効化、ユーザーには不要）
-logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
-
 from src.config.settings import get_settings, load_assistant_config
 from src.process_guard import (
     check_already_running,
@@ -23,23 +20,17 @@ from src.process_guard import (
     write_pid_file,
 )
 from src.db.session import init_db, get_session_factory
-from src.embedding.factory import get_embedding_provider
 from src.llm.factory import get_provider_for_service
 from src.mcp_bridge.client_manager import MCPClientManager, MCPServerConfig
 from src.messaging.router import MessageRouter
 from src.messaging.slack_adapter import SlackAdapter
-from src.rag.bm25_index import BM25Index
-from src.rag.vector_store import VectorStore
 from src.services.chat import ChatService
 from src.services.feed_collector import FeedCollector
 from src.services.ogp_extractor import OgpExtractor
-from src.services.rag_knowledge import RAGKnowledgeService
 from src.services.summarizer import Summarizer
 from src.services.thread_history import ThreadHistoryService
 from src.services.topic_recommender import TopicRecommender
 from src.services.user_profiler import UserProfiler
-from src.services.web_crawler import WebCrawler
-from src.services.safe_browsing import create_safe_browsing_client
 from src.slack.app import create_app, socket_mode_handler
 from src.slack.handlers import register_handlers
 
@@ -69,7 +60,9 @@ def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
             args=server_def.get("args", []),
             env=server_def.get("env", {}),
             url=server_def.get("url", ""),
+            system_instruction=server_def.get("system_instruction", ""),
             response_instruction=server_def.get("response_instruction", ""),
+            auto_context_tool=server_def.get("auto_context_tool", ""),
         ))
     return configs
 
@@ -112,52 +105,6 @@ async def main() -> None:
         else:
             logger.info("MCP無効: ツール呼び出し機能はオフです")
 
-        # RAG初期化（有効時のみ）
-        rag_service: RAGKnowledgeService | None = None
-        if settings.rag_enabled:
-            embedding = get_embedding_provider(settings, settings.embedding_provider)
-            vector_store = VectorStore(embedding, settings.chromadb_persist_dir)
-            web_crawler = WebCrawler(
-                max_pages=settings.rag_max_crawl_pages,
-                crawl_delay=settings.rag_crawl_delay_sec,
-                respect_robots_txt=settings.rag_respect_robots_txt,
-                robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
-            )
-            # Safe Browsing クライアント（URL安全性チェック）
-            safe_browsing_client = create_safe_browsing_client(settings)
-            if safe_browsing_client:
-                logger.info("URL安全性チェック有効: Google Safe Browsing API")
-
-            # BM25インデックス（ハイブリッド検索用）
-            bm25_index: BM25Index | None = None
-            if settings.rag_hybrid_search_enabled:
-                bm25_index = BM25Index(
-                    k1=settings.rag_bm25_k1,
-                    b=settings.rag_bm25_b,
-                    persist_dir=settings.bm25_persist_dir,
-                )
-                logger.info("BM25インデックス初期化完了")
-
-            rag_service = RAGKnowledgeService(
-                vector_store,
-                web_crawler,
-                chunk_size=settings.rag_chunk_size,
-                chunk_overlap=settings.rag_chunk_overlap,
-                similarity_threshold=settings.rag_similarity_threshold,
-                safe_browsing_client=safe_browsing_client,
-                bm25_index=bm25_index,
-                hybrid_search_enabled=settings.rag_hybrid_search_enabled,
-                vector_weight=settings.rag_vector_weight,
-                min_combined_score=settings.rag_min_combined_score,
-                debug_log_enabled=settings.rag_debug_log_enabled,
-            )
-            if settings.rag_hybrid_search_enabled:
-                logger.info("RAG有効: ハイブリッド検索（ベクトル＋BM25）が利用可能")
-            else:
-                logger.info("RAG有効: ナレッジベース機能が利用可能")
-        else:
-            logger.info("RAG無効: ナレッジベース機能はオフです")
-
         # Slack アプリ（ThreadHistoryService に必要なため先に作成）
         app = create_app(settings)
         slack_client = app.client
@@ -195,7 +142,6 @@ async def main() -> None:
             system_prompt=system_prompt,
             mcp_manager=mcp_manager,
             thread_history_fetcher=slack_adapter.fetch_thread_history,
-            rag_service=rag_service,
             format_instruction=slack_adapter.get_format_instruction(),
         )
 
@@ -236,8 +182,7 @@ async def main() -> None:
             bot_token=settings.slack_bot_token,
             timezone=settings.timezone,
             env_name=settings.env_name,
-            rag_service=rag_service,
-            rag_crawl_progress_interval=settings.rag_crawl_progress_interval,
+            mcp_manager=mcp_manager,
             bot_start_time=bot_start_time,
             slack_client=slack_client,
         )
