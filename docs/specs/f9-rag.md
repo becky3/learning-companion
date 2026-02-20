@@ -161,7 +161,7 @@ bot: クロールを開始しました... (リンク収集中)
 - **完了メッセージ**: 処理完了後、結果サマリーをスレッド内に投稿
   - 形式: `└─ 完了: {ページ数}ページ / {チャンク数}チャンク / エラー: {エラー数}件`
 
-> **Note**: MCP移行により、ページ単位の進捗コールバックは廃止。開始/完了メッセージのみに簡略化。
+> **Note**: 進捗通知は開始/完了メッセージのみ。ページ単位の進捗コールバックは提供しない。
 
 #### rag add / status / delete
 
@@ -890,10 +890,6 @@ DEBUG RAG result 1 text: "しれんのしろには以下のアイテムがあり
 - **DEBUG レベル**: テキストプレビュー（先頭100文字）、全文
 - `RAG_DEBUG_LOG_ENABLED=false` でログ出力を無効化可能
 
-#### ソース情報表示（廃止）
-
-> **MCP移行により廃止**: `RAG_SHOW_SOURCES` 設定は削除。MCP ツール経由では LLM が検索結果を直接受け取り、応答にソース情報を自然に含めるため、アプリ側での付加処理は不要。
-
 #### 戻り値型
 
 ```python
@@ -1065,13 +1061,11 @@ async def rag_stats() -> str:
 
 ### MCP経由のRAG統合
 
-MCP移行により、`ChatService` は RAG サービスを直接参照しない。LLM が MCP ツール一覧から `rag_search` を自律的に選択し、検索を実行する。
+`ChatService` は RAG サービスを直接参照しない。LLM が MCP ツール一覧から `rag_search` を自律的に選択し、検索を実行する。
 
-- `ChatService` のコンストラクタから `rag_service` 引数を**削除**
-- RAG コンテキストの自動注入コード（システムプロンプトへの付加）を**削除**
+- `ChatService` は `rag_service` 引数を持たない
+- RAG コンテキストのシステムプロンプト自動注入は行わない（LLM が MCP ツール結果を踏まえて応答を生成する）
 - RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
-- `rag_show_sources` は不要化（LLM が MCP ツールの結果を踏まえて自然にソース情報を含める）
-- **`RAG_ENABLED` の廃止**: `src/config/settings.py` から `rag_enabled` フィールドを削除。RAG の有効/無効は本体アプリ側の `MCP_ENABLED` + `config/mcp_servers.json` への rag エントリ登録で制御する（RAG MCP サーバー側の設定ではない）
 
 #### Slackコマンドのルーティング (`src/messaging/router.py`)
 
@@ -1082,15 +1076,14 @@ MCP移行により、`ChatService` は RAG サービスを直接参照しない�
 result = await self._mcp_manager.call_tool("rag_add", {"url": url})
 ```
 
-- `rag_service` コンストラクタ引数を**削除**
-- `rag_crawl_progress_interval` 引数を**削除**
-- 進捗コールバックを**削除**、開始/完了メッセージのみに簡略化
+- `rag_service`・`rag_crawl_progress_interval` 引数は持たない
+- 進捗通知は開始/完了メッセージのみ
 - RAG 利用可否の判定: `self._mcp_manager is not None`
   - ツール未登録時は `MCPToolNotFoundError` をキャッチしてユーザーフレンドリーなエラー表示
 
 ### RAG 設定 (`mcp_servers/rag/config.py`)
 
-MCP移行により、RAG関連の設定は `src/config/settings.py` から `mcp_servers/rag/config.py` の `RAGSettings` に移動する。`src/config/settings.py` からは RAG 関連設定をすべて削除し、`rag_enabled` フラグも廃止する（RAG の有無は MCP サーバー設定で決まる）。
+RAG 関連の設定は `mcp_servers/rag/config.py` の `RAGSettings` で管理する。`src/config/settings.py` は RAG 関連設定を持たない（RAG の有無は MCP サーバー設定で決まる）。
 
 **設定の独立性**: MCP サーバーは将来的に別マシンや Docker コンテナで実行される可能性がある。そのため、プロジェクトルートの `.env` は参照せず、MCP サーバー専用の設定ファイル `mcp_servers/rag/.env` から設定を読み込む。
 
@@ -1165,11 +1158,7 @@ def get_settings() -> RAGSettings:
 >
 > **`mcp_servers.json` の `env` フィールドとの優先順位**: pydantic-settings の仕様により、環境変数 > `.env` ファイルの順で解決される。`mcp_servers.json` の `env` フィールドはプロセスの環境変数として渡されるため、`mcp_servers/rag/.env` より優先される。
 >
-> **`src/config/settings.py` の変更**: RAG 関連設定をすべて削除。残すのは `mcp_enabled`、`mcp_servers_config` 等の既存 MCP 基盤設定のみ。
->
-> **`rag_show_sources` の廃止**: MCP 経由では LLM が自然にソース情報を含めるため不要。
->
-> **`rag_crawl_progress_interval` の廃止**: ページ単位の進捗コールバック廃止に伴い不要。
+> **`src/config/settings.py`**: RAG 関連設定は持たない。MCP 基盤設定（`mcp_enabled`、`mcp_servers_config` 等）のみ。
 
 #### 設定ファイルの配置
 
@@ -1234,24 +1223,7 @@ RAG_URL_SAFETY_TIMEOUT=5.0
 RAG_DEBUG_LOG_ENABLED=false
 ```
 
-#### 設定の移行ガイド
-
-プロジェクトルートの `.env` から `mcp_servers/rag/.env` への移行が必要。
-
-**移行手順**:
-
-1. プロジェクトルートの `.env` から RAG 関連設定を `mcp_servers/rag/.env` にコピー
-2. プロジェクトルートの `.env` / `.env.example` から RAG 関連設定を削除
-3. `MCP_ENABLED=true` と `config/mcp_servers.json` への rag エントリ追加で RAG を有効化
-
-**廃止される環境変数**（移行先なし、削除のみ）:
-
-| 環境変数 | 理由 |
-|---------|------|
-| `RAG_CRAWL_PROGRESS_INTERVAL` | ページ単位の進捗コールバック廃止 |
-| `RAG_SHOW_SOURCES` | LLM が MCP ツール結果から自然にソース情報を含める |
-
-**デプロイ方式ごとの設定注入**:
+#### デプロイ方式ごとの設定注入
 
 | デプロイ方式 | 設定注入方法 |
 |-------------|-------------|
@@ -1312,7 +1284,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 ### 設定
 
-- [ ] **AC27**: RAG の有効/無効が `MCP_ENABLED` と `config/mcp_servers.json` の RAG エントリ登録で制御されること（`RAG_ENABLED` は廃止）
+- [ ] **AC27**: RAG の有効/無効が `MCP_ENABLED` と `config/mcp_servers.json` の RAG エントリ登録で制御されること
 - [ ] **AC28**: `EMBEDDING_PROVIDER` で `local` / `online` を切り替えられること
 - [ ] **AC29**: チャンクサイズ・オーバーラップ・検索件数が環境変数で設定可能であること
 
@@ -1493,7 +1465,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 ## 注意事項
 
-1. **RAG の有効化**: `MCP_ENABLED=true` かつ `config/mcp_servers.json` に RAG エントリを登録することで有効化される（`RAG_ENABLED` フラグは廃止）
+1. **RAG の有効化**: `MCP_ENABLED=true` かつ `config/mcp_servers.json` に RAG エントリを登録することで有効化される
 2. **ChromaDBの永続化**: `CHROMADB_PERSIST_DIR` で指定したディレクトリにSQLiteファイルが作成される。デフォルトの `chroma_db/` は既に `.gitignore` 済みだが、ディレクトリを変更する場合は適宜 `.gitignore` に追加すること
 3. **Embeddingモデルの整合性**: モデルを変更した場合、既存データとの類似度計算が不正確になるため、コレクションの再構築が必要
 4. **Webクローラーの負荷配慮**: `asyncio.Semaphore` で同時接続数を制限
