@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from src.llm.base import Message
@@ -22,7 +23,9 @@ class CliAdapter(MessagingPort):
 
     async def send_message(self, text: str, thread_id: str, channel: str) -> None:
         """テキストを標準出力に表示する."""
-        print(f"\n{text}\n")
+        encoded = text.encode(sys.stdout.encoding or "utf-8", errors="replace")
+        sys.stdout.buffer.write(b"\n" + encoded + b"\n\n")
+        sys.stdout.buffer.flush()
 
     async def upload_file(
         self,
@@ -36,7 +39,10 @@ class CliAdapter(MessagingPort):
         path = Path(".tmp/cli_exports") / filename
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-        print(f"\n{comment}\nファイル保存先: {path}\n")
+        msg = f"\n{comment}\nファイル保存先: {path}\n"
+        encoded = msg.encode(sys.stdout.encoding or "utf-8", errors="replace")
+        sys.stdout.buffer.write(encoded + b"\n")
+        sys.stdout.buffer.flush()
 
     async def fetch_thread_history(
         self, channel: str, thread_id: str, current_message_id: str
