@@ -102,7 +102,7 @@ src/
   services/safe_browsing.py   # Google Safe Browsing API
   services/thread_history.py  # Slackスレッド履歴取得
   scheduler/jobs.py  # 配信ジョブ・フォーマット
-mcp-servers/                 # MCPサーバー群（将来リポジトリ分離対象）
+mcp_servers/                 # MCPサーバー群（将来リポジトリ分離対象）
   weather/
     server.py          # 天気予報MCPサーバー（気象庁API）
 config/

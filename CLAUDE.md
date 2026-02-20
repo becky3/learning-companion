@@ -8,7 +8,7 @@
 - **設定変更**: `.env` で各サービスごとにLLMを変更可能
   - `CHAT_LLM_PROVIDER` / `PROFILER_LLM_PROVIDER` / `TOPIC_LLM_PROVIDER` / `SUMMARIZER_LLM_PROVIDER`
   - 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
-- `MCP_ENABLED` — MCP機能の有効/無効（デフォルト: `false`）。MCPサーバー（`mcp-servers/` 配下）は `src/` のモジュールを import しないこと
+- `MCP_ENABLED` — MCP機能の有効/無効（デフォルト: `false`）。MCPサーバー（`mcp_servers/` 配下）は `src/` のモジュールを import しないこと
 - `RAG_ENABLED` — RAG機能の有効/無効（デフォルト: `false`）。詳細は `docs/specs/f9-rag.md` 参照
 
 ## 開発ルール

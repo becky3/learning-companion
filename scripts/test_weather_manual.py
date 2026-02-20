@@ -9,7 +9,7 @@ sys.path.insert(0, ".")
 
 from importlib import import_module
 
-mod = import_module("mcp-servers.weather.server")
+mod = import_module("mcp_servers.weather.server")
 get_weather = mod.get_weather
 
 
