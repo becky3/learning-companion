@@ -13,7 +13,29 @@ FastMCP を使用して 5 つの RAG ツールを公開する:
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import io
 import logging
+import os
+
+# ChromaDB テレメトリを無効化（import 前に設定する必要がある）
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+
+# RAG モジュールをモジュールレベルで import する。
+# 重要: asyncio.to_thread のワーカースレッド内で import すると、
+# anyio イベントループの import lock とデッドロックするため、
+# サーバー起動時（メインスレッド）に全て import しておく。
+# bm25s が "resource module not available on Windows" を stdout に print する
+# 問題への対策として、import 時に stdout を抑制する。
+with contextlib.redirect_stdout(io.StringIO()):
+    from .bm25_index import BM25Index
+    from .config import get_settings
+    from .embedding.factory import get_embedding_provider
+    from .rag_knowledge import RAGKnowledgeService
+    from .safe_browsing import create_safe_browsing_client
+    from .vector_store import VectorStore
+    from .web_crawler import WebCrawler
 
 from mcp.server.fastmcp import FastMCP
 
@@ -24,46 +46,59 @@ mcp = FastMCP("rag")
 # --- 遅延初期化 ---
 
 _rag_service = None
+_init_lock = asyncio.Lock()
 
 
-def _get_rag_service():
+async def _get_rag_service():
     """RAGKnowledgeService を遅延初期化して返す."""
     global _rag_service
     if _rag_service is not None:
         return _rag_service
 
-    from .bm25_index import BM25Index
-    from .config import get_settings
-    from .embedding.factory import get_embedding_provider
-    from .rag_knowledge import RAGKnowledgeService
-    from .safe_browsing import create_safe_browsing_client
-    from .vector_store import VectorStore
-    from .web_crawler import WebCrawler
+    async with _init_lock:
+        # ダブルチェック: Lock 待ちの間に別タスクが初期化済みの場合
+        if _rag_service is not None:
+            return _rag_service
 
+        # ChromaDB / BM25 のオブジェクト構築は同期的でブロッキング。
+        # イベントループをブロックすると MCP stdio 通信が途絶えるため、
+        # ワーカースレッドで実行する。
+        # 注意: import は全てモジュールレベルで完了済み。ワーカースレッド内で
+        # import するとデッドロックする（anyio イベントループとの import lock 競合）。
+        _rag_service = await asyncio.to_thread(_build_rag_service)
+        logger.info("RAG service initialized")
+        return _rag_service
+
+
+def _build_rag_service() -> RAGKnowledgeService:
+    """RAGKnowledgeService を構築する（ワーカースレッド用、import なし）."""
     settings = get_settings()
 
     embedding_provider = get_embedding_provider(settings, settings.embedding_provider)
-    vector_store = VectorStore(
-        embedding_provider=embedding_provider,
-        persist_directory=settings.chromadb_persist_dir,
-    )
-    web_crawler = WebCrawler(
-        max_pages=settings.rag_max_crawl_pages,
-        crawl_delay=settings.rag_crawl_delay_sec,
-        respect_robots_txt=settings.rag_respect_robots_txt,
-        robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
-    )
-    safe_browsing_client = create_safe_browsing_client(settings)
 
-    bm25_index = None
-    if settings.rag_hybrid_search_enabled:
-        bm25_index = BM25Index(
-            k1=settings.rag_bm25_k1,
-            b=settings.rag_bm25_b,
-            persist_dir=settings.bm25_persist_dir,
+    # bm25s が stdout に直接 print する問題への対策（MCP stdio プロトコル保護）
+    with contextlib.redirect_stdout(io.StringIO()):
+        vector_store = VectorStore(
+            embedding_provider=embedding_provider,
+            persist_directory=settings.chromadb_persist_dir,
         )
+        web_crawler = WebCrawler(
+            max_pages=settings.rag_max_crawl_pages,
+            crawl_delay=settings.rag_crawl_delay_sec,
+            respect_robots_txt=settings.rag_respect_robots_txt,
+            robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
+        )
+        safe_browsing_client = create_safe_browsing_client(settings)
 
-    _rag_service = RAGKnowledgeService(
+        bm25_index = None
+        if settings.rag_hybrid_search_enabled:
+            bm25_index = BM25Index(
+                k1=settings.rag_bm25_k1,
+                b=settings.rag_bm25_b,
+                persist_dir=settings.bm25_persist_dir,
+            )
+
+    return RAGKnowledgeService(
         vector_store=vector_store,
         web_crawler=web_crawler,
         chunk_size=settings.rag_chunk_size,
@@ -76,8 +111,6 @@ def _get_rag_service():
         min_combined_score=settings.rag_min_combined_score,
         debug_log_enabled=settings.rag_debug_log_enabled,
     )
-    logger.info("RAG service initialized")
-    return _rag_service
 
 
 # --- MCP ツール定義 ---
@@ -99,10 +132,8 @@ async def rag_search(query: str, n_results: int | None = None) -> str:
 
         結果が0件の場合は「該当する情報が見つかりませんでした」を返す。
     """
-    service = _get_rag_service()
+    service = await _get_rag_service()
     if n_results is None:
-        from .config import get_settings
-
         n_results = get_settings().rag_retrieval_count
 
     result = await service.retrieve(query, n_results=n_results)
@@ -128,9 +159,11 @@ async def rag_add(url: str) -> str:
     Returns:
         取り込み結果のメッセージ
     """
-    service = _get_rag_service()
+    service = await _get_rag_service()
     try:
         chunks = await service.ingest_page(url)
+        if chunks <= 0:
+            return f"エラー: ページの取り込みに失敗しました。URL: {url}"
         return f"ページを取り込みました: {url} ({chunks}チャンク)"
     except ValueError as e:
         return f"エラー: {e}"
@@ -150,7 +183,7 @@ async def rag_crawl(url: str, pattern: str = "") -> str:
     Returns:
         クロール結果のサマリー
     """
-    service = _get_rag_service()
+    service = await _get_rag_service()
     try:
         result = await service.ingest_from_index(url, url_pattern=pattern)
         pages = result["pages_crawled"]
@@ -174,9 +207,11 @@ async def rag_delete(url: str) -> str:
     Returns:
         削除結果のメッセージ
     """
-    service = _get_rag_service()
+    service = await _get_rag_service()
     try:
         count = await service.delete_source(url)
+        if count == 0:
+            return f"該当するソースが見つかりませんでした: {url}"
         return f"削除しました: {url} ({count}チャンク)"
     except Exception:
         logger.exception("Failed to delete: %s", url)
@@ -190,7 +225,7 @@ async def rag_stats() -> str:
     Returns:
         統計情報のテキスト
     """
-    service = _get_rag_service()
+    service = await _get_rag_service()
     try:
         stats = await service.get_stats()
         total_chunks = stats.get("total_chunks", 0)
