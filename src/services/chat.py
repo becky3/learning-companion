@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.config.settings import get_settings
 from src.db.models import Conversation
 from src.llm.base import LLMProvider, LLMResponse, Message, ToolDefinition, ToolResult
 
@@ -102,9 +103,25 @@ class ChatService:
                     session, user_id, thread_ts, text, response.content,
                 )
 
+            # MCPサーバーのシステム指示をシステムプロンプトに追加
+            system_instructions = self._mcp_manager.get_system_instructions()
+            if system_instructions:
+                extra = "\n\n".join(system_instructions)
+                if messages and messages[0].role == "system":
+                    messages[0] = Message(
+                        role="system",
+                        content=messages[0].content + "\n\n" + extra,
+                    )
+                else:
+                    messages.insert(0, Message(role="system", content=extra))
+
+            # 自動コンテキスト注入（RAG等）
+            rag_sources = await self._inject_auto_context(messages, text)
+
             final_response = await self._run_tool_loop(messages, tools)
             return await self._save_and_return(
                 session, user_id, thread_ts, text, final_response.content,
+                rag_sources=rag_sources,
             )
 
     async def _run_tool_loop(
@@ -162,6 +179,64 @@ class ChatService:
                 content=messages[0].content + "\n\n" + instruction,
             )
 
+    async def _inject_auto_context(
+        self, messages: list[Message], user_text: str
+    ) -> list[str]:
+        """auto_context_tool で設定されたツールを自動呼び出しし、結果をシステムプロンプトに注入する.
+
+        Returns:
+            検索結果に含まれるソースURLのリスト
+        """
+        sources: list[str] = []
+        if not self._mcp_manager:
+            return sources
+        auto_tools = self._mcp_manager.get_auto_context_tools()
+        if not auto_tools:
+            return sources
+
+        for tool_name in auto_tools:
+            try:
+                result = await asyncio.wait_for(
+                    self._mcp_manager.call_tool(tool_name, {"query": user_text}),
+                    timeout=TOOL_CALL_TIMEOUT_SEC,
+                )
+            except Exception:
+                logger.debug("Auto-context tool '%s' failed", tool_name, exc_info=True)
+                continue
+
+            if not result or "該当する情報が見つかりませんでした" in result:
+                continue
+
+            # ソースURLを抽出（"## Source: URL" 形式）
+            for line in result.splitlines():
+                if line.startswith("## Source: "):
+                    url = line[len("## Source: "):].strip()
+                    if url and url not in sources:
+                        sources.append(url)
+
+            # 検索結果をシステムプロンプトに注入
+            context_block = (
+                "以下は質問に関連する参考情報です。"
+                "回答に役立つ場合は活用してください:\n" + result
+            )
+            if messages and messages[0].role == "system":
+                messages[0] = Message(
+                    role="system",
+                    content=messages[0].content + "\n\n" + context_block,
+                )
+            else:
+                messages.insert(0, Message(role="system", content=context_block))
+
+            # 対応する response_instruction も適用
+            instruction = self._mcp_manager.get_response_instruction(tool_name)
+            if instruction and messages and messages[0].role == "system":
+                messages[0] = Message(
+                    role="system",
+                    content=messages[0].content + "\n\n" + instruction,
+                )
+
+        return sources
+
     async def _execute_tool_with_timeout(
         self, tool_name: str, arguments: dict[str, object]
     ) -> ToolResult:
@@ -196,6 +271,8 @@ class ChatService:
         thread_ts: str,
         user_text: str,
         assistant_text: str,
+        *,
+        rag_sources: list[str] | None = None,
     ) -> str:
         """ユーザーメッセージとアシスタント応答をDBに保存し、応答テキストを返す."""
         session.add(Conversation(
@@ -211,6 +288,13 @@ class ChatService:
             content=assistant_text,
         ))
         await session.commit()
+
+        # ソース情報を追記（設定有効時のみ）
+        if rag_sources and get_settings().rag_show_sources:
+            sources_text = "\n---\n参照元:\n" + "\n".join(
+                f"• {url}" for url in rag_sources
+            )
+            return assistant_text + sources_text
 
         return assistant_text
 

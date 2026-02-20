@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     # MCP
     mcp_enabled: bool = False
     mcp_servers_config: str = "config/mcp_servers.json"
+    rag_show_sources: bool = False  # RAG参照元URL表示（デバッグ用）
 
     # Thread History
     thread_history_limit: int = Field(default=20, ge=1, le=100)
