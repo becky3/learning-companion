@@ -40,7 +40,7 @@ gitGraph
     checkout main
     merge release/v1.0.0 id: "v1.0.0"
     checkout develop
-    merge main id: "sync-main"
+    merge main id: "sync(main→develop)"
     branch bugfix/fix-typo-#10
     commit id: "fix-1"
     checkout develop
@@ -52,7 +52,7 @@ gitGraph
 | ブランチ | 役割 | マージ元 | 保護 |
 |---------|------|---------|------|
 | `main` | 安定版（本番相当） | `release/*`, `hotfix/*` | 直接プッシュ禁止 |
-| `develop` | 開発統合 | `feature/*`, `bugfix/*`, `main`（リリース後同期） | 直接プッシュ禁止 |
+| `develop` | 開発統合 | `feature/*`, `bugfix/*`, `sync/*`（リリース後同期） | 直接プッシュ禁止 |
 
 ### 作業ブランチ
 
@@ -62,6 +62,7 @@ gitGraph
 | `bugfix/` | バグ修正 | `develop` または対象 `release/*` | ベースと同一ブランチ | `bugfix/{修正内容}-#{Issue番号}` |
 | `release/` | リリース準備 | `develop` | `main`（squash） | `release/v{X.Y.Z}` |
 | `hotfix/` | 本番緊急修正 | `main` | `main` + `develop` | `hotfix/{修正内容}-#{Issue番号}` |
+| `sync/` | リリース後の main → develop 同期 | `develop` | `develop` | `sync/main-to-develop-v{X.Y.Z}` |
 | `claude/` | Claude Code自動生成 | `develop`(*) | `develop` | `claude/issue-{N}-{date}-{id}`（自動命名） |
 
 (*) `claude/` ブランチは claude-code-action が自動生成するため、命名規則はシステム依存。
@@ -97,6 +98,7 @@ sequenceDiagram
     participant Develop as develop
     participant Release as release/vX.Y.Z
     participant Bugfix as bugfix/*
+    participant Sync as sync/*
     participant Main as main
 
     Dev->>Develop: 機能がまとまった状態を確認
@@ -108,7 +110,11 @@ sequenceDiagram
     Dev->>Release: PR作成（bugfix → release）・マージ
     Note over Main: CI実行
     Main->>Main: Squash and merge
-    Dev->>Develop: main → develop に差分反映
+    Dev->>Main: タグ vX.Y.Z を付与・push
+    Dev->>Main: GitHub Release を作成
+    Dev->>Sync: develop から sync ブランチを作成
+    Dev->>Sync: main をマージ（コンフリクト解消）
+    Dev->>Develop: PR作成（sync → develop）・マージ
 ```
 
 1. ある程度機能がまとまったタイミングで `develop` から `release/v{X.Y.Z}` ブランチを作成
@@ -116,7 +122,9 @@ sequenceDiagram
 3. リリース準備中に修正が必要な場合は、bugfix ブランチを `release/*` から作成し、PRで `release/*` にマージする（詳細は下記「release ブランチ上の修正」参照）
 4. マージ方法: **Squash and merge**（リリース単位で1コミットにまとめる。詳細は「マージ方式」セクション参照）
 5. マージ判断は開発者が行う
-6. **main マージ後、`main` → `develop` に差分を反映する**（履歴の整合性を保つため）
+6. **main にタグ `v{X.Y.Z}` を付与し push する**（詳細は下記「タグ付けと GitHub Release」参照）
+7. **GitHub Release を作成する**（タグから自動生成 or 手動作成）
+8. **main → develop に差分を反映する**（sync ブランチ経由。詳細は下記「main → develop の差分反映」参照）
 
 #### release ブランチ上の修正
 
@@ -138,24 +146,49 @@ git push -u origin bugfix/fix-something
 gh pr create --base release/v0.0.1 --head bugfix/fix-something
 ```
 
+#### タグ付けと GitHub Release
+
+main への squash マージ後、リリースバージョンのタグを付与し、GitHub Release を作成する。
+
+```bash
+# main を最新に更新してからタグを付与
+git checkout main
+git pull --ff-only
+git tag v{X.Y.Z}
+git push origin v{X.Y.Z}
+
+# GitHub Release を作成（GitHub UI または gh CLI）
+gh release create v{X.Y.Z} --title "v{X.Y.Z} — リリースタイトル" --generate-notes
+```
+
 #### main → develop の差分反映
 
-リリース後、`main` と `develop` の差分が出ないように以下の手順で反映を行う:
+squash マージにより `main` に新しいコミットが作成されるため、`develop` と `main` の間に差分が生じる。
+sync ブランチを経由してPRで反映する。
+
+> **注意**: `main` → `develop` に直接PRを作成するとコンフリクトが発生する（squash コミットと元コミットのSHAが異なるため）。
+> ローカルで sync ブランチを作成し、コンフリクトを解消してからPRにすること。
 
 ```bash
-git checkout develop
+# develop から sync ブランチを作成
+git checkout -b sync/main-to-develop-v{X.Y.Z} develop
+
+# main をマージ（コンフリクト解消）
 git merge main
-git push origin develop
+# コンフリクトがある場合: ファイルごとに適切な側を採用
+# リリースブランチでのみ変更されたファイル → main 側（--theirs）
+# develop でも並行して変更されたファイル → 手動で内容を確認・統合
+git add <resolved-files>
+git commit --no-edit
+
+# push して PR 作成
+git push -u origin sync/main-to-develop-v{X.Y.Z}
+gh pr create --base develop --head sync/main-to-develop-v{X.Y.Z} \
+  --title "sync: main → develop (release/v{X.Y.Z})" \
+  --body "リリース後の差分反映"
 ```
 
-または PR を作成する場合:
-
-```bash
-gh pr create --base develop --head main --title "sync: main → develop (release/vX.Y.Z)" --body "リリース後の差分反映"
-```
-
-> **目的**: squash マージにより `main` に新しいコミットが作成されるため、`develop` と `main` の間に差分が生じる。
-> これを解消し、`develop` が常に `main` の最新状態を含むようにする。
+マージ後、`git diff develop..main --stat` で差分がゼロ（main 側にあって develop にない変更が存在しない）であることを確認する。
 
 ### hotfix（緊急修正）
 
@@ -176,7 +209,7 @@ sequenceDiagram
 1. `main` から `hotfix/{修正内容}-#{Issue番号}` を作成
 2. 修正・コミット
 3. `main` に向けてPR作成・マージ
-4. `main` の変更を `develop` にもマージ（`git merge main` または PR）
+4. `main` の変更を `develop` にもマージ（hotfix は通常マージのため `git merge main` で直接反映可。squash マージではないため SHA 不一致が起きない）
 
 ## マージ方式
 
@@ -185,7 +218,7 @@ sequenceDiagram
 | feature/bugfix → develop | 通常マージ | `gh pr merge --merge` | 開発履歴を保持 |
 | bugfix → release（リリース準備中の修正） | 通常マージ | `gh pr merge --merge` | 修正履歴を保持し、トレーサビリティを確保 |
 | release → main（リリース） | squash マージ | `gh pr merge --squash` | リリース単位で1コミットにまとめ、main の履歴をきれいに保つ |
-| main → develop（リリース後同期） | 通常マージ | `git merge main` or `gh pr merge --merge` | main の squash コミットを develop に取り込み、差分を解消する |
+| sync → develop（リリース後同期） | 通常マージ | `gh pr merge --merge` | sync ブランチ経由で main の squash コミットを develop に取り込み、差分を解消する |
 | hotfix → main | 通常マージ | `gh pr merge --merge` | 緊急修正の履歴を保持 |
 
 **注意**: GitHub リポジトリ設定で squash merge を有効化する必要がある（Settings > General > Pull Requests > Allow squash merging）。
