@@ -1071,8 +1071,7 @@ MCP移行により、`ChatService` は RAG サービスを直接参照しない�
 - RAG コンテキストの自動注入コード（システムプロンプトへの付加）を**削除**
 - RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
 - `rag_show_sources` は不要化（LLM が MCP ツールの結果を踏まえて自然にソース情報を含める）
-- **`RAG_ENABLED` の廃止**: `src/config/settings.py` から `rag_enabled` フィールドを削除。RAG の有効/無効は本体アプリ側の `MCP_ENABLED` + `config/mcp_servers.json` への rag エントリ登録で制御する（RAG MCP サーバー側の設定ではない）。
-  `CLAUDE.md` における `RAG_ENABLED` 記述の更新は実装 PR (#564) で行う
+- **`RAG_ENABLED` の廃止**: `src/config/settings.py` から `rag_enabled` フィールドを削除。RAG の有効/無効は本体アプリ側の `MCP_ENABLED` + `config/mcp_servers.json` への rag エントリ登録で制御する（RAG MCP サーバー側の設定ではない）
 
 #### Slackコマンドのルーティング (`src/messaging/router.py`)
 
