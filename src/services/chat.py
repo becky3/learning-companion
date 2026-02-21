@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
@@ -26,6 +28,20 @@ logger = logging.getLogger(__name__)
 TOOL_LOOP_MAX_ITERATIONS = 10
 # 30秒: 外部API呼び出し（天気予報等）の遅延を許容しつつ、応答全体をブロックしない値。
 TOOL_CALL_TIMEOUT_SEC = 30
+
+# rag_search ツール結果からスコア情報を抽出するパターン
+# "### Result N [distance=X.XXX]" or "### Result N [score=X.XXX]"
+_VECTOR_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[distance=([\d.]+)\]")
+_BM25_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[score=([\d.]+)\]")
+
+
+@dataclass(frozen=True)
+class RagSource:
+    """RAG検索のソース情報（参照元表示用）."""
+
+    url: str
+    engine: str  # "vector" or "bm25"
+    score: float  # distance (vector) or score (bm25)
 
 
 class ChatService:
@@ -193,13 +209,14 @@ class ChatService:
 
     async def _inject_auto_context(
         self, messages: list[Message], user_text: str
-    ) -> tuple[list[str], set[str]]:
+    ) -> tuple[list[RagSource], set[str]]:
         """auto_context_tool で設定されたツールを自動呼び出しし、結果をシステムプロンプトに注入する.
 
         Returns:
-            (検索結果に含まれるソースURLのリスト, 適用済みresponse_instructionのセット)
+            (検索結果のRagSourceリスト, 適用済みresponse_instructionのセット)
         """
-        sources: list[str] = []
+        sources: list[RagSource] = []
+        seen: set[tuple[str, str]] = set()
         applied: set[str] = set()
         if not self._mcp_manager:
             return sources, applied
@@ -220,16 +237,34 @@ class ChatService:
             if not result or "該当する情報が見つかりませんでした" in result:
                 continue
 
-            # ソースURLを抽出（旧: "## Source: URL"、新: "Source: URL" 形式の両対応）
+            # ソース情報を抽出（エンジン種別・スコア付き）
+            current_engine: str | None = None
+            current_score: float | None = None
             for line in result.splitlines():
+                m_vec = _VECTOR_HEADER_RE.match(line)
+                if m_vec:
+                    current_engine = "vector"
+                    current_score = float(m_vec.group(1))
+                    continue
+                m_bm25 = _BM25_HEADER_RE.match(line)
+                if m_bm25:
+                    current_engine = "bm25"
+                    current_score = float(m_bm25.group(1))
+                    continue
+                url: str | None = None
                 if line.startswith("## Source: "):
                     url = line[len("## Source: "):].strip()
-                    if url and url not in sources:
-                        sources.append(url)
                 elif line.startswith("Source: "):
                     url = line[len("Source: "):].strip()
-                    if url and url not in sources:
-                        sources.append(url)
+                if url:
+                    engine = current_engine or "unknown"
+                    score = current_score if current_score is not None else 0.0
+                    key = (engine, url)
+                    if key not in seen:
+                        seen.add(key)
+                        sources.append(RagSource(url=url, engine=engine, score=score))
+                    current_engine = None
+                    current_score = None
 
             # 検索結果をシステムプロンプトに注入
             context_block = (
@@ -257,24 +292,48 @@ class ChatService:
         return sources, applied
 
     @staticmethod
-    def _extract_rag_sources_from_messages(messages: list[Message]) -> list[str]:
-        """ツールループ内の rag_search 結果からソースURLを抽出する.
+    def _extract_rag_sources_from_messages(messages: list[Message]) -> list[RagSource]:
+        """ツールループ内の rag_search 結果からソース情報を抽出する.
 
-        messages 内の role="tool" メッセージから "Source: URL" 行を検出し、
-        ユニークなソースURLリストを返す。
+        messages 内の role="tool" メッセージから検索エンジン種別・スコア・URLを
+        検出し、ユニークなソース情報リストを返す。
 
         Returns:
-            ソースURLのリスト（重複なし、出現順）
+            RagSourceのリスト（(engine, url) の重複なし、出現順）
         """
-        sources: list[str] = []
+        sources: list[RagSource] = []
+        seen: set[tuple[str, str]] = set()
         for msg in messages:
             if msg.role != "tool":
                 continue
+            current_engine: str | None = None
+            current_score: float | None = None
             for line in msg.content.splitlines():
+                # ヘッダ行から検索エンジン種別・スコアを取得
+                m_vec = _VECTOR_HEADER_RE.match(line)
+                if m_vec:
+                    current_engine = "vector"
+                    current_score = float(m_vec.group(1))
+                    continue
+                m_bm25 = _BM25_HEADER_RE.match(line)
+                if m_bm25:
+                    current_engine = "bm25"
+                    current_score = float(m_bm25.group(1))
+                    continue
+                # Source: 行からURLを取得
                 if line.startswith("Source: "):
                     url = line[len("Source: "):].strip()
-                    if url and url not in sources:
-                        sources.append(url)
+                    if not url:
+                        continue
+                    engine = current_engine or "unknown"
+                    score = current_score if current_score is not None else 0.0
+                    key = (engine, url)
+                    if key not in seen:
+                        seen.add(key)
+                        sources.append(RagSource(url=url, engine=engine, score=score))
+                    # リセット
+                    current_engine = None
+                    current_score = None
         return sources
 
     async def _execute_tool_with_timeout(
@@ -312,7 +371,7 @@ class ChatService:
         user_text: str,
         assistant_text: str,
         *,
-        rag_sources: list[str] | None = None,
+        rag_sources: list[RagSource] | None = None,
     ) -> str:
         """ユーザーメッセージとアシスタント応答をDBに保存し、応答テキストを返す."""
         session.add(Conversation(
@@ -332,11 +391,20 @@ class ChatService:
         # ソース情報を追記（設定有効時のみ）
         if rag_sources and get_settings().rag_show_sources:
             sources_text = "\n---\n参照元:\n" + "\n".join(
-                f"• {url}" for url in rag_sources
+                self._format_rag_source(src) for src in rag_sources
             )
             return assistant_text + sources_text
 
         return assistant_text
+
+    @staticmethod
+    def _format_rag_source(src: RagSource) -> str:
+        """RagSource を参照元表示用の文字列にフォーマットする."""
+        if src.engine == "vector":
+            return f"• [vector: distance={src.score:.3f}] {src.url}"
+        if src.engine == "bm25":
+            return f"• [bm25: score={src.score:.3f}] {src.url}"
+        return f"• {src.url}"
 
     async def _load_history(
         self, session: AsyncSession, thread_ts: str
