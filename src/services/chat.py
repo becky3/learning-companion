@@ -9,7 +9,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -31,8 +31,10 @@ TOOL_CALL_TIMEOUT_SEC = 30
 
 # rag_search ツール結果からスコア情報を抽出するパターン
 # "### Result N [distance=X.XXX]" or "### Result N [score=X.XXX]"
-_VECTOR_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[distance=([\d.]+)\]")
-_BM25_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[score=([\d.]+)\]")
+_VECTOR_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[distance=(\d+(?:\.\d+)?)\]")
+_BM25_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[score=(\d+(?:\.\d+)?)\]")
+
+RagEngineType = Literal["vector", "bm25", "unknown"]
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,7 @@ class RagSource:
     """RAG検索のソース情報（参照元表示用）."""
 
     url: str
-    engine: str  # "vector" or "bm25"
+    engine: RagEngineType
     score: float  # distance (vector) or score (bm25)
 
 
@@ -238,7 +240,7 @@ class ChatService:
                 continue
 
             # ソース情報を抽出（エンジン種別・スコア付き）
-            current_engine: str | None = None
+            current_engine: RagEngineType | None = None
             current_score: float | None = None
             for line in result.splitlines():
                 m_vec = _VECTOR_HEADER_RE.match(line)
@@ -256,13 +258,15 @@ class ChatService:
                     url = line[len("## Source: "):].strip()
                 elif line.startswith("Source: "):
                     url = line[len("Source: "):].strip()
-                if url:
-                    engine = current_engine or "unknown"
-                    score = current_score if current_score is not None else 0.0
-                    key = (engine, url)
-                    if key not in seen:
-                        seen.add(key)
-                        sources.append(RagSource(url=url, engine=engine, score=score))
+                if url is not None:
+                    if url:
+                        engine: RagEngineType = current_engine or "unknown"
+                        score = current_score if current_score is not None else 0.0
+                        key = (engine, url)
+                        if key not in seen:
+                            seen.add(key)
+                            sources.append(RagSource(url=url, engine=engine, score=score))
+                    # URL の有無に関わらず、Source 行を見たらヘッダ情報をリセット
                     current_engine = None
                     current_score = None
 
@@ -306,7 +310,7 @@ class ChatService:
         for msg in messages:
             if msg.role != "tool":
                 continue
-            current_engine: str | None = None
+            current_engine: RagEngineType | None = None
             current_score: float | None = None
             for line in msg.content.splitlines():
                 # ヘッダ行から検索エンジン種別・スコアを取得
@@ -324,8 +328,11 @@ class ChatService:
                 if line.startswith("Source: "):
                     url = line[len("Source: "):].strip()
                     if not url:
+                        # URL が空の場合も、前回のヘッダ情報をリセットしておく
+                        current_engine = None
+                        current_score = None
                         continue
-                    engine = current_engine or "unknown"
+                    engine: RagEngineType = current_engine or "unknown"
                     score = current_score if current_score is not None else 0.0
                     key = (engine, url)
                     if key not in seen:
