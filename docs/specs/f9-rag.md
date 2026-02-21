@@ -1068,7 +1068,7 @@ async def rag_stats() -> str:
 
 ### MCP経由のRAG統合
 
-`ChatService` は RAG サービスを直接参照しない。`config/mcp_servers.json` の `auto_context_tool` 設定により、`ChatService` がユーザーの質問で `rag_search` を自動呼び出しし、結果をシステムプロンプトに注入する。
+`ChatService` は RAG サービスを直接参照しない。`config/mcp_servers.json` の `auto_context_tool` 設定により、`ChatService` がユーザーの質問で `rag_search` を自動的に呼び出し、結果をシステムプロンプトに注入する。
 
 - `ChatService` は `rag_service` 引数を持たない
 - `auto_context_tool: "rag_search"` により、LLM のツール選択に依存せずコード側で確実にRAG検索を実行する

@@ -265,6 +265,8 @@ MCPサーバーの接続設定を外部ファイルで管理する。
 }
 ```
 
+> **起動方式の違い**: weather はスタンドアロンスクリプトのためパス実行（`["mcp_servers/weather/server.py"]`）、rag はパッケージ内相対 import を使用するため `-m` モジュール実行（`["-m", "mcp_servers.rag.server"]`）を使用する。
+
 **設定フィールド（サーバーごとのオプション）**:
 
 | フィールド | 型 | デフォルト | 説明 |
@@ -458,19 +460,30 @@ async def respond(self, user_id: str, text: str, thread_ts: str) -> str:
 
 **`_inject_auto_context()` の動作**:
 
-`auto_context_tool` に設定されたツールをユーザーの入力テキストで自動呼び出しし、結果をシステムプロンプトに注入する。LLM のツール選択に依存せず、コード側で確実にコンテキストを提供する方式。
+`auto_context_tool` に設定されたツールをユーザーの入力テキストで自動的に呼び出し、結果をシステムプロンプトに注入する。LLM のツール選択に依存せず、コード側で確実にコンテキストを提供する方式。
 
 ```python
 async def _inject_auto_context(self, messages, user_text):
-    """auto_context_tool のツールを自動呼び出し → システムプロンプトに注入."""
+    """auto_context_tool のツールを自動呼び出し → システムプロンプトに注入.
+
+    Returns:
+        (ソースURLリスト, 適用済みresponse_instructionのセット)
+    """
+    rag_sources: list[str] = []
+    applied: set[str] = set()
     auto_tools = self._mcp_manager.get_auto_context_tools()
     for tool_name in auto_tools:
         result = await self._mcp_manager.call_tool(tool_name, {"query": user_text})
         if result and "該当する情報が見つかりませんでした" not in result:
             # 検索結果をシステムプロンプトに追加
             messages[0].content += "\n\n以下は質問に関連する参考情報です。回答に役立つ場合は活用してください:\n" + result
+            # ソースURLを抽出（"## Source: URL" 形式）
+            rag_sources.extend(extract_source_urls(result))
             # 対応する response_instruction も適用（重複防止セットに記録）
-    return sources, applied_instructions
+            instruction = self._mcp_manager.get_response_instruction(tool_name)
+            if instruction:
+                applied.add(instruction)
+    return rag_sources, applied
 ```
 
 **`_apply_response_instruction()` の動作**:
