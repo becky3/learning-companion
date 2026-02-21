@@ -81,6 +81,62 @@ class RAGRetrievalResult:
     sources: list[str]
 
 
+@dataclass
+class VectorSearchItem:
+    """ベクトル検索の生結果アイテム.
+
+    仕様: docs/specs/f9-rag.md
+
+    Attributes:
+        text: チャンクテキスト
+        source_url: ソースURL
+        distance: cosine距離（0に近いほど類似）
+        chunk_index: チャンクインデックス
+    """
+
+    text: str
+    source_url: str
+    distance: float
+    chunk_index: int
+
+
+@dataclass
+class BM25SearchItem:
+    """BM25検索の生結果アイテム.
+
+    仕様: docs/specs/f9-rag.md
+
+    Attributes:
+        text: チャンクテキスト
+        source_url: ソースURL
+        score: BM25スコア（高いほどキーワード一致）
+        doc_id: ドキュメントID
+    """
+
+    text: str
+    source_url: str
+    score: float
+    doc_id: str
+
+
+@dataclass
+class RawSearchResults:
+    """ベクトル検索・BM25検索の生結果（準Agentic Search用）.
+
+    仕様: docs/specs/f9-rag.md
+
+    統合パイプライン（min-max正規化 + CC結合）を迂回し、
+    各エンジンの生結果を個別にLLMに渡して判断を委譲する。
+
+    Attributes:
+        vector_results: ベクトル検索の生結果リスト
+        bm25_results: BM25検索の生結果リスト
+    """
+
+    vector_results: list[VectorSearchItem]
+    bm25_results: list[BM25SearchItem]
+
+
 class RAGKnowledgeService:
     """RAGナレッジ管理サービス.
 
@@ -494,6 +550,73 @@ class RAGKnowledgeService:
         return RAGRetrievalResult(
             context="\n\n".join(formatted_parts),
             sources=sources,
+        )
+
+    async def retrieve_raw_results(self, query: str, n_results: int = 5) -> RawSearchResults:
+        """ベクトル検索・BM25検索の生結果を個別に返す（準Agentic Search用）.
+
+        統合パイプラインを迂回し、各エンジンの生スコアをそのままLLMに渡す。
+
+        仕様: docs/specs/f9-rag.md
+
+        Args:
+            query: 検索クエリ
+            n_results: 各エンジンから返却する結果の最大数
+
+        Returns:
+            RawSearchResults: ベクトル検索とBM25検索の生結果
+        """
+        # ベクトル検索（閾値フィルタなし: LLMが判断する）
+        vector_results_raw = await self._vector_store.search(
+            query,
+            n_results=n_results,
+            similarity_threshold=None,
+        )
+        vector_items: list[VectorSearchItem] = []
+        for result in vector_results_raw:
+            source_url = str(result.metadata.get("source_url", ""))
+            chunk_index = int(result.metadata.get("chunk_index", 0))
+            vector_items.append(
+                VectorSearchItem(
+                    text=result.text,
+                    source_url=source_url,
+                    distance=result.distance,
+                    chunk_index=chunk_index,
+                )
+            )
+
+        # BM25検索
+        bm25_items: list[BM25SearchItem] = []
+        if self._bm25_index is not None:
+            bm25_results_raw = self._bm25_index.search(query, n_results=n_results)
+            for result in bm25_results_raw:
+                source_url = self._bm25_index.get_source_url(result.doc_id) or ""
+                bm25_items.append(
+                    BM25SearchItem(
+                        text=result.text,
+                        source_url=source_url,
+                        score=result.score,
+                        doc_id=result.doc_id,
+                    )
+                )
+
+        # デバッグログ出力
+        if self._debug_log_enabled:
+            logger.info("RAG retrieve_raw: query=%r", query)
+            for i, item in enumerate(vector_items, start=1):
+                logger.info(
+                    "RAG vector result %d: distance=%.3f source=%r",
+                    i, item.distance, item.source_url,
+                )
+            for i, item in enumerate(bm25_items, start=1):
+                logger.info(
+                    "RAG bm25 result %d: score=%.3f source=%r",
+                    i, item.score, item.source_url,
+                )
+
+        return RawSearchResults(
+            vector_results=vector_items,
+            bm25_results=bm25_items,
         )
 
     async def delete_source(self, source_url: str) -> int:

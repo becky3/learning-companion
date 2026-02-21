@@ -73,15 +73,15 @@ class ChatService:
                 history = await self._load_history(session, thread_ts)
 
             # メッセージリストを構築
+            # 構成順: format_instruction → personality
+            # MCP system_instructions は後段で先頭に挿入される
             messages: list[Message] = []
-            system_content = self._system_prompt or ""
-            # フォーマット指示を追加
+            parts: list[str] = []
             if self._format_instruction:
-                system_content = (
-                    system_content + "\n\n" + self._format_instruction
-                    if system_content
-                    else self._format_instruction
-                )
+                parts.append(self._format_instruction)
+            if self._system_prompt:
+                parts.append(self._system_prompt)
+            system_content = "\n\n".join(parts)
             if system_content:
                 messages.append(Message(role="system", content=system_content))
             messages.extend(history)
@@ -103,14 +103,15 @@ class ChatService:
                     session, user_id, thread_ts, text, response.content,
                 )
 
-            # MCPサーバーのシステム指示をシステムプロンプトに追加
+            # MCPサーバーのシステム指示をシステムプロンプトの先頭に追加
+            # ツール動作の指示はキャラクター設定より優先度が高いため先頭に配置
             system_instructions = self._mcp_manager.get_system_instructions()
             if system_instructions:
                 extra = "\n\n".join(system_instructions)
                 if messages and messages[0].role == "system":
                     messages[0] = Message(
                         role="system",
-                        content=messages[0].content + "\n\n" + extra,
+                        content=extra + "\n\n" + messages[0].content,
                     )
                 else:
                     messages.insert(0, Message(role="system", content=extra))
@@ -121,6 +122,11 @@ class ChatService:
             final_response = await self._run_tool_loop(
                 messages, tools, applied_instructions=auto_applied,
             )
+
+            # ツールループで rag_search が呼ばれた場合のソースURL抽出
+            if not rag_sources:
+                rag_sources = self._extract_rag_sources_from_messages(messages)
+
             return await self._save_and_return(
                 session, user_id, thread_ts, text, final_response.content,
                 rag_sources=rag_sources,
@@ -214,10 +220,14 @@ class ChatService:
             if not result or "該当する情報が見つかりませんでした" in result:
                 continue
 
-            # ソースURLを抽出（"## Source: URL" 形式）
+            # ソースURLを抽出（旧: "## Source: URL"、新: "Source: URL" 形式の両対応）
             for line in result.splitlines():
                 if line.startswith("## Source: "):
                     url = line[len("## Source: "):].strip()
+                    if url and url not in sources:
+                        sources.append(url)
+                elif line.startswith("Source: "):
+                    url = line[len("Source: "):].strip()
                     if url and url not in sources:
                         sources.append(url)
 
@@ -245,6 +255,27 @@ class ChatService:
                     )
 
         return sources, applied
+
+    @staticmethod
+    def _extract_rag_sources_from_messages(messages: list[Message]) -> list[str]:
+        """ツールループ内の rag_search 結果からソースURLを抽出する.
+
+        messages 内の role="tool" メッセージから "Source: URL" 行を検出し、
+        ユニークなソースURLリストを返す。
+
+        Returns:
+            ソースURLのリスト（重複なし、出現順）
+        """
+        sources: list[str] = []
+        for msg in messages:
+            if msg.role != "tool":
+                continue
+            for line in msg.content.splitlines():
+                if line.startswith("Source: "):
+                    url = line[len("Source: "):].strip()
+                    if url and url not in sources:
+                        sources.append(url)
+        return sources
 
     async def _execute_tool_with_timeout(
         self, tool_name: str, arguments: dict[str, object]

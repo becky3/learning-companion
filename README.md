@@ -57,13 +57,15 @@ uv run python -m src.main
 RAG検索精度の評価パイプラインを提供します。
 
 ```bash
-# テスト用ChromaDBを初期化
-uv run python -m src.rag.cli init-test-db \
+# テスト用DB初期化（ChromaDB + BM25）
+uv run python -m mcp_servers.rag.cli init-test-db \
+  --chunk-size 200 --chunk-overlap 30 \
   --persist-dir .tmp/test_chroma_db \
+  --bm25-persist-dir .tmp/test_bm25_index \
   --fixture tests/fixtures/rag_test_documents.json
 
 # RAG検索精度を評価
-uv run python -m src.rag.cli evaluate \
+uv run python -m mcp_servers.rag.cli evaluate \
   --persist-dir .tmp/test_chroma_db \
   --output-dir .tmp/rag-evaluation
 ```

@@ -45,11 +45,13 @@ uv run python scripts/collect_evaluation_data.py --config scripts/eval_data_conf
 - 各ドキュメントは先頭2000文字に制限（サイズ均一化）
 - ライセンス: CC BY-SA 4.0
 
-### 3. テスト用ChromaDBの初期化
+### 3. テスト用DBの初期化（ChromaDB + BM25）
 
 ```bash
-uv run python -m src.rag.cli init-test-db \
+uv run python -m mcp_servers.rag.cli init-test-db \
+  --chunk-size 200 --chunk-overlap 30 \
   --persist-dir .tmp/rag-evaluation-extended/chroma_db_test \
+  --bm25-persist-dir .tmp/rag-evaluation-extended/bm25_index_test \
   --fixture tests/fixtures/rag_evaluation_extended/rag_test_documents_extended.json
 ```
 

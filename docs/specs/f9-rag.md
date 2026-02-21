@@ -58,19 +58,30 @@ flowchart TB
     VECTOR --> EMBED
 ```
 
-### チャット応答時のフロー
+### チャット応答時のフロー（準Agentic Search）
 
-`auto_context_tool` 方式により、LLM のツール選択に依存せずコード側で確実に RAG 検索を実行する。LLM がツール一覧から追加で `rag_search` を呼ぶことも可能なハイブリッド構成。
+LLM がツールループ内で `rag_search` を呼ぶかどうかを自律的に判断する。`system_instruction` でナレッジベース関連の質問時に検索を促すが、挨拶・雑談では検索しない。`rag_search` はベクトル検索・BM25検索の生結果を個別に返し、LLM が両方の結果を総合的に判断して回答を生成する。
 
 ```mermaid
 flowchart LR
-    A["1. ユーザーがSlackで質問"] --> B["2. ChatService が<br/>auto_context_tool で<br/>rag_search を自動呼び出し"]
-    B --> C["3. MCP経由で<br/>rag_search(質問文) 実行"]
-    C --> D["4. 質問文をEmbedding →<br/>ChromaDBで類似チャンク検索"]
-    D --> E["5. 検索結果を<br/>システムプロンプトに注入"]
-    E --> F["6. LLMが注入済みコンテキスト<br/>を踏まえて応答を生成"]
+    A["1. ユーザーがSlackで質問"] --> B["2. LLMが質問内容を判断し<br/>rag_search の要否を決定"]
+    B -->|検索必要| C["3. MCP経由で<br/>rag_search(クエリ) 実行"]
+    B -->|検索不要| F
+    C --> D["4. ベクトル検索 + BM25検索<br/>の生結果を個別返却"]
+    D --> E["5. LLMが両エンジンの<br/>生結果を総合判断"]
+    E --> F["6. LLMが応答を生成"]
     F --> G["7. ソースURLを付与し<br/>Slackに投稿"]
 ```
+
+> **設計判断: 準Agentic Search**
+>
+> 以前の `auto_context_tool` 方式では全メッセージで自動的に `rag_search` が呼ばれていたが、以下の問題があった:
+>
+> - ハイブリッド検索の統合パイプライン（min-max正規化 + CC結合）が有用な信号を破壊
+> - 個別検索は良好（vector NDCG=0.828, BM25 keyword_exact=1.000）なのに統合後は精度低下
+> - 挨拶・雑談でも不要な検索が発生
+>
+> 準Agentic Search では統合パイプラインを迂回し、各エンジンの生結果をLLMに渡して判断を委譲する。既存の `HybridSearchEngine` は設定で戻せるよう保持している。
 
 ### ハイブリッド検索アーキテクチャ
 
@@ -190,16 +201,19 @@ bot: エラー: ページの取り込みに失敗しました。
      原因: HTTP 404 Not Found
 ```
 
-### チャット応答（MCP経由の自動検索）
+### チャット応答（準Agentic Search）
 
 ```
 ユーザー: @bot Pythonのasync/awaitについて教えて
 
-（MCP有効で RAG MCP サーバーが登録済み + auto_context_tool 設定ありの場合）
-→ ChatService が rag_search を自動呼び出し（auto_context_tool）
-→ 検索結果をシステムプロンプトに注入
-→ LLM が注入済みコンテキストを踏まえて応答を生成
+（MCP有効で RAG MCP サーバーが登録済みの場合）
+→ LLM が質問内容を判断し、rag_search の呼び出しを決定
+→ rag_search がベクトル検索 + BM25検索の生結果を返却
+→ LLM が両エンジンの結果を総合判断して応答を生成
 → ソースURLをコード側で付与して応答
+
+ユーザー: @bot こんにちは！
+→ LLM が挨拶と判断し、rag_search を呼ばずに応答
 
 （MCP無効、または RAG MCP サーバー未登録の場合）
 → 従来通りLLMの学習済み知識のみで応答
@@ -871,6 +885,16 @@ class RAGKnowledgeService:
         無効時はベクトル検索のみ。
         """
 
+    async def retrieve_raw_results(
+        self, query: str, n_results: int = 5,
+    ) -> RawSearchResults:
+        """ベクトル検索・BM25の生結果を個別に返す（準Agentic Search用）.
+
+        統合パイプライン（正規化・CC結合・スコアフィルタ）を迂回し、
+        各エンジンの生結果をそのままLLMに渡すことで判断を委譲する。
+        similarity_threshold=None で閾値フィルタなし。
+        """
+
     async def delete_source(self, source_url: str) -> int:
         """ソースURL指定で知識を削除."""
 
@@ -902,6 +926,34 @@ class RAGRetrievalResult:
     """RAG検索結果."""
     context: str  # フォーマット済みテキスト
     sources: list[str]  # ユニークなソースURLリスト
+```
+
+#### 準Agentic Search用の戻り値型
+
+`retrieve_raw_results()` が返す生結果データクラス（統合パイプラインを迂回）:
+
+```python
+@dataclass
+class VectorSearchItem:
+    """ベクトル検索の個別結果."""
+    text: str
+    source_url: str
+    distance: float      # cosine distance (0に近いほど類似)
+    chunk_index: int
+
+@dataclass
+class BM25SearchItem:
+    """BM25検索の個別結果."""
+    text: str
+    source_url: str
+    score: float         # BM25スコア (高いほどキーワード一致)
+    doc_id: str
+
+@dataclass
+class RawSearchResults:
+    """ベクトル検索・BM25の生結果コンテナ."""
+    vector_results: list[VectorSearchItem]
+    bm25_results: list[BM25SearchItem]
 ```
 
 ### 類似度閾値フィルタリング
@@ -968,11 +1020,12 @@ python -m mcp_servers.rag.cli evaluate \
   --threshold 0.5 \
   --fail-on-regression
 
-# テスト用ChromaDB初期化（chunk-size, chunk-overlap は必須）
+# テスト用DB初期化（ChromaDB + BM25、chunk-size, chunk-overlap は必須）
 python -m mcp_servers.rag.cli init-test-db \
   --chunk-size 200 \
   --chunk-overlap 30 \
   --persist-dir .tmp/test_chroma_db \
+  --bm25-persist-dir .tmp/test_bm25_index \
   --fixture tests/fixtures/rag_test_documents.json
 ```
 
@@ -1001,6 +1054,7 @@ python -m mcp_servers.rag.cli init-test-db \
 | `--chunk-size` | **必須** | — | チャンクサイズ |
 | `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
 | `--persist-dir` | | `.tmp/test_chroma_db` | ChromaDB永続化ディレクトリ |
+| `--bm25-persist-dir` | | `.tmp/test_bm25_index` | BM25インデックス永続化ディレクトリ |
 | `--fixture` | | `tests/fixtures/rag_test_documents.json` | テストドキュメントフィクスチャ |
 
 **出力ファイル**: `report.json`, `report.md`, `baseline.json`
@@ -1018,15 +1072,22 @@ mcp = FastMCP("rag")
 async def rag_search(query: str, n_results: int | None = None) -> str:
     """ナレッジベースから関連情報を検索する.
 
-    n_results 未指定時は RAGSettings.rag_retrieval_count を使用。
+    ベクトル検索（意味的類似度）とBM25検索（キーワード一致）の生結果を
+    個別に返す。統合スコアリングは行わず、LLMが両方の結果を総合的に判断する。
 
     Returns:
-        検索結果テキスト。各チャンクを以下の形式で連結:
+        検索結果テキスト。以下の形式で返却:
 
-        ## Source: <ソースURL>
+        ## ベクトル検索結果 (意味的類似度)
+        ### Result 1 [distance=0.234]
+        Source: <ソースURL>
         <本文テキスト>
 
-        ソースURLが含まれるため、LLM が回答内で自然に参照元を提示できる。
+        ## BM25検索結果 (キーワード一致)
+        ### Result 1 [score=4.521]
+        Source: <ソースURL>
+        <本文テキスト>
+
         結果が0件の場合は「該当する情報が見つかりませんでした」を返す。
     """
 
@@ -1058,33 +1119,37 @@ async def rag_stats() -> str:
       "command": "python",
       "args": ["-m", "mcp_servers.rag.server"],
       "env": {},
-      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。...",
-      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。",
-      "auto_context_tool": "rag_search"
+      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。ユーザーの質問がナレッジベースの内容に関連する可能性がある場合は、rag_search ツールで検索してください。検索クエリはユーザーの質問から重要なキーワードを抽出して構成してください。挨拶・雑談などナレッジベースと無関係な質問では検索不要です。",
+      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。"
     }
   }
 }
 ```
 
-### MCP経由のRAG統合
+### MCP経由のRAG統合（準Agentic Search）
 
-`ChatService` は RAG サービスを直接参照しない。`config/mcp_servers.json` の `auto_context_tool` 設定により、`ChatService` がユーザーの質問で `rag_search` を自動的に呼び出し、結果をシステムプロンプトに注入する。
+`ChatService` は RAG サービスを直接参照しない。LLM がツールループ内で `rag_search` を呼ぶかどうかを自律的に判断する（準Agentic Search）。
 
 - `ChatService` は `rag_service` 引数を持たない
-- `auto_context_tool: "rag_search"` により、LLM のツール選択に依存せずコード側で確実にRAG検索を実行する
-- LLM はツール一覧にも `rag_search` を持つため、追加で呼び出すことも可能（ハイブリッド構成）
+- `system_instruction` により、LLM にナレッジベース関連の質問時に `rag_search` を呼ぶよう促す
+- LLM が質問内容を判断し、挨拶・雑談では検索をスキップする
+- `rag_search` はベクトル検索・BM25検索の生結果を個別に返し、LLM が総合判断する
 - ソースURLの付与はコード側（`_save_and_return()`）でメインアプリ設定 `rag_show_sources`（`src/config/settings.py`）に基づき行う（LLM 任せにしない）
+- ツールループ内で `rag_search` が呼ばれた場合、`_extract_rag_sources_from_messages()` でソースURLを抽出する
 - RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
 
 **`mcp_servers.json` の RAG エントリ設定**:
 
 | フィールド | 値 | 役割 |
 |-----------|---|------|
-| `system_instruction` | ナレッジベースの利用を促す指示 | LLM がツールループ内で `rag_search` を追加呼び出しする際のガイド |
+| `system_instruction` | 検索判断基準・クエリ最適化ヒント | LLM がツールループ内で `rag_search` を呼ぶかの判断指針 |
 | `response_instruction` | 応答品質の指示 | ツール実行後にシステムプロンプトに追加 |
-| `auto_context_tool` | `"rag_search"` | ツールループ前に自動呼び出し → 結果をコンテキスト注入 |
 
 > 詳細は `docs/specs/f5-mcp-integration.md` の MCPServerConfig 拡張フィールドを参照。
+>
+> **注**: f5 仕様書には `auto_context_tool` フィールドの記載が残っている場合がある。
+> 準Agentic Search 移行により RAG では使用しなくなったが、フィールド自体は汎用機能として
+> f5 側で引き続きサポートされる。f5 仕様書の更新は別PRで対応する。
 
 #### Slackコマンドのルーティング (`src/messaging/router.py`)
 
@@ -1373,7 +1438,7 @@ RAG_DEBUG_LOG_ENABLED=false
 - [ ] **AC64**: JSON/Markdown形式のレポートが出力されること
 - [ ] **AC65**: ベースライン比較でリグレッション検出ができること
 - [ ] **AC66**: `--fail-on-regression` 指定時、リグレッション検出で exit code 1 になること
-- [ ] **AC67**: `init-test-db` コマンドでテスト用ChromaDBを初期化できること
+- [ ] **AC67**: `init-test-db` コマンドでテスト用ChromaDB・BM25インデックスを初期化できること
 
 ### robots.txt 遵守
 
@@ -1482,6 +1547,13 @@ RAG_DEBUG_LOG_ENABLED=false
 2. 仕様書更新 — 本ドキュメントの MCP 前提への書き換え (#563)
 3. RAG MCP 全移行 — ファイル移動、MCP サーバー実装、`src/` 側の RAG 依存削除 (#564)
 
+### Phase 6: 準Agentic Search (#548)
+
+1. `rag_knowledge.py` — `retrieve_raw_results()` + データクラス追加
+2. `server.py` — BM25常時初期化 + `rag_search` 出力を生結果個別返却に変更
+3. `mcp_servers.json` — `auto_context_tool` 除去 + `system_instruction` 更新
+4. `chat.py` — `_extract_rag_sources_from_messages()` 追加、ツールループ後のソースURL抽出
+
 ---
 
 ## 注意事項
@@ -1517,6 +1589,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-21 | 準Agentic Search 化: `auto_context_tool` 方式 → LLM 駆動のツール呼び出しに変更、`rag_search` の出力をベクトル/BM25生結果の個別返却に変更、`mcp_servers.json` から `auto_context_tool` 除去、`ChatService._extract_rag_sources_from_messages()` 追加、BM25常時初期化（#548） |
 | 2026-02-21 | チャット応答フローを `auto_context_tool` 方式に更新: LLM 任せ → コード側自動注入に変更、MCP経由のRAG統合セクション書き換え、`mcp_servers.json` 設定例に `system_instruction` / `response_instruction` / `auto_context_tool` 追加（#564） |
 | 2026-02-20 | MCP 前提に仕様書更新: アーキテクチャ図を MCP ツール経由に変更、ディレクトリ構成を `mcp_servers/rag/` に更新、`RAG_ENABLED` 廃止（MCP で制御）、`rag_show_sources` を RAG MCP サーバー設定から廃止（メインアプリ設定 `src/config/settings.py` に残存）、ページ単位の進捗コールバック廃止、RAG 設定を `RAGSettings` に移動、MCP サーバー仕様追加（#563） |
 | 2026-02-19 | スイープ確定パラメータを settings.py デフォルト値に反映（`rag_vector_weight` 1.0→0.90, `rag_bm25_k1` 1.5→2.5, `rag_bm25_b` 0.75→0.50, `rag_retrieval_count` 5→3）、`rag_min_combined_score` 新規追加、検索パラメータチューニングガイドセクション追加（#535） |

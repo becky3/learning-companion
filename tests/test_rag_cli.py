@@ -938,7 +938,7 @@ class TestCLIInitTestDb:
     """CLI init-test-dbコマンドのテスト."""
 
     @pytest.mark.asyncio
-    async def test_init_test_db_creates_chromadb(self, tmp_path: Path) -> None:
+    async def test_ac67_init_test_db_creates_chromadb(self, tmp_path: Path) -> None:
         """init-test-dbコマンドでChromaDBが初期化されること."""
         from mcp_servers.rag.cli import init_test_db
         from argparse import Namespace
@@ -957,9 +957,11 @@ class TestCLIInitTestDb:
         fixture_path.write_text(json.dumps(fixture_data), encoding="utf-8")
 
         persist_dir = tmp_path / "test_chroma"
+        bm25_persist_dir = tmp_path / "test_bm25"
 
         args = Namespace(
             persist_dir=str(persist_dir),
+            bm25_persist_dir=str(bm25_persist_dir),
             fixture=str(fixture_path),
             chunk_size=200,
             chunk_overlap=30,
@@ -981,3 +983,48 @@ class TestCLIInitTestDb:
 
             # _ingest_crawled_pageが呼ばれたか確認
             mock_service._ingest_crawled_page.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_ac67_init_test_db_creates_bm25_index(self, tmp_path: Path) -> None:
+        """init-test-dbコマンドでBM25インデックスも永続化されること."""
+        from mcp_servers.rag.cli import init_test_db
+        from mcp_servers.rag.bm25_index import BM25Index
+        from argparse import Namespace
+
+        # テスト用フィクスチャ作成
+        fixture_path = tmp_path / "fixture.json"
+        fixture_data = {
+            "documents": [
+                {
+                    "source_url": "https://example.com/test.html",
+                    "title": "テストドキュメント",
+                    "content": "これはテスト用のコンテンツです。十分な長さのテキスト。",
+                }
+            ]
+        }
+        fixture_path.write_text(json.dumps(fixture_data), encoding="utf-8")
+
+        persist_dir = tmp_path / "test_chroma"
+        bm25_persist_dir = tmp_path / "test_bm25"
+
+        args = Namespace(
+            persist_dir=str(persist_dir),
+            bm25_persist_dir=str(bm25_persist_dir),
+            fixture=str(fixture_path),
+            chunk_size=200,
+            chunk_overlap=30,
+        )
+
+        with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
+            mock_service = AsyncMock()
+            mock_service._ingest_crawled_page = AsyncMock(return_value=1)
+            mock_create_service.return_value = mock_service
+
+            await init_test_db(args)
+
+        # BM25インデックスが永続化されたか確認
+        assert bm25_persist_dir.exists(), "BM25 persist directory should exist"
+
+        # 永続化されたインデックスをロードして中身を確認
+        loaded_index = BM25Index(persist_dir=str(bm25_persist_dir))
+        assert loaded_index.get_document_count() > 0, "BM25 index should have documents"

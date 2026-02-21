@@ -10,8 +10,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from mcp_servers.rag.bm25_index import BM25Index, BM25Result
 from mcp_servers.rag.vector_store import RetrievalResult, VectorStore
-from mcp_servers.rag.rag_knowledge import RAGKnowledgeService, RAGRetrievalResult
+from mcp_servers.rag.rag_knowledge import (
+    BM25SearchItem,
+    RAGKnowledgeService,
+    RAGRetrievalResult,
+    RawSearchResults,
+    VectorSearchItem,
+)
 from mcp_servers.rag.web_crawler import CrawledPage, WebCrawler
 
 
@@ -1015,3 +1022,189 @@ class TestSafeBrowsingIntegration:
 
         # Assert: チェックなしで正常に処理される
         mock_web_crawler.crawl_page.assert_called_once()
+
+
+class TestRetrieveRawResults:
+    """retrieve_raw_results() のテスト（準Agentic Search, Issue #548）."""
+
+    async def test_vector_and_bm25_raw_results_returned(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+    ) -> None:
+        """AC1: ベクトル検索とBM25の生結果が個別に返ること."""
+        # Arrange
+        mock_bm25 = MagicMock(spec=BM25Index)
+        mock_bm25.search.return_value = [
+            BM25Result(doc_id="doc1", score=4.521, text="BM25 result text"),
+        ]
+        mock_bm25.get_source_url.return_value = "https://example.com/bm25"
+
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="Vector result text",
+                metadata={"source_url": "https://example.com/vector", "chunk_index": 0},
+                distance=0.234,
+            ),
+        ]
+
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            bm25_index=mock_bm25,
+        )
+
+        # Act
+        result = await service.retrieve_raw_results("test query", n_results=3)
+
+        # Assert
+        assert isinstance(result, RawSearchResults)
+        assert len(result.vector_results) == 1
+        assert len(result.bm25_results) == 1
+
+        vec = result.vector_results[0]
+        assert isinstance(vec, VectorSearchItem)
+        assert vec.text == "Vector result text"
+        assert vec.source_url == "https://example.com/vector"
+        assert vec.distance == 0.234
+        assert vec.chunk_index == 0
+
+        bm25 = result.bm25_results[0]
+        assert isinstance(bm25, BM25SearchItem)
+        assert bm25.text == "BM25 result text"
+        assert bm25.source_url == "https://example.com/bm25"
+        assert bm25.score == 4.521
+        assert bm25.doc_id == "doc1"
+
+    async def test_bm25_none_returns_vector_only(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+    ) -> None:
+        """BM25なしの場合はベクトル検索結果のみ返ること."""
+        # Arrange
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="Vector only",
+                metadata={"source_url": "https://example.com/vec", "chunk_index": 2},
+                distance=0.5,
+            ),
+        ]
+
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            bm25_index=None,
+        )
+
+        # Act
+        result = await service.retrieve_raw_results("test query")
+
+        # Assert
+        assert len(result.vector_results) == 1
+        assert len(result.bm25_results) == 0
+
+    async def test_both_empty_returns_empty_raw_results(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+    ) -> None:
+        """両方空なら空の RawSearchResults."""
+        # Arrange
+        mock_bm25 = MagicMock(spec=BM25Index)
+        mock_bm25.search.return_value = []
+        mock_vector_store.search.return_value = []
+
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            bm25_index=mock_bm25,
+        )
+
+        # Act
+        result = await service.retrieve_raw_results("empty query")
+
+        # Assert
+        assert len(result.vector_results) == 0
+        assert len(result.bm25_results) == 0
+
+    async def test_raw_scores_preserved(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+    ) -> None:
+        """生スコアが変換されず保持されること."""
+        # Arrange
+        mock_bm25 = MagicMock(spec=BM25Index)
+        mock_bm25.search.return_value = [
+            BM25Result(doc_id="d1", score=7.89, text="high score"),
+            BM25Result(doc_id="d2", score=0.12, text="low score"),
+        ]
+        mock_bm25.get_source_url.return_value = "https://example.com"
+
+        mock_vector_store.search.return_value = [
+            RetrievalResult(
+                text="close match",
+                metadata={"source_url": "https://example.com", "chunk_index": 0},
+                distance=0.05,
+            ),
+            RetrievalResult(
+                text="far match",
+                metadata={"source_url": "https://example.com", "chunk_index": 1},
+                distance=1.234,
+            ),
+        ]
+
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=None,
+            bm25_index=mock_bm25,
+        )
+
+        # Act
+        result = await service.retrieve_raw_results("test", n_results=5)
+
+        # Assert: スコアが正規化・変換されず元のまま保持
+        assert result.vector_results[0].distance == 0.05
+        assert result.vector_results[1].distance == 1.234
+        assert result.bm25_results[0].score == 7.89
+        assert result.bm25_results[1].score == 0.12
+
+    async def test_similarity_threshold_not_applied(
+        self,
+        mock_vector_store: MagicMock,
+        mock_web_crawler: MagicMock,
+    ) -> None:
+        """retrieve_raw_results は similarity_threshold=None で呼ぶこと."""
+        # Arrange
+        mock_vector_store.search.return_value = []
+
+        service = RAGKnowledgeService(
+            vector_store=mock_vector_store,
+            web_crawler=mock_web_crawler,
+            chunk_size=200,
+            chunk_overlap=30,
+            similarity_threshold=0.5,  # サービスには閾値を設定
+        )
+
+        # Act
+        await service.retrieve_raw_results("test", n_results=3)
+
+        # Assert: similarity_threshold=None で呼ばれること（LLMが判断する）
+        mock_vector_store.search.assert_called_once_with(
+            "test",
+            n_results=3,
+            similarity_threshold=None,
+        )

@@ -168,7 +168,7 @@ def main() -> None:
     )
 
     # init-test-db サブコマンド
-    init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB初期化")
+    init_parser = subparsers.add_parser("init-test-db", help="テスト用ChromaDB・BM25初期化")
     init_parser.add_argument(
         "--persist-dir",
         default=".tmp/test_chroma_db",
@@ -178,6 +178,11 @@ def main() -> None:
         "--fixture",
         default="tests/fixtures/rag_test_documents.json",
         help="テストドキュメントフィクスチャ",
+    )
+    init_parser.add_argument(
+        "--bm25-persist-dir",
+        default=".tmp/test_bm25_index",
+        help="BM25インデックス永続化ディレクトリ",
     )
     init_parser.add_argument(
         "--chunk-size",
@@ -263,6 +268,7 @@ def _build_bm25_index_from_fixture(
     chunk_overlap: int,
     k1: float = 1.5,
     b: float = 0.75,
+    persist_dir: str | None = None,
 ) -> "BM25Index":
     """テストドキュメントフィクスチャからBM25インデックスを構築する.
 
@@ -274,6 +280,7 @@ def _build_bm25_index_from_fixture(
         chunk_overlap: チャンクオーバーラップ
         k1: BM25 用語頻度の飽和パラメータ（デフォルト: 1.5）
         b: BM25 文書長の正規化パラメータ（デフォルト: 0.75）
+        persist_dir: BM25インデックスの永続化ディレクトリ（指定時は自動保存）
 
     Returns:
         構築済みBM25Indexインスタンス
@@ -284,7 +291,7 @@ def _build_bm25_index_from_fixture(
     with open(fixture_path, encoding="utf-8") as f:
         fixture_data = json.load(f)
 
-    bm25_index = BM25Index(k1=k1, b=b)
+    bm25_index = BM25Index(k1=k1, b=b, persist_dir=persist_dir)
     documents: list[tuple[str, str, str]] = []
     for doc in fixture_data.get("documents", []):
         source_url = doc.get("source_url", "")
@@ -597,18 +604,20 @@ def write_markdown_report(
 
 
 async def init_test_db(args: argparse.Namespace) -> None:
-    """テスト用ChromaDBを初期化する.
+    """テスト用ChromaDB・BM25インデックスを初期化する.
 
     フィクスチャ JSON → CrawledPage 変換 → _ingest_crawled_page() で投入。
     本番と同じチャンキングパスを通ることで、評価結果が本番動作を反映する。
+    BM25インデックスも同一フィクスチャから構築・永続化する。
 
     Args:
         args: コマンドライン引数
     """
     from .web_crawler import CrawledPage
 
-    logger.info("Initializing test ChromaDB...")
-    logger.info("Persist directory: %s", args.persist_dir)
+    logger.info("Initializing test DB (ChromaDB + BM25)...")
+    logger.info("ChromaDB persist directory: %s", args.persist_dir)
+    logger.info("BM25 persist directory: %s", args.bm25_persist_dir)
     logger.info("Fixture file: %s", args.fixture)
 
     # フィクスチャファイルの存在確認
@@ -653,7 +662,22 @@ async def init_test_db(args: argparse.Namespace) -> None:
     for page in pages:
         count = await rag_service._ingest_crawled_page(page)
         total += count
-    logger.info("Added %d chunks from %d documents to test ChromaDB at %s", total, len(pages), args.persist_dir)
+    logger.info(
+        "Added %d chunks from %d documents to test ChromaDB at %s",
+        total, len(pages), args.persist_dir,
+    )
+
+    # BM25インデックスも同一フィクスチャから構築・永続化
+    bm25_index = _build_bm25_index_from_fixture(
+        str(fixture_path),
+        chunk_size=args.chunk_size,
+        chunk_overlap=args.chunk_overlap,
+        persist_dir=args.bm25_persist_dir,
+    )
+    logger.info(
+        "BM25 index persisted at %s (%d documents)",
+        args.bm25_persist_dir, bm25_index.get_document_count(),
+    )
 
 
 if __name__ == "__main__":
