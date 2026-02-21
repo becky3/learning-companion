@@ -146,27 +146,50 @@ async def rag_search(query: str, n_results: int | None = None) -> str:
     if not raw.vector_results and not raw.bm25_results:
         return "該当する情報が見つかりませんでした"
 
+    # ヒットしたソースURLごとにスコア情報を収集し、ページ全文を返す。
+    # チャンク単位だとキーワードを含むチャンクだけ返り、肝心のデータが
+    # 別チャンクに分断されてLLMに届かない問題を解消する。
+    source_scores: dict[str, list[str]] = {}
+    for item in raw.vector_results:
+        source_scores.setdefault(item.source_url, []).append(
+            f"vector distance={item.distance:.3f}"
+        )
+    for item in raw.bm25_results:
+        source_scores.setdefault(item.source_url, []).append(
+            f"bm25 score={item.score:.3f}"
+        )
+
     parts: list[str] = []
-
-    # ベクトル検索結果
-    if raw.vector_results:
-        parts.append("## ベクトル検索結果 (意味的類似度)\n")
-        for i, item in enumerate(raw.vector_results, start=1):
-            parts.append(f"### Result {i} [distance={item.distance:.3f}]")
-            parts.append(f"Source: {item.source_url}")
-            parts.append(item.text)
-            parts.append("")
-
-    # BM25検索結果
-    if raw.bm25_results:
-        parts.append("## BM25検索結果 (キーワード一致)\n")
-        for i, item in enumerate(raw.bm25_results, start=1):
-            parts.append(f"### Result {i} [score={item.score:.3f}]")
-            parts.append(f"Source: {item.source_url}")
-            parts.append(item.text)
-            parts.append("")
+    for source_url, scores in source_scores.items():
+        page_content = await service.get_page_content(source_url)
+        score_info = ", ".join(scores)
+        parts.append(f"## Source: {source_url}")
+        parts.append(f"[検索ヒット: {score_info}]")
+        parts.append("")
+        parts.append(page_content)
+        parts.append("")
 
     return "\n".join(parts).rstrip()
+
+    # --- 旧方式: チャンク単位で返却 ---
+    # 2段階方式（チャンクで絞り → rag_get_page で全文取得）の
+    # Stage 1 として再利用する想定で残す。
+    # parts: list[str] = []
+    # if raw.vector_results:
+    #     parts.append("## ベクトル検索結果 (意味的類似度)\n")
+    #     for i, item in enumerate(raw.vector_results, start=1):
+    #         parts.append(f"### Result {i} [distance={item.distance:.3f}]")
+    #         parts.append(f"Source: {item.source_url}")
+    #         parts.append(item.text)
+    #         parts.append("")
+    # if raw.bm25_results:
+    #     parts.append("## BM25検索結果 (キーワード一致)\n")
+    #     for i, item in enumerate(raw.bm25_results, start=1):
+    #         parts.append(f"### Result {i} [score={item.score:.3f}]")
+    #         parts.append(f"Source: {item.source_url}")
+    #         parts.append(item.text)
+    #         parts.append("")
+    # return "\n".join(parts).rstrip()
 
 
 @mcp.tool()

@@ -30,7 +30,12 @@ TOOL_LOOP_MAX_ITERATIONS = 10
 TOOL_CALL_TIMEOUT_SEC = 30
 
 # rag_search ツール結果からスコア情報を抽出するパターン
-# "### Result N [distance=X.XXX]" or "### Result N [score=X.XXX]"
+# ページ単位形式: "## Source: URL" + "[検索ヒット: vector distance=X.XXX, bm25 score=X.XXX]"
+_SOURCE_HEADER_RE = re.compile(r"##\s+Source:\s+(.+)")
+_HIT_SCORE_RE = re.compile(
+    r"(vector)\s+distance=(\d+(?:\.\d+)?)|(bm25)\s+score=(\d+(?:\.\d+)?)"
+)
+# 旧チャンク単位形式（2段階方式の Stage 1 で再利用予定）
 _VECTOR_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[distance=(\d+(?:\.\d+)?)\]")
 _BM25_HEADER_RE = re.compile(r"###\s+Result\s+\d+\s+\[score=(\d+(?:\.\d+)?)\]")
 
@@ -301,46 +306,57 @@ class ChatService:
 
         messages 内の role="tool" メッセージから検索エンジン種別・スコア・URLを
         検出し、ユニークなソース情報リストを返す。
+        ページ単位形式と旧チャンク単位形式の両方に対応する。
 
         Returns:
-            RagSourceのリスト（(engine, url) の重複なし、出現順）
+            RagSourceのリスト（URL の重複なし、出現順）
         """
         sources: list[RagSource] = []
-        seen: set[tuple[str, str]] = set()
+        seen: set[str] = set()
         for msg in messages:
             if msg.role != "tool":
                 continue
-            current_engine: RagEngineType | None = None
-            current_score: float | None = None
+            current_url: str | None = None
             for line in msg.content.splitlines():
-                # ヘッダ行から検索エンジン種別・スコアを取得
+                # --- ページ単位形式 ---
+                # "## Source: URL"
+                m_src = _SOURCE_HEADER_RE.match(line)
+                if m_src:
+                    current_url = m_src.group(1).strip()
+                    continue
+                # "[検索ヒット: vector distance=X.XXX, bm25 score=X.XXX]"
+                if current_url and line.startswith("[検索ヒット:"):
+                    hit_scores = _HIT_SCORE_RE.findall(line)
+                    for vec_eng, vec_score, bm25_eng, bm25_score in hit_scores:
+                        if vec_eng and current_url not in seen:
+                            seen.add(current_url)
+                            sources.append(RagSource(
+                                url=current_url, engine="vector",
+                                score=float(vec_score),
+                            ))
+                        elif bm25_eng and current_url not in seen:
+                            seen.add(current_url)
+                            sources.append(RagSource(
+                                url=current_url, engine="bm25",
+                                score=float(bm25_score),
+                            ))
+                    if current_url not in seen:
+                        seen.add(current_url)
+                        sources.append(RagSource(
+                            url=current_url, engine="unknown", score=0.0,
+                        ))
+                    current_url = None
+                    continue
+
+                # --- 旧チャンク単位形式（2段階方式の Stage 1 で再利用予定）---
                 m_vec = _VECTOR_HEADER_RE.match(line)
                 if m_vec:
-                    current_engine = "vector"
-                    current_score = float(m_vec.group(1))
+                    current_url = None  # リセット
                     continue
                 m_bm25 = _BM25_HEADER_RE.match(line)
                 if m_bm25:
-                    current_engine = "bm25"
-                    current_score = float(m_bm25.group(1))
+                    current_url = None
                     continue
-                # Source: 行からURLを取得
-                if line.startswith("Source: "):
-                    url = line[len("Source: "):].strip()
-                    if not url:
-                        # URL が空の場合も、前回のヘッダ情報をリセットしておく
-                        current_engine = None
-                        current_score = None
-                        continue
-                    engine: RagEngineType = current_engine or "unknown"
-                    score = current_score if current_score is not None else 0.0
-                    key = (engine, url)
-                    if key not in seen:
-                        seen.add(key)
-                        sources.append(RagSource(url=url, engine=engine, score=score))
-                    # リセット
-                    current_engine = None
-                    current_score = None
         return sources
 
     async def _execute_tool_with_timeout(

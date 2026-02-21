@@ -619,6 +619,18 @@ class RAGKnowledgeService:
             bm25_results=bm25_items,
         )
 
+    async def get_page_content(self, source_url: str) -> str:
+        """ソースURLの全チャンクを結合してページ全文を返す.
+
+        Args:
+            source_url: 取得するソースURL
+
+        Returns:
+            chunk_index 順に結合したテキスト（チャンク間は改行で連結）
+        """
+        chunks = await self._vector_store.get_by_source(source_url)
+        return "\n".join(c.text for c in chunks)
+
     async def delete_source(self, source_url: str) -> int:
         """ソースURL指定で知識を削除.
 

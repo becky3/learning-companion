@@ -209,6 +209,35 @@ class VectorStore:
 
         return retrieval_results
 
+    async def get_by_source(self, source_url: str) -> list[DocumentChunk]:
+        """ソースURLの全チャンクを chunk_index 順で取得する.
+
+        Args:
+            source_url: 取得するソースURL
+
+        Returns:
+            chunk_index 昇順の DocumentChunk リスト
+        """
+        results = await asyncio.to_thread(
+            self._collection.get,
+            where={"source_url": source_url},
+            include=[IncludeEnum.documents, IncludeEnum.metadatas],
+        )
+
+        if not results["ids"]:
+            return []
+
+        documents = results["documents"] or []
+        metadatas = results["metadatas"] or []
+        ids = results["ids"]
+
+        chunks = [
+            DocumentChunk(id=doc_id, text=doc or "", metadata=meta or {})
+            for doc_id, doc, meta in zip(ids, documents, metadatas)
+        ]
+        chunks.sort(key=lambda c: int(c.metadata.get("chunk_index", 0)))
+        return chunks
+
     async def delete_by_source(self, source_url: str) -> int:
         """ソースURL指定でチャンクを削除.
 
