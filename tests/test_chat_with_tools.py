@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.db.models import Base
 from src.llm.base import LLMProvider, LLMResponse, ToolCall, ToolDefinition
-from src.services.chat import TOOL_LOOP_MAX_ITERATIONS, ChatService
+from src.services.chat import TOOL_LOOP_MAX_ITERATIONS, ChatService, RagSource
 
 
 @pytest.fixture
@@ -375,7 +375,7 @@ class TestExtractRagSourcesFromMessages:
     """_extract_rag_sources_from_messages() のテスト（準Agentic Search, Issue #548）."""
 
     def test_extracts_source_urls_from_tool_messages(self) -> None:
-        """ツールメッセージから Source: URL を抽出すること."""
+        """ツールメッセージから検索エンジン種別・スコア・URLを抽出すること."""
         from src.llm.base import Message
 
         messages = [
@@ -403,8 +403,9 @@ class TestExtractRagSourcesFromMessages:
         sources = ChatService._extract_rag_sources_from_messages(messages)
 
         assert sources == [
-            "https://example.com/page1",
-            "https://example.com/page2",
+            RagSource(url="https://example.com/page1", engine="vector", score=0.234),
+            RagSource(url="https://example.com/page2", engine="vector", score=0.567),
+            RagSource(url="https://example.com/page1", engine="bm25", score=4.521),
         ]
 
     def test_returns_empty_when_no_tool_messages(self) -> None:
@@ -434,8 +435,8 @@ class TestExtractRagSourcesFromMessages:
         sources = ChatService._extract_rag_sources_from_messages(messages)
         assert sources == []
 
-    def test_deduplicates_source_urls(self) -> None:
-        """重複するソースURLは1つにまとめること."""
+    def test_deduplicates_same_engine_source_urls(self) -> None:
+        """同一エンジン・同一URLの重複は1つにまとめること."""
         from src.llm.base import Message
 
         messages = [
@@ -454,7 +455,9 @@ class TestExtractRagSourcesFromMessages:
         ]
 
         sources = ChatService._extract_rag_sources_from_messages(messages)
-        assert sources == ["https://example.com/same"]
+        assert sources == [
+            RagSource(url="https://example.com/same", engine="vector", score=0.1),
+        ]
 
 
 @pytest.mark.asyncio
@@ -500,4 +503,57 @@ async def test_rag_sources_from_tool_loop(
         result = await service.respond("U001", "テスト質問", "ts_rag_001")
 
     assert "参照元:" in result
+    assert "[vector: distance=0.234]" in result
     assert "https://example.com/page1" in result
+
+
+@pytest.mark.asyncio
+async def test_rag_sources_bm25_format_in_output(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """ツールループで bm25 結果を含む場合、参照元に [bm25: score=X.XXX] が表示されること."""
+    tool_calls = [
+        ToolCall(id="call_1", name="rag_search", arguments={"query": "テスト"}),
+    ]
+    mock_llm = _make_mock_llm(
+        text_response="ナレッジベースによると...",
+        tool_calls=tool_calls,
+    )
+    mock_mcp = _make_mock_mcp_manager(
+        tools=[
+            ToolDefinition(
+                name="rag_search",
+                description="ナレッジベース検索",
+                input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ],
+        call_result=(
+            "## ベクトル検索結果 (意味的類似度)\n\n"
+            "### Result 1 [distance=0.234]\n"
+            "Source: https://example.com/page1\n"
+            "関連テキスト\n\n"
+            "## BM25検索結果 (キーワード一致)\n\n"
+            "### Result 1 [score=4.521]\n"
+            "Source: https://example.com/page2\n"
+            "BM25テキスト"
+        ),
+    )
+    from unittest.mock import patch
+
+    mock_settings = MagicMock()
+    mock_settings.rag_show_sources = True
+
+    service = ChatService(
+        llm=mock_llm,
+        session_factory=session_factory,
+        mcp_manager=mock_mcp,
+    )
+
+    with patch("src.services.chat.get_settings", return_value=mock_settings):
+        result = await service.respond("U001", "テスト質問", "ts_rag_002")
+
+    assert "参照元:" in result
+    assert "[vector: distance=0.234]" in result
+    assert "[bm25: score=4.521]" in result
+    assert "https://example.com/page1" in result
+    assert "https://example.com/page2" in result

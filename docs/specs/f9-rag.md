@@ -1135,7 +1135,8 @@ async def rag_stats() -> str:
 - LLM が質問内容を判断し、挨拶・雑談では検索をスキップする
 - `rag_search` はベクトル検索・BM25検索の生結果を個別に返し、LLM が総合判断する
 - ソースURLの付与はコード側（`_save_and_return()`）でメインアプリ設定 `rag_show_sources`（`src/config/settings.py`）に基づき行う（LLM 任せにしない）
-- ツールループ内で `rag_search` が呼ばれた場合、`_extract_rag_sources_from_messages()` でソースURLを抽出する
+- ツールループ内で `rag_search` が呼ばれた場合、`_extract_rag_sources_from_messages()` で検索エンジン種別・スコア・ソースURLを抽出する
+- 参照元表示フォーマット: `• [vector: distance=X.XXX] URL` / `• [bm25: score=X.XXX] URL`（`RagSource` dataclass で管理）
 - RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
 
 **`mcp_servers.json` の RAG エントリ設定**:
@@ -1553,6 +1554,7 @@ RAG_DEBUG_LOG_ENABLED=false
 2. `server.py` — BM25常時初期化 + `rag_search` 出力を生結果個別返却に変更
 3. `mcp_servers.json` — `auto_context_tool` 除去 + `system_instruction` 更新
 4. `chat.py` — `_extract_rag_sources_from_messages()` 追加、ツールループ後のソースURL抽出
+5. `chat.py` — `RagSource` dataclass 追加、参照元表示にエンジン種別・スコアを追加（#576）
 
 ---
 
@@ -1589,6 +1591,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-21 | 参照元表示にエンジン種別・スコアを追加: `RagSource` dataclass 導入、`_extract_rag_sources_from_messages()` / `_inject_auto_context()` の戻り値を `list[RagSource]` に変更、表示形式を `• [vector: distance=X.XXX] URL` / `• [bm25: score=X.XXX] URL` に改善（#576） |
 | 2026-02-21 | 準Agentic Search 化: `auto_context_tool` 方式 → LLM 駆動のツール呼び出しに変更、`rag_search` の出力をベクトル/BM25生結果の個別返却に変更、`mcp_servers.json` から `auto_context_tool` 除去、`ChatService._extract_rag_sources_from_messages()` 追加、BM25常時初期化（#548） |
 | 2026-02-21 | チャット応答フローを `auto_context_tool` 方式に更新: LLM 任せ → コード側自動注入に変更、MCP経由のRAG統合セクション書き換え、`mcp_servers.json` 設定例に `system_instruction` / `response_instruction` / `auto_context_tool` 追加（#564） |
 | 2026-02-20 | MCP 前提に仕様書更新: アーキテクチャ図を MCP ツール経由に変更、ディレクトリ構成を `mcp_servers/rag/` に更新、`RAG_ENABLED` 廃止（MCP で制御）、`rag_show_sources` を RAG MCP サーバー設定から廃止（メインアプリ設定 `src/config/settings.py` に残存）、ページ単位の進捗コールバック廃止、RAG 設定を `RAGSettings` に移動、MCP サーバー仕様追加（#563） |
