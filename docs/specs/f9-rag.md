@@ -1073,7 +1073,7 @@ async def rag_stats() -> str:
 - `ChatService` は `rag_service` 引数を持たない
 - `auto_context_tool: "rag_search"` により、LLM のツール選択に依存せずコード側で確実にRAG検索を実行する
 - LLM はツール一覧にも `rag_search` を持つため、追加で呼び出すことも可能（ハイブリッド構成）
-- ソースURLの付与はコード側（`_save_and_return()`）で `rag_show_sources` 設定に基づき強制的に行う（LLM 任せにしない）
+- ソースURLの付与はコード側（`_save_and_return()`）でメインアプリ設定 `rag_show_sources`（`src/config/settings.py`）に基づき行う（LLM 任せにしない）
 - RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
 
 **`mcp_servers.json` の RAG エントリ設定**:
@@ -1518,7 +1518,7 @@ RAG_DEBUG_LOG_ENABLED=false
 | 日付 | 内容 |
 |------|------|
 | 2026-02-21 | チャット応答フローを `auto_context_tool` 方式に更新: LLM 任せ → コード側自動注入に変更、MCP経由のRAG統合セクション書き換え、`mcp_servers.json` 設定例に `system_instruction` / `response_instruction` / `auto_context_tool` 追加（#564） |
-| 2026-02-20 | MCP 前提に仕様書更新: アーキテクチャ図を MCP ツール経由に変更、ディレクトリ構成を `mcp_servers/rag/` に更新、`RAG_ENABLED` 廃止（MCP で制御）、`rag_show_sources` 廃止、ページ単位の進捗コールバック廃止、RAG 設定を `RAGSettings` に移動、MCP サーバー仕様追加（#563） |
+| 2026-02-20 | MCP 前提に仕様書更新: アーキテクチャ図を MCP ツール経由に変更、ディレクトリ構成を `mcp_servers/rag/` に更新、`RAG_ENABLED` 廃止（MCP で制御）、`rag_show_sources` を RAG MCP サーバー設定から廃止（メインアプリ設定 `src/config/settings.py` に残存）、ページ単位の進捗コールバック廃止、RAG 設定を `RAGSettings` に移動、MCP サーバー仕様追加（#563） |
 | 2026-02-19 | スイープ確定パラメータを settings.py デフォルト値に反映（`rag_vector_weight` 1.0→0.90, `rag_bm25_k1` 1.5→2.5, `rag_bm25_b` 0.75→0.50, `rag_retrieval_count` 5→3）、`rag_min_combined_score` 新規追加、検索パラメータチューニングガイドセクション追加（#535） |
 | 2026-02-19 | チャンクサイズ縮小（`rag_chunk_size` 500→200, `rag_chunk_overlap` 50→30）、`RAGKnowledgeService` コンストラクタを必須引数化（`similarity_threshold` / `vector_weight` / `debug_log_enabled` 追加、内部 `get_settings()` 参照廃止）、評価CLI の環境変数ハック廃止、`init_test_db` / BM25インデックス構築を `_ingest_crawled_page` / `_smart_chunk` 経由に統一（#522） |
 | 2026-02-19 | パラメータスイープ再実行（拡充データ101件+プレフィックス有効）で `RAG_VECTOR_WEIGHT` 推奨値を 0.5→1.0 に更新（#518） |
