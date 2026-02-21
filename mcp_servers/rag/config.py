@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import functools
+import sys
 from pathlib import Path
 from typing import Literal
 
@@ -96,3 +97,21 @@ class RAGSettings(BaseSettings):
 def get_settings() -> RAGSettings:
     """キャッシュ付きでRAGSettingsインスタンスを返す."""
     return RAGSettings()
+
+
+def ensure_utf8_streams(*, include_stdout: bool = False) -> None:
+    """Windows 環境で stderr（とオプションで stdout）を UTF-8 に切り替える.
+
+    Windows のデフォルトエンコーディング（cp932）では日本語ログが文字化けするため、
+    プロセス起動直後に呼び出して UTF-8 に統一する。
+
+    Args:
+        include_stdout: True の場合 stdout も切り替える。
+            MCP サーバーは stdout を MCP プロトコルで使うため False にすること。
+    """
+    if include_stdout and hasattr(sys.stdout, "reconfigure"):
+        if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+            sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
+            sys.stderr.reconfigure(encoding="utf-8")

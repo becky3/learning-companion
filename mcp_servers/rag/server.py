@@ -19,6 +19,11 @@ import io
 import logging
 import os
 
+# Windows cp932 環境でログが文字化けするため、起動直後に UTF-8 に切り替える。
+# stdout は MCP プロトコルで使うため stderr のみ。
+from .config import ensure_utf8_streams
+ensure_utf8_streams()
+
 # ChromaDB テレメトリを無効化（import 前に設定する必要がある）
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
