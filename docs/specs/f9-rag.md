@@ -60,14 +60,16 @@ flowchart TB
 
 ### チャット応答時のフロー
 
+`auto_context_tool` 方式により、LLM のツール選択に依存せずコード側で確実に RAG 検索を実行する。LLM がツール一覧から追加で `rag_search` を呼ぶことも可能なハイブリッド構成。
+
 ```mermaid
 flowchart LR
-    A["1. ユーザーがSlackで質問"] --> B["2. LLM がツール一覧から<br/>rag_search を選択"]
-    B --> C["3. MCP経由で<br/>rag_search(質問文) 呼び出し"]
+    A["1. ユーザーがSlackで質問"] --> B["2. ChatService が<br/>auto_context_tool で<br/>rag_search を自動呼び出し"]
+    B --> C["3. MCP経由で<br/>rag_search(質問文) 実行"]
     C --> D["4. 質問文をEmbedding →<br/>ChromaDBで類似チャンク検索"]
-    D --> E["5. 検索結果をLLMに返却"]
-    E --> F["6. LLMが関連知識を<br/>踏まえて応答を生成"]
-    F --> G["7. 応答をSlackに投稿"]
+    D --> E["5. 検索結果を<br/>システムプロンプトに注入"]
+    E --> F["6. LLMが注入済みコンテキスト<br/>を踏まえて応答を生成"]
+    F --> G["7. ソースURLを付与し<br/>Slackに投稿"]
 ```
 
 ### ハイブリッド検索アーキテクチャ
@@ -193,9 +195,11 @@ bot: エラー: ページの取り込みに失敗しました。
 ```
 ユーザー: @bot Pythonのasync/awaitについて教えて
 
-（MCP有効で RAG MCP サーバーが登録済みの場合）
-→ LLM がツール一覧から rag_search を選択し、MCP経由で検索
-→ 検索結果を踏まえて応答を生成
+（MCP有効で RAG MCP サーバーが登録済み + auto_context_tool 設定ありの場合）
+→ ChatService が rag_search を自動呼び出し（auto_context_tool）
+→ 検索結果をシステムプロンプトに注入
+→ LLM が注入済みコンテキストを踏まえて応答を生成
+→ ソースURLをコード側で付与して応答
 
 （MCP無効、または RAG MCP サーバー未登録の場合）
 → 従来通りLLMの学習済み知識のみで応答
@@ -1052,8 +1056,11 @@ async def rag_stats() -> str:
     "rag": {
       "transport": "stdio",
       "command": "python",
-      "args": ["mcp_servers/rag/server.py"],
-      "env": {}
+      "args": ["-m", "mcp_servers.rag.server"],
+      "env": {},
+      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。...",
+      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。",
+      "auto_context_tool": "rag_search"
     }
   }
 }
@@ -1061,11 +1068,23 @@ async def rag_stats() -> str:
 
 ### MCP経由のRAG統合
 
-`ChatService` は RAG サービスを直接参照しない。LLM が MCP ツール一覧から `rag_search` を自律的に選択し、検索を実行する。
+`ChatService` は RAG サービスを直接参照しない。`config/mcp_servers.json` の `auto_context_tool` 設定により、`ChatService` がユーザーの質問で `rag_search` を自動呼び出しし、結果をシステムプロンプトに注入する。
 
 - `ChatService` は `rag_service` 引数を持たない
-- RAG コンテキストのシステムプロンプト自動注入は行わない（LLM が MCP ツール結果を踏まえて応答を生成する）
+- `auto_context_tool: "rag_search"` により、LLM のツール選択に依存せずコード側で確実にRAG検索を実行する
+- LLM はツール一覧にも `rag_search` を持つため、追加で呼び出すことも可能（ハイブリッド構成）
+- ソースURLの付与はコード側（`_save_and_return()`）で `rag_show_sources` 設定に基づき強制的に行う（LLM 任せにしない）
 - RAG の利用可否は `MCP_ENABLED=true` かつ RAG MCP サーバーが `config/mcp_servers.json` に登録されているかで決まる
+
+**`mcp_servers.json` の RAG エントリ設定**:
+
+| フィールド | 値 | 役割 |
+|-----------|---|------|
+| `system_instruction` | ナレッジベースの利用を促す指示 | LLM がツールループ内で `rag_search` を追加呼び出しする際のガイド |
+| `response_instruction` | 応答品質の指示 | ツール実行後にシステムプロンプトに追加 |
+| `auto_context_tool` | `"rag_search"` | ツールループ前に自動呼び出し → 結果をコンテキスト注入 |
+
+> 詳細は `docs/specs/f5-mcp-integration.md` の MCPServerConfig 拡張フィールドを参照。
 
 #### Slackコマンドのルーティング (`src/messaging/router.py`)
 
@@ -1498,6 +1517,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-21 | チャット応答フローを `auto_context_tool` 方式に更新: LLM 任せ → コード側自動注入に変更、MCP経由のRAG統合セクション書き換え、`mcp_servers.json` 設定例に `system_instruction` / `response_instruction` / `auto_context_tool` 追加（#564） |
 | 2026-02-20 | MCP 前提に仕様書更新: アーキテクチャ図を MCP ツール経由に変更、ディレクトリ構成を `mcp_servers/rag/` に更新、`RAG_ENABLED` 廃止（MCP で制御）、`rag_show_sources` 廃止、ページ単位の進捗コールバック廃止、RAG 設定を `RAGSettings` に移動、MCP サーバー仕様追加（#563） |
 | 2026-02-19 | スイープ確定パラメータを settings.py デフォルト値に反映（`rag_vector_weight` 1.0→0.90, `rag_bm25_k1` 1.5→2.5, `rag_bm25_b` 0.75→0.50, `rag_retrieval_count` 5→3）、`rag_min_combined_score` 新規追加、検索パラメータチューニングガイドセクション追加（#535） |
 | 2026-02-19 | チャンクサイズ縮小（`rag_chunk_size` 500→200, `rag_chunk_overlap` 50→30）、`RAGKnowledgeService` コンストラクタを必須引数化（`similarity_threshold` / `vector_weight` / `debug_log_enabled` 追加、内部 `get_settings()` 参照廃止）、評価CLI の環境変数ハック廃止、`init_test_db` / BM25インデックス構築を `_ingest_crawled_page` / `_smart_chunk` 経由に統一（#522） |

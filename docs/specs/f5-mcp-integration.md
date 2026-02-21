@@ -249,11 +249,33 @@ MCPサーバーの接続設定を外部ファイルで管理する。
       "transport": "stdio",
       "command": "python",
       "args": ["mcp_servers/weather/server.py"],
-      "env": {}
+      "env": {},
+      "response_instruction": "気温、降水確率などの数値データは省略せず、具体的に回答に含めてください。"
+    },
+    "rag": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["-m", "mcp_servers.rag.server"],
+      "env": {},
+      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。...",
+      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。",
+      "auto_context_tool": "rag_search"
     }
   }
 }
 ```
+
+**設定フィールド（サーバーごとのオプション）**:
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|---|----------|------|
+| `transport` | str | `"stdio"` | トランスポート種別（`"stdio"` のみサポート） |
+| `command` | str | `""` | stdio用: 実行コマンド |
+| `args` | list | `[]` | stdio用: コマンド引数 |
+| `env` | dict | `{}` | 環境変数 |
+| `system_instruction` | str | `""` | システムプロンプトに常時追加する指示。ツール利用を促す用途 |
+| `response_instruction` | str | `""` | ツール実行後にシステムプロンプトへ追加する指示。応答品質の制御用 |
+| `auto_context_tool` | str | `""` | ユーザークエリで自動呼び出しし、結果をシステムプロンプトに注入するツール名 |
 
 **トランスポート種別**:
 
@@ -286,6 +308,9 @@ class MCPServerConfig:
     args: list[str] = field(default_factory=list)  # stdio用: コマンド引数
     env: dict[str, str] = field(default_factory=dict)  # 環境変数
     url: str = ""                # http用: 接続URL（将来対応）
+    system_instruction: str = ""       # ツール利用を促すためシステムプロンプトに常時追加する指示
+    response_instruction: str = ""     # ツール結果を使った応答時にLLMへ追加する指示
+    auto_context_tool: str = ""        # ユーザークエリで自動呼び出しし結果をコンテキスト注入するツール名
 ```
 
 ### MCPクライアント管理 (`src/mcp_bridge/client_manager.py`)
@@ -314,6 +339,15 @@ class MCPClientManager:
             MCPToolExecutionError: ツール実行失敗時
             MCPToolNotFoundError: 指定ツールが見つからない場合
         """
+
+    def get_system_instructions(self) -> list[str]:
+        """全サーバーのシステム指示を返す."""
+
+    def get_auto_context_tools(self) -> list[str]:
+        """自動コンテキスト注入するツール名のリストを返す."""
+
+    def get_response_instruction(self, tool_name: str) -> str:
+        """ツール名に対応するサーバーの応答指示を返す."""
 
     async def cleanup(self) -> None:
         """全接続をクリーンアップする."""
@@ -405,23 +439,50 @@ async def respond(self, user_id: str, text: str, thread_ts: str) -> str:
         return self._save_and_return(response, ...)
 
     tools = await self._mcp_manager.get_available_tools()
-    for _ in range(TOOL_LOOP_MAX_ITERATIONS):
-        response = await self._llm.complete_with_tools(messages, tools)
 
-        if not response.tool_calls:
-            break  # テキスト応答 → ループ終了
+    # 1. system_instruction: サーバー設定の指示をシステムプロンプトに追加
+    system_instructions = self._mcp_manager.get_system_instructions()
+    if system_instructions:
+        extra = "\n\n".join(system_instructions)
+        messages[0].content += "\n\n" + extra  # 既存システムプロンプトに追記
 
-        # ツール実行 & 結果をメッセージに追加
-        messages.append(Message(role="assistant", content=response.content, tool_calls=response.tool_calls))
-        for tc in response.tool_calls:
-            result = await self._execute_tool_with_timeout(tc)
-            messages.append(Message(role="tool", content=result.content, tool_call_id=tc.id))
-    else:
-        # 最大反復到達 → 強制的にテキスト応答を要求
-        messages.append(Message(role="user", content="ツール呼び出しの上限に達しました。現在の情報で回答してください。"))
-        response = await self._llm.complete(messages)
+    # 2. auto_context: 自動コンテキスト注入（RAG等）
+    rag_sources, auto_applied = await self._inject_auto_context(messages, text)
 
-    return self._save_and_return(response, ...)
+    # 3. ツール呼び出しループ（response_instruction は各ツール実行後に適用）
+    final_response = await self._run_tool_loop(
+        messages, tools, applied_instructions=auto_applied,
+    )
+    return self._save_and_return(final_response, ..., rag_sources=rag_sources)
+```
+
+**`_inject_auto_context()` の動作**:
+
+`auto_context_tool` に設定されたツールをユーザーの入力テキストで自動呼び出しし、結果をシステムプロンプトに注入する。LLM のツール選択に依存せず、コード側で確実にコンテキストを提供する方式。
+
+```python
+async def _inject_auto_context(self, messages, user_text):
+    """auto_context_tool のツールを自動呼び出し → システムプロンプトに注入."""
+    auto_tools = self._mcp_manager.get_auto_context_tools()
+    for tool_name in auto_tools:
+        result = await self._mcp_manager.call_tool(tool_name, {"query": user_text})
+        if result and "該当する情報が見つかりませんでした" not in result:
+            # 検索結果をシステムプロンプトに追加
+            messages[0].content += "\n\n以下は質問に関連する参考情報です。回答に役立つ場合は活用してください:\n" + result
+            # 対応する response_instruction も適用（重複防止セットに記録）
+    return sources, applied_instructions
+```
+
+**`_apply_response_instruction()` の動作**:
+
+ツール実行後、そのツールが属するサーバーの `response_instruction` をシステムプロンプトに追加する。同じ指示が複数回追加されないよう、適用済みセット（`applied_instructions`）で重複を防止する。`_inject_auto_context()` で適用済みの指示は `_run_tool_loop()` に引き渡され、ループ内での重複追加を防ぐ。
+
+**指示の適用タイミングと優先順位**:
+
+```mermaid
+flowchart LR
+    A["1. system_instruction<br/>（常時追加）"] --> B["2. auto_context 結果<br/>+ response_instruction"]
+    B --> C["3. ツールループ内<br/>response_instruction<br/>（重複防止）"]
 ```
 
 ### 会話履歴におけるツール呼び出しの扱い
@@ -587,3 +648,9 @@ class Settings(BaseSettings):
 - [参考記事: MCPサーバー構築 (Qiita)](https://qiita.com/k_ide/items/11c04869f9a179258618)
 - [気象庁API（非公式）](https://www.jma.go.jp/bosai/forecast/) — 天気予報データ
 - [参考記事: 気象庁APIの使い方 (Qiita)](https://qiita.com/Tatsuki_Yo/items/121afaecad59a7e11c61)
+
+## 変更履歴
+
+| 日付 | 内容 |
+|------|------|
+| 2026-02-21 | `MCPServerConfig` に `system_instruction` / `response_instruction` / `auto_context_tool` フィールド追加、`MCPClientManager` に対応メソッド追加、`ChatService` の擬似コードを auto_context / response_instruction 処理を含む形に更新、`mcp_servers.json` 設定例に RAG エントリ追加（#564） |
