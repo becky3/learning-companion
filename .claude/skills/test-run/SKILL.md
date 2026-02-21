@@ -270,19 +270,21 @@ RAG 関連ファイル（`src/rag/**`, `src/embedding/**`, `src/services/rag_kno
 
 RAG 精度テストが必要と判断した場合、確認なしで自動実行する:
 
-1. テスト用 ChromaDB を初期化:
+1. テスト用 DB を初期化（ChromaDB + BM25）:
 
    ```bash
-   python -m src.rag.cli init-test-db \
-     --persist-dir ./test_chroma_db \
+   python -m mcp_servers.rag.cli init-test-db \
+     --chunk-size 200 --chunk-overlap 30 \
+     --persist-dir .tmp/test_chroma_db \
+     --bm25-persist-dir .tmp/test_bm25_index \
      --fixture tests/fixtures/rag_test_documents.json
    ```
 
 2. 精度評価を実行:
 
    ```bash
-   python -m src.rag.cli evaluate \
-     --persist-dir ./test_chroma_db \
+   python -m mcp_servers.rag.cli evaluate \
+     --persist-dir .tmp/test_chroma_db \
      --output-dir reports/rag-evaluation
    ```
 

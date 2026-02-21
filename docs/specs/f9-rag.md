@@ -1020,11 +1020,12 @@ python -m mcp_servers.rag.cli evaluate \
   --threshold 0.5 \
   --fail-on-regression
 
-# テスト用ChromaDB初期化（chunk-size, chunk-overlap は必須）
+# テスト用DB初期化（ChromaDB + BM25、chunk-size, chunk-overlap は必須）
 python -m mcp_servers.rag.cli init-test-db \
   --chunk-size 200 \
   --chunk-overlap 30 \
   --persist-dir .tmp/test_chroma_db \
+  --bm25-persist-dir .tmp/test_bm25_index \
   --fixture tests/fixtures/rag_test_documents.json
 ```
 
@@ -1053,6 +1054,7 @@ python -m mcp_servers.rag.cli init-test-db \
 | `--chunk-size` | **必須** | — | チャンクサイズ |
 | `--chunk-overlap` | **必須** | — | チャンクオーバーラップ |
 | `--persist-dir` | | `.tmp/test_chroma_db` | ChromaDB永続化ディレクトリ |
+| `--bm25-persist-dir` | | `.tmp/test_bm25_index` | BM25インデックス永続化ディレクトリ |
 | `--fixture` | | `tests/fixtures/rag_test_documents.json` | テストドキュメントフィクスチャ |
 
 **出力ファイル**: `report.json`, `report.md`, `baseline.json`
@@ -1436,7 +1438,7 @@ RAG_DEBUG_LOG_ENABLED=false
 - [ ] **AC64**: JSON/Markdown形式のレポートが出力されること
 - [ ] **AC65**: ベースライン比較でリグレッション検出ができること
 - [ ] **AC66**: `--fail-on-regression` 指定時、リグレッション検出で exit code 1 になること
-- [ ] **AC67**: `init-test-db` コマンドでテスト用ChromaDBを初期化できること
+- [ ] **AC67**: `init-test-db` コマンドでテスト用ChromaDB・BM25インデックスを初期化できること
 
 ### robots.txt 遵守
 
