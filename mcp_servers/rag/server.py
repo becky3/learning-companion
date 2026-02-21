@@ -90,13 +90,14 @@ def _build_rag_service() -> RAGKnowledgeService:
         )
         safe_browsing_client = create_safe_browsing_client(settings)
 
-        bm25_index = None
-        if settings.rag_hybrid_search_enabled:
-            bm25_index = BM25Index(
-                k1=settings.rag_bm25_k1,
-                b=settings.rag_bm25_b,
-                persist_dir=settings.bm25_persist_dir,
-            )
+        # BM25は準Agentic Search（生結果個別返却）で常時使用するため、
+        # rag_hybrid_search_enabled に関係なく常時初期化する。
+        # 既存の hybrid_search_enabled フラグと HybridSearchEngine は従来のまま保持。
+        bm25_index = BM25Index(
+            k1=settings.rag_bm25_k1,
+            b=settings.rag_bm25_b,
+            persist_dir=settings.bm25_persist_dir,
+        )
 
     return RAGKnowledgeService(
         vector_store=vector_store,
@@ -120,33 +121,47 @@ def _build_rag_service() -> RAGKnowledgeService:
 async def rag_search(query: str, n_results: int | None = None) -> str:
     """ナレッジベースから関連情報を検索する.
 
+    ベクトル検索（意味的類似度）とBM25検索（キーワード一致）の生結果を
+    個別に返す。統合スコアリングは行わず、LLMが両方の結果を総合的に判断する。
+
     Args:
         query: 検索クエリ
-        n_results: 取得する結果数（未指定時は設定値を使用）
+        n_results: 各エンジンから取得する結果数（未指定時は設定値を使用）
 
     Returns:
-        検索結果テキスト。各チャンクを以下の形式で連結:
-
-        ## Source: <ソースURL>
-        <本文テキスト>
-
+        検索結果テキスト。ベクトル検索結果とBM25検索結果をセクション分けして返す。
         結果が0件の場合は「該当する情報が見つかりませんでした」を返す。
     """
     service = await _get_rag_service()
     if n_results is None:
         n_results = get_settings().rag_retrieval_count
 
-    result = await service.retrieve(query, n_results=n_results)
-    if not result.context:
+    raw = await service.retrieve_raw_results(query, n_results=n_results)
+
+    if not raw.vector_results and not raw.bm25_results:
         return "該当する情報が見つかりませんでした"
 
-    # MCP ツール向けフォーマット: ソースURLを明示
     parts: list[str] = []
-    for source in result.sources:
-        parts.append(f"## Source: {source}")
-    parts.append("")
-    parts.append(result.context)
-    return "\n".join(parts)
+
+    # ベクトル検索結果
+    if raw.vector_results:
+        parts.append("## ベクトル検索結果 (意味的類似度)\n")
+        for i, item in enumerate(raw.vector_results, start=1):
+            parts.append(f"### Result {i} [distance={item.distance:.3f}]")
+            parts.append(f"Source: {item.source_url}")
+            parts.append(item.text)
+            parts.append("")
+
+    # BM25検索結果
+    if raw.bm25_results:
+        parts.append("## BM25検索結果 (キーワード一致)\n")
+        for i, item in enumerate(raw.bm25_results, start=1):
+            parts.append(f"### Result {i} [score={item.score:.3f}]")
+            parts.append(f"Source: {item.source_url}")
+            parts.append(item.text)
+            parts.append("")
+
+    return "\n".join(parts).rstrip()
 
 
 @mcp.tool()

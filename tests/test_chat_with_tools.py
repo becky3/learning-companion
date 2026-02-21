@@ -369,3 +369,135 @@ async def test_chat_no_tools_available(
 
     assert result == "ツールなし応答"
     mock_llm.complete.assert_called_once()
+
+
+class TestExtractRagSourcesFromMessages:
+    """_extract_rag_sources_from_messages() のテスト（準Agentic Search, Issue #548）."""
+
+    def test_extracts_source_urls_from_tool_messages(self) -> None:
+        """ツールメッセージから Source: URL を抽出すること."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(role="user", content="テスト"),
+            Message(role="assistant", content=""),
+            Message(
+                role="tool",
+                content=(
+                    "## ベクトル検索結果 (意味的類似度)\n\n"
+                    "### Result 1 [distance=0.234]\n"
+                    "Source: https://example.com/page1\n"
+                    "テキスト内容1\n\n"
+                    "### Result 2 [distance=0.567]\n"
+                    "Source: https://example.com/page2\n"
+                    "テキスト内容2\n\n"
+                    "## BM25検索結果 (キーワード一致)\n\n"
+                    "### Result 1 [score=4.521]\n"
+                    "Source: https://example.com/page1\n"
+                    "テキスト内容3"
+                ),
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+
+        assert sources == [
+            "https://example.com/page1",
+            "https://example.com/page2",
+        ]
+
+    def test_returns_empty_when_no_tool_messages(self) -> None:
+        """ツールメッセージがない場合は空リストを返すこと."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(role="user", content="こんにちは"),
+            Message(role="assistant", content="こんにちは！"),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == []
+
+    def test_returns_empty_when_no_source_in_tool_message(self) -> None:
+        """ツールメッセージに Source: がない場合は空リストを返すこと."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(
+                role="tool",
+                content="東京: 晴れ 最高15°C",
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == []
+
+    def test_deduplicates_source_urls(self) -> None:
+        """重複するソースURLは1つにまとめること."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(
+                role="tool",
+                content=(
+                    "### Result 1 [distance=0.1]\n"
+                    "Source: https://example.com/same\n"
+                    "テキスト1\n\n"
+                    "### Result 2 [distance=0.2]\n"
+                    "Source: https://example.com/same\n"
+                    "テキスト2"
+                ),
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == ["https://example.com/same"]
+
+
+@pytest.mark.asyncio
+async def test_rag_sources_from_tool_loop(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """ツールループで rag_search が呼ばれた場合、ソースURLが抽出されること."""
+    tool_calls = [
+        ToolCall(id="call_1", name="rag_search", arguments={"query": "テスト"}),
+    ]
+    mock_llm = _make_mock_llm(
+        text_response="ナレッジベースによると...",
+        tool_calls=tool_calls,
+    )
+    mock_mcp = _make_mock_mcp_manager(
+        tools=[
+            ToolDefinition(
+                name="rag_search",
+                description="ナレッジベース検索",
+                input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ],
+        call_result=(
+            "## ベクトル検索結果 (意味的類似度)\n\n"
+            "### Result 1 [distance=0.234]\n"
+            "Source: https://example.com/page1\n"
+            "関連テキスト"
+        ),
+    )
+    # rag_show_sources を有効にする
+    from unittest.mock import patch
+
+    mock_settings = MagicMock()
+    mock_settings.rag_show_sources = True
+
+    service = ChatService(
+        llm=mock_llm,
+        session_factory=session_factory,
+        mcp_manager=mock_mcp,
+    )
+
+    with patch("src.services.chat.get_settings", return_value=mock_settings):
+        result = await service.respond("U001", "テスト質問", "ts_rag_001")
+
+    assert "参照元:" in result
+    assert "https://example.com/page1" in result
