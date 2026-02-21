@@ -258,7 +258,7 @@ MCPサーバーの接続設定を外部ファイルで管理する。
       "args": ["-m", "mcp_servers.rag.server"],
       "env": {},
       "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。...",
-      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。",
+      "response_instruction": "以下のルールに従って、ナレッジベースの検索結果を使って回答してください。...",
       "auto_context_tool": "rag_search"
     }
   }

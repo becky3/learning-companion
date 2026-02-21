@@ -1119,8 +1119,8 @@ async def rag_stats() -> str:
       "command": "python",
       "args": ["-m", "mcp_servers.rag.server"],
       "env": {},
-      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。ユーザーの質問がナレッジベースの内容に関連する可能性がある場合は、rag_search ツールで検索してください。検索クエリはユーザーの質問から重要なキーワードを抽出して構成してください。挨拶・雑談などナレッジベースと無関係な質問では検索不要です。",
-      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。"
+      "system_instruction": "（検索判断基準・クエリ最適化ヒント）",
+      "response_instruction": "（検索結果の選別ルール・スコア活用指示）"
     }
   }
 }
@@ -1144,7 +1144,15 @@ async def rag_stats() -> str:
 | フィールド | 値 | 役割 |
 |-----------|---|------|
 | `system_instruction` | 検索判断基準・クエリ最適化ヒント | LLM がツールループ内で `rag_search` を呼ぶかの判断指針 |
-| `response_instruction` | 応答品質の指示 | ツール実行後にシステムプロンプトに追加 |
+| `response_instruction` | 検索結果の選別ルール・スコア活用指示 | ツール実行後にシステムプロンプトに追加し、LLM が検索結果を適切に選別して回答するよう制御 |
+
+**`response_instruction` の設計方針**:
+
+- 検索結果ごとにトピック該当性を判断させ、該当する情報のみ使用させる
+- 検索結果にない情報の推測補完を禁止する（ハルシネーション防止）
+- 関連情報が見つからなかった場合は、その旨を伝えさせる（定型文ではなくキャラクターの個性に委ねる）
+- 各結果に付与された cosine distance（ベクトル検索）/ BM25 score（キーワード検索）を判断材料として活用させる
+- LLM は学習データからこれらのスコア指標の性質を理解している前提で指示する
 
 > 詳細は `docs/specs/f5-mcp-integration.md` の MCPServerConfig 拡張フィールドを参照。
 >
@@ -1591,6 +1599,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-21 | `response_instruction` を強化: 関連性判断・推測禁止・スコア活用の3ルール + 補足に書き換え、LLMが検索結果を選別して回答するよう指示（#575） |
 | 2026-02-21 | 参照元表示にエンジン種別・スコアを追加: `RagSource` dataclass 導入、`_extract_rag_sources_from_messages()` / `_inject_auto_context()` の戻り値を `list[RagSource]` に変更、表示形式を `• [vector: distance=X.XXX] URL` / `• [bm25: score=X.XXX] URL` に改善（#576） |
 | 2026-02-21 | 準Agentic Search 化: `auto_context_tool` 方式 → LLM 駆動のツール呼び出しに変更、`rag_search` の出力をベクトル/BM25生結果の個別返却に変更、`mcp_servers.json` から `auto_context_tool` 除去、`ChatService._extract_rag_sources_from_messages()` 追加、BM25常時初期化（#548） |
 | 2026-02-21 | チャット応答フローを `auto_context_tool` 方式に更新: LLM 任せ → コード側自動注入に変更、MCP経由のRAG統合セクション書き換え、`mcp_servers.json` 設定例に `system_instruction` / `response_instruction` / `auto_context_tool` 追加（#564） |
