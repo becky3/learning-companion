@@ -46,6 +46,56 @@ class RagSource:
     score: float  # distance (vector) or score (bm25)
 
 
+def _parse_rag_sources_from_text(
+    text: str,
+    seen: set[tuple[str, str]],
+) -> list[RagSource]:
+    """テキストからRAGソース情報を抽出する.
+
+    ヘッダ行（Result [distance=...] / [score=...]）で検索エンジン種別・スコアを取得し、
+    Source: 行からURLを抽出する。seen セットで (engine, url) の重複を排除する。
+
+    Args:
+        text: パース対象のテキスト
+        seen: 重複排除用のセット（呼び出し元と共有、破壊的に更新される）
+
+    Returns:
+        抽出された RagSource のリスト
+    """
+    sources: list[RagSource] = []
+    current_engine: RagEngineType | None = None
+    current_score: float | None = None
+    for line in text.splitlines():
+        m_vec = _VECTOR_HEADER_RE.match(line)
+        if m_vec:
+            current_engine = "vector"
+            current_score = float(m_vec.group(1))
+            continue
+        m_bm25 = _BM25_HEADER_RE.match(line)
+        if m_bm25:
+            current_engine = "bm25"
+            current_score = float(m_bm25.group(1))
+            continue
+        # "## Source: " と "Source: " の両方に対応
+        url: str | None = None
+        if line.startswith("## Source: "):
+            url = line[len("## Source: "):].strip()
+        elif line.startswith("Source: "):
+            url = line[len("Source: "):].strip()
+        if url is not None:
+            if url:
+                engine: RagEngineType = current_engine or "unknown"
+                score = current_score if current_score is not None else 0.0
+                key = (engine, url)
+                if key not in seen:
+                    seen.add(key)
+                    sources.append(RagSource(url=url, engine=engine, score=score))
+            # URL の有無に関わらず、Source 行を見たらヘッダ情報をリセット
+            current_engine = None
+            current_score = None
+    return sources
+
+
 class ChatService:
     """チャット応答サービス.
 
@@ -240,35 +290,7 @@ class ChatService:
                 continue
 
             # ソース情報を抽出（エンジン種別・スコア付き）
-            current_engine: RagEngineType | None = None
-            current_score: float | None = None
-            for line in result.splitlines():
-                m_vec = _VECTOR_HEADER_RE.match(line)
-                if m_vec:
-                    current_engine = "vector"
-                    current_score = float(m_vec.group(1))
-                    continue
-                m_bm25 = _BM25_HEADER_RE.match(line)
-                if m_bm25:
-                    current_engine = "bm25"
-                    current_score = float(m_bm25.group(1))
-                    continue
-                url: str | None = None
-                if line.startswith("## Source: "):
-                    url = line[len("## Source: "):].strip()
-                elif line.startswith("Source: "):
-                    url = line[len("Source: "):].strip()
-                if url is not None:
-                    if url:
-                        engine: RagEngineType = current_engine or "unknown"
-                        score = current_score if current_score is not None else 0.0
-                        key = (engine, url)
-                        if key not in seen:
-                            seen.add(key)
-                            sources.append(RagSource(url=url, engine=engine, score=score))
-                    # URL の有無に関わらず、Source 行を見たらヘッダ情報をリセット
-                    current_engine = None
-                    current_score = None
+            sources.extend(_parse_rag_sources_from_text(result, seen))
 
             # 検索結果をシステムプロンプトに注入
             context_block = (
@@ -310,37 +332,7 @@ class ChatService:
         for msg in messages:
             if msg.role != "tool":
                 continue
-            current_engine: RagEngineType | None = None
-            current_score: float | None = None
-            for line in msg.content.splitlines():
-                # ヘッダ行から検索エンジン種別・スコアを取得
-                m_vec = _VECTOR_HEADER_RE.match(line)
-                if m_vec:
-                    current_engine = "vector"
-                    current_score = float(m_vec.group(1))
-                    continue
-                m_bm25 = _BM25_HEADER_RE.match(line)
-                if m_bm25:
-                    current_engine = "bm25"
-                    current_score = float(m_bm25.group(1))
-                    continue
-                # Source: 行からURLを取得
-                if line.startswith("Source: "):
-                    url = line[len("Source: "):].strip()
-                    if not url:
-                        # URL が空の場合も、前回のヘッダ情報をリセットしておく
-                        current_engine = None
-                        current_score = None
-                        continue
-                    engine: RagEngineType = current_engine or "unknown"
-                    score = current_score if current_score is not None else 0.0
-                    key = (engine, url)
-                    if key not in seen:
-                        seen.add(key)
-                        sources.append(RagSource(url=url, engine=engine, score=score))
-                    # リセット
-                    current_engine = None
-                    current_score = None
+            sources.extend(_parse_rag_sources_from_text(msg.content, seen))
         return sources
 
     async def _execute_tool_with_timeout(
