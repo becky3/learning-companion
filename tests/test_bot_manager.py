@@ -472,10 +472,9 @@ class TestWaitForReadyWindows:
         monkeypatch.setattr("sys.platform", "win32")
 
         mock_proc = MagicMock()
-        mock_proc.stdout.readline.return_value = b"BOT_READY\n"
+        mock_proc.stdout.readline.side_effect = [b"BOT_READY\n", b""]
 
         from src.bot_manager import _wait_for_ready_windows
-        # タイムアウトを短く設定してテスト
         _wait_for_ready_windows(mock_proc, timeout=5)
 
     def test_pipe_closed_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -492,26 +491,21 @@ class TestWaitForReadyWindows:
 
     def test_ac16_timeout_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """AC16: タイムアウト時に exit(1)."""
-        import concurrent.futures
-
         monkeypatch.setattr("sys.platform", "win32")
 
         mock_proc = MagicMock()
+        # readline がブロックし続ける（何も返さない）ことでタイムアウトを発生させる
+        import threading
+        block_event = threading.Event()
+        def blocking_readline() -> bytes:
+            block_event.wait()
+            return b""
+        mock_proc.stdout.readline.side_effect = blocking_readline
 
         from src.bot_manager import _wait_for_ready_windows
-        with (
-            patch(
-                "concurrent.futures.ThreadPoolExecutor"
-            ) as mock_executor_cls,
-            pytest.raises(SystemExit, match="1"),
-        ):
-            mock_executor = MagicMock()
-            mock_executor_cls.return_value.__enter__ = MagicMock(return_value=mock_executor)
-            mock_executor_cls.return_value.__exit__ = MagicMock(return_value=False)
-            mock_future = MagicMock()
-            mock_future.result.side_effect = concurrent.futures.TimeoutError()
-            mock_executor.submit.return_value = mock_future
-            _wait_for_ready_windows(mock_proc, timeout=1)
+        with pytest.raises(SystemExit, match="1"):
+            _wait_for_ready_windows(mock_proc, timeout=0.1)
+        block_event.set()  # テスト終了後にスレッドを解放
 
 
 # ---------------------------------------------------------------------------

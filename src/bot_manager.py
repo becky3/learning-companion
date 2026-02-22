@@ -159,6 +159,8 @@ def _start_bot() -> int:
         # BOT_READY 待ちに失敗した場合、子プロセスを停止する
         # SystemExit (sys.exit) も捕捉するため BaseException を使用
         _kill_process_tree(proc.pid)
+        if proc.stdout is not None:
+            proc.stdout.close()
         remove_pid_file()
         raise
     finally:
@@ -176,45 +178,58 @@ def _wait_for_ready(proc: subprocess.Popen[bytes]) -> None:
     """子プロセスの stdout から BOT_READY を待つ."""
     assert proc.stdout is not None  # noqa: S101
 
-    deadline = READY_TIMEOUT_SECONDS
+    timeout = READY_TIMEOUT_SECONDS
     # Windows では select が pipe に使えないため、スレッドで readline する
     if sys.platform == "win32":
-        _wait_for_ready_windows(proc, deadline)
+        _wait_for_ready_windows(proc, timeout)
     else:
-        _wait_for_ready_unix(proc, deadline)
+        _wait_for_ready_unix(proc, timeout)
 
 
 def _wait_for_ready_windows(proc: subprocess.Popen[bytes], timeout: float) -> None:
-    """Windows向け: スレッドで stdout.readline() をタイムアウト付きで待つ."""
-    import concurrent.futures
+    """Windows向け: daemon スレッドで stdout.readline() を行い、全体デッドラインで待つ."""
+    import queue
+    import threading
+    import time
 
     assert proc.stdout is not None  # noqa: S101
 
-    def _read_line() -> str:
-        line = proc.stdout.readline()  # type: ignore[union-attr]
-        return line.decode("utf-8", errors="replace").strip()
+    line_queue: queue.Queue[str] = queue.Queue()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        while True:
-            future = executor.submit(_read_line)
-            try:
-                line = future.result(timeout=timeout)
-            except concurrent.futures.TimeoutError:
-                print(f"Error: Bot startup timed out ({READY_TIMEOUT_SECONDS}s)", file=sys.stderr)
-                sys.exit(1)
+    def _reader() -> None:
+        for raw in iter(proc.stdout.readline, b""):  # type: ignore[union-attr]
+            line_queue.put(raw.decode("utf-8", errors="replace").strip())
+        line_queue.put("")  # EOF
 
-            if not line:
-                # パイプが閉じた（子プロセスが異常終了した）
-                returncode = proc.poll()
-                print(
-                    f"Error: Bot process exited unexpectedly (exit code: {returncode}). "
-                    f"Check log: {LOG_FILE}",
-                    file=sys.stderr,
-                )
-                sys.exit(1)
+    reader_thread = threading.Thread(target=_reader, daemon=True)
+    reader_thread.start()
 
-            if line == BOT_READY_SIGNAL:
-                return
+    deadline = time.monotonic() + timeout
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print(f"Error: Bot startup timed out ({timeout}s)", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            line = line_queue.get(timeout=remaining)
+        except queue.Empty:
+            print(f"Error: Bot startup timed out ({timeout}s)", file=sys.stderr)
+            sys.exit(1)
+
+        if not line:
+            # パイプが閉じた（子プロセスが異常終了した）
+            returncode = proc.poll()
+            print(
+                f"Error: Bot process exited unexpectedly (exit code: {returncode}). "
+                f"Check log: {LOG_FILE}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        if line == BOT_READY_SIGNAL:
+            return
 
 
 def _wait_for_ready_unix(proc: subprocess.Popen[bytes], timeout: float) -> None:
@@ -229,7 +244,7 @@ def _wait_for_ready_unix(proc: subprocess.Popen[bytes], timeout: float) -> None:
 
     while True:
         if remaining <= 0:
-            print(f"Error: Bot startup timed out ({READY_TIMEOUT_SECONDS}s)", file=sys.stderr)
+            print(f"Error: Bot startup timed out ({timeout}s)", file=sys.stderr)
             sys.exit(1)
 
         start = time.monotonic()
@@ -238,7 +253,7 @@ def _wait_for_ready_unix(proc: subprocess.Popen[bytes], timeout: float) -> None:
         remaining -= elapsed
 
         if not ready:
-            print(f"Error: Bot startup timed out ({READY_TIMEOUT_SECONDS}s)", file=sys.stderr)
+            print(f"Error: Bot startup timed out ({timeout}s)", file=sys.stderr)
             sys.exit(1)
 
         line = proc.stdout.readline().decode("utf-8", errors="replace").strip()
