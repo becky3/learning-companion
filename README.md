@@ -90,8 +90,6 @@ src/
   llm/anthropic_provider.py
   llm/lmstudio_provider.py  # OpenAI SDK で base_url を localhost:1234 に向ける
   llm/factory.py     # プロバイダー生成ファクトリ
-  embedding/         # Embeddingプロバイダー（LM Studio / OpenAI）
-  rag/               # RAGインフラ（チャンキング、ChromaDBベクトルストア、評価CLI）
   process_guard.py   # Bot重複起動防止
   mcp_bridge/
     __init__.py
@@ -101,21 +99,23 @@ src/
   services/summarizer.py     # 記事要約 (ローカルLLM)
   services/user_profiler.py  # 会話からユーザー情報抽出 (ローカルLLM)
   services/topic_recommender.py # 学習トピック提案 (オンラインLLM)
-  services/web_crawler.py     # Webクローラー（RAG用）
-  services/rag_knowledge.py   # RAGナレッジサービス
   services/ogp_extractor.py   # OGPメタデータ抽出
-  services/safe_browsing.py   # Google Safe Browsing API
   services/thread_history.py  # Slackスレッド履歴取得
   scheduler/jobs.py  # 配信ジョブ・フォーマット
 mcp_servers/                 # MCPサーバー群（将来リポジトリ分離対象）
   weather/
     server.py          # 天気予報MCPサーバー（気象庁API）
+  rag/
+    server.py          # RAGナレッジMCPサーバー
+    rag_knowledge.py   # RAGナレッジサービス
+    web_crawler.py     # Webクローラー（RAG用）
+    safe_browsing.py   # Google Safe Browsing API
+    embedding/         # Embeddingプロバイダー（LM Studio / OpenAI）
 config/
   assistant.yaml     # アシスタントの名前・性格・口調 (システムプロンプトに反映)
   mcp_servers.json   # MCPサーバー接続設定
 docs/
   specs/             # 機能仕様書 (実装の根拠)
-  retro/             # レトロスペクティブ記録
 .claude/
   settings.json      # Claude Code 設定（hooks、サブエージェント定義など）
   agents/            # サブエージェント定義ファイル
@@ -172,6 +172,17 @@ uv run mypy src
 - [F7: ボットステータス](docs/specs/f7-bot-status.md)
 - [F8: スレッドサポート](docs/specs/f8-thread-support.md)
 - [F9: RAGナレッジ](docs/specs/f9-rag.md)
+- [F10: Slack mrkdwn形式対応](docs/specs/f10-slack-mrkdwn.md)
+- [F11: CLIアダプター](docs/specs/f11-cli-adapter.md)
+
+### 開発・運用
+
+- [git-flow ブランチ運用](docs/specs/git-flow.md)
+- [PR body テンプレート](docs/specs/pr-body-template.md)
+- [Bot プロセスガード](docs/specs/bot-process-guard.md)
+- [自動進行管理](docs/specs/auto-progress.md)
+- [auto-fix.yml 構造設計](docs/specs/auto-fix-structure.md)
+- [Copilot 自動修正ワークフロー](docs/specs/copilot-auto-fix.md)
 
 ### Claude Code 関連
 
@@ -181,4 +192,8 @@ uv run mypy src
 - [Planner サブエージェント](docs/specs/planner-agent.md)
 - [Doc Reviewer サブエージェント](docs/specs/doc-review-agent.md)
 - [Test Runner サブエージェント](docs/specs/test-runner-agent.md)
+- [Code Reviewer サブエージェント](docs/specs/code-review-agent.md)
 - [Doc Gen スキル](docs/specs/doc-gen-skill.md)
+- [Handoff スキル](docs/specs/handoff-skill.md)
+- [Check Review Batch スキル](docs/specs/check-review-batch-skill.md)
+- [Topic スキル](docs/specs/topic-skill.md)

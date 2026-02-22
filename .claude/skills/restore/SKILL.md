@@ -25,7 +25,7 @@ Claude Code のシステムプロンプトに `You have a persistent auto memory
 
 ### ステップ1: MEMORY.md の確認
 
-`$MEMORY_DIR/MEMORY.md` を読み、「進行中タスク」セクションから現在の作業状況を把握する。
+`$MEMORY_DIR/MEMORY.md` を読み、プロジェクト知見を把握する。
 
 ### ステップ2: キャラクター決定
 
@@ -91,8 +91,8 @@ ls -1 "$MEMORY_DIR/journal/"*.md 2>/dev/null | sort -r | head -n 1
   - 判断: [迷った点・選んだ選択肢]
   - 気づき: [ポイント]（あれば）
 
-📋 進行中タスク:
-- [MEMORY.md の進行中タスクから抜粋]
+📋 残課題・進行中の作業:
+- [ジャーナルの残課題から抜粋]
 
 ---
 🔜 今日のセッションで着手候補:
