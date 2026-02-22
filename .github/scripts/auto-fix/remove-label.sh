@@ -6,6 +6,8 @@
 # エラー方針: ラベル未存在 → notice で続行、API失敗 → warning で続行
 
 set -euo pipefail
+# 動的パス解決のため静的解析不可
+# shellcheck disable=SC1091
 source "$(dirname "$0")/_common.sh"
 
 require_env PR_NUMBER

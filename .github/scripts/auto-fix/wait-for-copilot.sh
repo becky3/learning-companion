@@ -23,8 +23,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# 同一ディレクトリの共通関数を読み込み
-# shellcheck source=_common.sh
+# 動的パス解決のため静的解析不可
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/_common.sh"
 
 require_env PR_NUMBER GH_TOKEN GH_REPO GITHUB_OUTPUT
