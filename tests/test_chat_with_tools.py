@@ -459,6 +459,27 @@ class TestExtractRagSourcesFromMessages:
             RagSource(url="https://example.com/same", engine="vector", score=0.1),
         ]
 
+    def test_extracts_source_urls_with_hash_prefix(self) -> None:
+        """'## Source: ' プレフィックスも処理できること."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(
+                role="tool",
+                content=(
+                    "### Result 1 [distance=0.123]\n"
+                    "## Source: https://example.com/page\n"
+                    "テキスト内容"
+                ),
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == [
+            RagSource(url="https://example.com/page", engine="vector", score=0.123),
+        ]
+
 
 @pytest.mark.asyncio
 async def test_rag_sources_from_tool_loop(
