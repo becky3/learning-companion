@@ -34,7 +34,7 @@ from src.bot_manager import (
 class TestGetChildPids:
     """子プロセスPID取得のテスト."""
 
-    def test_get_child_pids_windows_returns_pids(self) -> None:
+    def test_ac17_get_child_pids_windows_returns_pids(self) -> None:
         """Windows: wmic出力から子プロセスPIDを取得する."""
         mock_result = MagicMock()
         mock_result.stdout = "ProcessId\n111\n222\n\n"
@@ -42,7 +42,7 @@ class TestGetChildPids:
             pids = _get_child_pids_windows(9999)
         assert pids == [111, 222]
 
-    def test_get_child_pids_windows_empty(self) -> None:
+    def test_ac17_get_child_pids_windows_empty(self) -> None:
         """Windows: 子プロセスがない場合は空リストを返す."""
         mock_result = MagicMock()
         mock_result.stdout = "ProcessId\n\n"
@@ -50,13 +50,13 @@ class TestGetChildPids:
             pids = _get_child_pids_windows(9999)
         assert pids == []
 
-    def test_get_child_pids_windows_wmic_not_found(self) -> None:
+    def test_ac17_get_child_pids_windows_wmic_not_found(self) -> None:
         """Windows: wmicが見つからない場合は空リストを返す."""
         with patch("src.bot_manager.subprocess.run", side_effect=FileNotFoundError()):
             pids = _get_child_pids_windows(9999)
         assert pids == []
 
-    def test_get_child_pids_unix_returns_pids(self) -> None:
+    def test_ac17_get_child_pids_unix_returns_pids(self) -> None:
         """Unix: pgrep出力から子プロセスPIDを取得する."""
         mock_result = MagicMock()
         mock_result.stdout = "111\n222\n"
@@ -64,13 +64,13 @@ class TestGetChildPids:
             pids = _get_child_pids_unix(9999)
         assert pids == [111, 222]
 
-    def test_get_child_pids_unix_pgrep_not_found(self) -> None:
+    def test_ac17_get_child_pids_unix_pgrep_not_found(self) -> None:
         """Unix: pgrepが見つからない場合は空リストを返す."""
         with patch("src.bot_manager.subprocess.run", side_effect=FileNotFoundError()):
             pids = _get_child_pids_unix(9999)
         assert pids == []
 
-    def test_get_child_pids_windows_wmic_timeout(self) -> None:
+    def test_ac17_get_child_pids_windows_wmic_timeout(self) -> None:
         """Windows: wmicがタイムアウトした場合は空リストを返す."""
         with patch(
             "src.bot_manager.subprocess.run",
@@ -79,7 +79,7 @@ class TestGetChildPids:
             pids = _get_child_pids_windows(9999)
         assert pids == []
 
-    def test_get_child_pids_unix_pgrep_timeout(self) -> None:
+    def test_ac17_get_child_pids_unix_pgrep_timeout(self) -> None:
         """Unix: pgrepがタイムアウトした場合は空リストを返す."""
         with patch(
             "src.bot_manager.subprocess.run",
@@ -467,8 +467,8 @@ class TestStartBot:
 class TestWaitForReadyWindows:
     """Windows向け BOT_READY 待ちのテスト."""
 
-    def test_receives_bot_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """BOT_READY を受信したら正常終了する."""
+    def test_ac16_receives_bot_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """AC16: BOT_READY を受信したら正常終了する."""
         monkeypatch.setattr("sys.platform", "win32")
 
         mock_proc = MagicMock()
@@ -477,8 +477,8 @@ class TestWaitForReadyWindows:
         from src.bot_manager import _wait_for_ready_windows
         _wait_for_ready_windows(mock_proc, timeout=5)
 
-    def test_pipe_closed_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """パイプが閉じた場合は exit(1)."""
+    def test_ac16_pipe_closed_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """AC16: パイプが閉じた場合は exit(1)."""
         monkeypatch.setattr("sys.platform", "win32")
 
         mock_proc = MagicMock()
@@ -516,8 +516,8 @@ class TestWaitForReadyWindows:
 class TestWaitForReadyUnix:
     """Unix向け BOT_READY 待ちのテスト."""
 
-    def test_receives_bot_ready(self) -> None:
-        """BOT_READY を受信したら正常終了する."""
+    def test_ac16_receives_bot_ready(self) -> None:
+        """AC16: BOT_READY を受信したら正常終了する."""
         mock_proc = MagicMock()
         mock_proc.stdout.fileno.return_value = 3
         mock_proc.stdout.readline.return_value = b"BOT_READY\n"
@@ -526,8 +526,8 @@ class TestWaitForReadyUnix:
         with patch("select.select", return_value=([3], [], [])):
             _wait_for_ready_unix(mock_proc, timeout=5)
 
-    def test_pipe_closed_exits(self) -> None:
-        """パイプが閉じた場合は exit(1)."""
+    def test_ac16_pipe_closed_exits(self) -> None:
+        """AC16: パイプが閉じた場合は exit(1)."""
         mock_proc = MagicMock()
         mock_proc.stdout.fileno.return_value = 3
         mock_proc.stdout.readline.return_value = b""

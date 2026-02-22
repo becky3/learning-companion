@@ -81,13 +81,19 @@ def _get_child_pids_unix(pid: int) -> list[int]:
 def _kill_pid_windows(pid: int) -> None:
     """Windowsで指定PIDのプロセスを強制停止する."""
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["taskkill", "/PID", str(pid), "/F"],
             capture_output=True,
             text=True,
             timeout=5,
         )
-        logger.info("プロセスを停止しました: PID=%d", pid)
+        if result.returncode == 0:
+            logger.info("プロセスを停止しました: PID=%d", pid)
+        else:
+            logger.warning(
+                "プロセスの停止に失敗しました: PID=%d (returncode=%d)",
+                pid, result.returncode,
+            )
     except FileNotFoundError:
         logger.warning("taskkill コマンドが見つかりません")
     except subprocess.TimeoutExpired:
