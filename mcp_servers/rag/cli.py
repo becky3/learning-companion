@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,17 +50,27 @@ logger = logging.getLogger(__name__)
 
 
 def _validate_bm25_k1(value: str) -> float:
-    f = float(value)
-    if f < 0.0:
+    try:
+        f = float(value)
+    except ValueError:
         raise argparse.ArgumentTypeError(
-            f"--bm25-k1 must be >= 0.0 (got {f})"
+            f"--bm25-k1: invalid float value: '{value}'"
+        ) from None
+    if not math.isfinite(f) or f <= 0.0:
+        raise argparse.ArgumentTypeError(
+            f"--bm25-k1 must be > 0.0 (got {f})"
         )
     return f
 
 
 def _validate_bm25_b(value: str) -> float:
-    f = float(value)
-    if not 0.0 <= f <= 1.0:
+    try:
+        f = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"--bm25-b: invalid float value: '{value}'"
+        ) from None
+    if not math.isfinite(f) or not 0.0 <= f <= 1.0:
         raise argparse.ArgumentTypeError(
             f"--bm25-b must be between 0.0 and 1.0 (got {f})"
         )
