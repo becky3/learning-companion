@@ -61,6 +61,14 @@ def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
 
 
 async def main() -> None:
+    # ログ設定（プロセスガードのログ出力に必要なため最初に実行）
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level)
+
+    # 重複起動検知: 既に動いていたら警告して終了
+    check_already_running()
+    write_pid_file()
+
     from src.db.session import get_session_factory, init_db
     from src.llm.factory import get_provider_for_service
     from src.mcp_bridge.client_manager import MCPClientManager
@@ -75,14 +83,6 @@ async def main() -> None:
     from src.services.user_profiler import UserProfiler
     from src.slack.app import create_app, socket_mode_handler
     from src.slack.handlers import register_handlers
-
-    # ログ設定（プロセスガードのログ出力に必要なため最初に実行）
-    settings = get_settings()
-    logging.basicConfig(level=settings.log_level)
-
-    # 重複起動検知: 既に動いていたら警告して終了
-    check_already_running()
-    write_pid_file()
 
     mcp_manager: MCPClientManager | None = None
     try:
@@ -223,10 +223,6 @@ async def main() -> None:
 
 if __name__ == "__main__":
     import argparse
-
-    from src.compat import configure_stdio_encoding
-
-    configure_stdio_encoding()
 
     parser = argparse.ArgumentParser(description="AI Assistant Bot")
     group = parser.add_mutually_exclusive_group()
