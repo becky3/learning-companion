@@ -117,10 +117,10 @@ system_content = "\n\n".join(parts)
 
 | ファイル | 役割 |
 |---------|------|
-| `config/assistant.yaml` | アシスタント設定（mrkdwn指示文を追加） |
+| `config/assistant.yaml` | アシスタント設定（mrkdwn指示文） |
 | `src/main.py` | エントリーポイント（システムプロンプト構築） |
-| `src/services/chat.py` | チャットサービス（変更なし） |
-| `src/slack/handlers.py` | Slackハンドラ（変更なし） |
+| `src/services/chat.py` | チャットサービス（format_instruction の先頭配置） |
+| `src/slack/handlers.py` | Slackハンドラ |
 
 ## テスト方針
 

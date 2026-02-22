@@ -67,7 +67,10 @@ uv run python -m mcp_servers.rag.cli init-test-db \
 # RAG検索精度を評価
 uv run python -m mcp_servers.rag.cli evaluate \
   --persist-dir .tmp/test_chroma_db \
-  --output-dir .tmp/rag-evaluation
+  --output-dir .tmp/rag-evaluation \
+  --chunk-size 200 --chunk-overlap 30 \
+  --vector-weight 0.6 \
+  --bm25-k1 1.5 --bm25-b 0.75
 ```
 
 詳細は [RAGナレッジ機能仕様](docs/specs/f9-rag.md) を参照してください。

@@ -138,12 +138,6 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 | code-reviewer | セルフコードレビュー | `/code-review` スキル |
 | doc-reviewer | ドキュメントレビュー | `/doc-review` スキル |
 | planner | 実装計画の立案 | Issue 対応時に手動 |
-| prt-code-reviewer | CLAUDE.md 準拠・バグ検出 | `/check-pr` 経由 |
-| prt-code-simplifier | コード簡素化 | `/check-pr` 経由 |
-| prt-comment-analyzer | コメント正確性分析 | `/check-pr` 経由 |
-| prt-silent-failure-hunter | サイレント障害検出 | `/check-pr` 経由 |
-| prt-test-analyzer | テストカバレッジ分析 | `/check-pr` 経由 |
-| prt-type-design-analyzer | 型設計の品質分析 | `/check-pr` 経由 |
 
 ### エージェントチーム
 

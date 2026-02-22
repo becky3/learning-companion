@@ -293,7 +293,10 @@ RAG 精度テストが必要と判断した場合、確認なしで自動実行�
    ```bash
    python -m mcp_servers.rag.cli evaluate \
      --persist-dir .tmp/test_chroma_db \
-     --output-dir reports/rag-evaluation
+     --output-dir reports/rag-evaluation \
+     --chunk-size 200 --chunk-overlap 30 \
+     --vector-weight 0.6 \
+     --bm25-k1 1.5 --bm25-b 0.75
    ```
 
 3. 結果を報告: レポート（`reports/rag-evaluation/report.md`）の内容を表示
