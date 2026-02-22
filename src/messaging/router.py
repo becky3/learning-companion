@@ -26,6 +26,7 @@ from src.services.topic_recommender import TopicRecommender
 from src.services.user_profiler import UserProfiler
 
 if TYPE_CHECKING:
+    from slack_sdk.web.async_client import AsyncWebClient
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
     from src.mcp_bridge.client_manager import MCPClientManager
@@ -496,7 +497,7 @@ class MessageRouter:
         env_name: str = "",
         mcp_manager: MCPClientManager | None = None,
         bot_start_time: datetime | None = None,
-        slack_client: object | None = None,
+        slack_client: AsyncWebClient | None = None,
     ) -> None:
         self._messaging = messaging
         self._chat_service = chat_service

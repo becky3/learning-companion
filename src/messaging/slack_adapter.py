@@ -11,6 +11,8 @@ from src.llm.base import Message
 from src.messaging.port import MessagingPort
 
 if TYPE_CHECKING:
+    from slack_sdk.web.async_client import AsyncWebClient
+
     from src.services.thread_history import ThreadHistoryService
 
 
@@ -22,7 +24,7 @@ class SlackAdapter(MessagingPort):
 
     def __init__(
         self,
-        slack_client: object,
+        slack_client: AsyncWebClient,
         bot_user_id: str,
         thread_history_service: ThreadHistoryService,
         format_instruction: str = "",
@@ -34,7 +36,7 @@ class SlackAdapter(MessagingPort):
 
     async def send_message(self, text: str, thread_id: str, channel: str) -> None:
         """Slack にメッセージを投稿する."""
-        await self._client.chat_postMessage(  # type: ignore[attr-defined]
+        await self._client.chat_postMessage(
             channel=channel, text=text, thread_ts=thread_id,
         )
 
@@ -47,7 +49,7 @@ class SlackAdapter(MessagingPort):
         comment: str,
     ) -> None:
         """Slack にファイルをアップロードする."""
-        await self._client.files_upload_v2(  # type: ignore[attr-defined]
+        await self._client.files_upload_v2(
             channel=channel,
             thread_ts=thread_id,
             content=content,
