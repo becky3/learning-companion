@@ -65,11 +65,7 @@ argument-hint: "spec [feature-name]"
    - コメントから議論内容を収集
 
 3. 関連コードの調査
-
-   ```bash
-   # 機能に関連するファイルを検索
-   find src/ -name "*${FEATURE_NAME}*"
-   ```
+   - Globツールで機能に関連するファイルを検索: `src/**/*${FEATURE_NAME}*`
 
 4. 仕様書生成（以下のセクションを含む）:
    - **概要**: 機能の簡潔な説明

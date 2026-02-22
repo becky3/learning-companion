@@ -25,7 +25,7 @@ AI Assistantは、Slack上で動作するAIアシスタントである。
 
 | カテゴリ | 技術 |
 |---------|------|
-| 言語 | Python 3.10+ |
+| 言語 | Python 3.11+ |
 | パッケージ管理 | uv |
 | Slack SDK | slack-bolt (AsyncApp, Socket Mode) |
 | オンラインLLM | OpenAI (openai SDK) / Anthropic (anthropic SDK) |
