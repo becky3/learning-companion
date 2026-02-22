@@ -708,6 +708,10 @@ async def init_test_db(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
+    from .config import ensure_utf8_streams
+
+    ensure_utf8_streams(include_stdout=True)
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
