@@ -1,0 +1,311 @@
+"""Bot 管理コマンド — start / restart / stop / status
+仕様: docs/specs/bot-process-guard.md
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import signal
+import subprocess
+import sys
+from pathlib import Path
+
+from src.process_guard import (
+    BOT_READY_SIGNAL,
+    is_process_alive,
+    read_pid_file,
+    remove_pid_file,
+)
+
+logger = logging.getLogger(__name__)
+READY_TIMEOUT_SECONDS = 60
+LOG_DIR = Path(".tmp")
+LOG_FILE = LOG_DIR / "bot.log"
+
+
+# ---------------------------------------------------------------------------
+# プロセスツリー停止
+# ---------------------------------------------------------------------------
+
+
+def _get_child_pids_windows(pid: int) -> list[int]:
+    """Windowsで指定PIDの子プロセスPIDリストを取得する."""
+    try:
+        result = subprocess.run(
+            ["wmic", "process", "where", f"(ParentProcessId={pid})", "get", "ProcessId"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError:
+        logger.debug("wmic コマンドが見つかりません")
+        return []
+    except subprocess.TimeoutExpired:
+        logger.warning("wmic コマンドがタイムアウトしました")
+        return []
+
+    child_pids: list[int] = []
+    for line in result.stdout.strip().splitlines():
+        line = line.strip()
+        if line and line.isdigit():
+            child_pids.append(int(line))
+    return child_pids
+
+
+def _get_child_pids_unix(pid: int) -> list[int]:
+    """Unixで指定PIDの子プロセスPIDリストを取得する."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-P", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except FileNotFoundError:
+        logger.debug("pgrep コマンドが見つかりません")
+        return []
+    except subprocess.TimeoutExpired:
+        logger.warning("pgrep コマンドがタイムアウトしました")
+        return []
+
+    child_pids: list[int] = []
+    for line in result.stdout.strip().splitlines():
+        line = line.strip()
+        if line and line.isdigit():
+            child_pids.append(int(line))
+    return child_pids
+
+
+def _kill_pid_windows(pid: int) -> None:
+    """Windowsで指定PIDのプロセスを強制停止する."""
+    try:
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/F"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        logger.info("プロセスを停止しました: PID=%d", pid)
+    except FileNotFoundError:
+        logger.warning("taskkill コマンドが見つかりません")
+    except subprocess.TimeoutExpired:
+        logger.warning("taskkill がタイムアウトしました: PID=%d", pid)
+
+
+def _kill_pid_unix(pid: int) -> None:
+    """Unixで指定PIDのプロセスをSIGTERMで停止する."""
+    try:
+        os.kill(pid, signal.SIGTERM)
+        logger.info("プロセスを停止しました: PID=%d", pid)
+    except ProcessLookupError:
+        logger.debug("プロセスが既に存在しません: PID=%d", pid)
+    except PermissionError:
+        logger.warning("プロセスの停止権限がありません: PID=%d", pid)
+
+
+def _kill_process_tree(pid: int) -> None:
+    """指定PIDのプロセスツリー（子プロセス→本体の順）を外部から停止する."""
+    if sys.platform == "win32":
+        child_pids = _get_child_pids_windows(pid)
+        for child_pid in child_pids:
+            _kill_pid_windows(child_pid)
+        _kill_pid_windows(pid)
+    else:
+        child_pids = _get_child_pids_unix(pid)
+        for child_pid in child_pids:
+            _kill_pid_unix(child_pid)
+        _kill_pid_unix(pid)
+
+
+# ---------------------------------------------------------------------------
+# 管理コマンド
+# ---------------------------------------------------------------------------
+
+
+def _stop_bot() -> bool:
+    """起動中のBotを停止する. 停止した場合True, 未起動の場合Falseを返す."""
+    pid = read_pid_file()
+    if pid is None or not is_process_alive(pid):
+        # PIDファイルがあるがプロセスがない場合（stale）もクリーンアップ
+        if pid is not None:
+            remove_pid_file()
+        return False
+
+    _kill_process_tree(pid)
+    remove_pid_file()
+    return True
+
+
+def _start_bot() -> int:
+    """Botを子プロセスとして起動し、BOT_READY を待つ. 子プロセスのPIDを返す."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_file = open(LOG_FILE, "a", encoding="utf-8")  # noqa: SIM115
+
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "src.main"],
+            stdout=subprocess.PIPE,
+            stderr=log_file,
+        )
+    except Exception:
+        log_file.close()
+        raise
+
+    try:
+        _wait_for_ready(proc)
+    except BaseException:
+        # BOT_READY 待ちに失敗した場合、子プロセスを停止する
+        # SystemExit (sys.exit) も捕捉するため BaseException を使用
+        _kill_process_tree(proc.pid)
+        remove_pid_file()
+        raise
+    finally:
+        log_file.close()
+
+    return proc.pid
+
+
+def _wait_for_ready(proc: subprocess.Popen[bytes]) -> None:
+    """子プロセスの stdout から BOT_READY を待つ."""
+    assert proc.stdout is not None  # noqa: S101
+
+    deadline = READY_TIMEOUT_SECONDS
+    # Windows では select が pipe に使えないため、スレッドで readline する
+    if sys.platform == "win32":
+        _wait_for_ready_windows(proc, deadline)
+    else:
+        _wait_for_ready_unix(proc, deadline)
+
+
+def _wait_for_ready_windows(proc: subprocess.Popen[bytes], timeout: float) -> None:
+    """Windows向け: スレッドで stdout.readline() をタイムアウト付きで待つ."""
+    import concurrent.futures
+
+    assert proc.stdout is not None  # noqa: S101
+
+    def _read_line() -> str:
+        line = proc.stdout.readline()  # type: ignore[union-attr]
+        return line.decode("utf-8", errors="replace").strip()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        while True:
+            future = executor.submit(_read_line)
+            try:
+                line = future.result(timeout=timeout)
+            except concurrent.futures.TimeoutError:
+                print(f"Error: Bot startup timed out ({READY_TIMEOUT_SECONDS}s)", file=sys.stderr)
+                sys.exit(1)
+
+            if not line:
+                # パイプが閉じた（子プロセスが異常終了した）
+                returncode = proc.poll()
+                print(
+                    f"Error: Bot process exited unexpectedly (exit code: {returncode}). "
+                    f"Check log: {LOG_FILE}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+            if line == BOT_READY_SIGNAL:
+                return
+
+
+def _wait_for_ready_unix(proc: subprocess.Popen[bytes], timeout: float) -> None:
+    """Unix向け: select で stdout をタイムアウト付きで待つ."""
+    import select as select_mod
+
+    assert proc.stdout is not None  # noqa: S101
+    fd = proc.stdout.fileno()
+
+    remaining = timeout
+    import time
+
+    while True:
+        if remaining <= 0:
+            print(f"Error: Bot startup timed out ({READY_TIMEOUT_SECONDS}s)", file=sys.stderr)
+            sys.exit(1)
+
+        start = time.monotonic()
+        ready, _, _ = select_mod.select([fd], [], [], remaining)
+        elapsed = time.monotonic() - start
+        remaining -= elapsed
+
+        if not ready:
+            print(f"Error: Bot startup timed out ({READY_TIMEOUT_SECONDS}s)", file=sys.stderr)
+            sys.exit(1)
+
+        line = proc.stdout.readline().decode("utf-8", errors="replace").strip()
+        if not line:
+            returncode = proc.poll()
+            print(
+                f"Error: Bot process exited unexpectedly (exit code: {returncode}). "
+                f"Check log: {LOG_FILE}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        if line == BOT_READY_SIGNAL:
+            return
+
+
+def cmd_start() -> None:
+    """--start: Botを起動する."""
+    pid = read_pid_file()
+    if pid is not None and is_process_alive(pid):
+        print(f"Already running (PID={pid})")
+        sys.exit(1)
+
+    # stale PID ファイルがあれば削除
+    if pid is not None:
+        remove_pid_file()
+
+    child_pid = _start_bot()
+    print(f"Running (PID={child_pid})")
+
+
+def cmd_stop() -> None:
+    """--stop: Botを停止する."""
+    stopped = _stop_bot()
+    if stopped:
+        print("Stopped")
+    else:
+        print("Not running")
+
+
+def cmd_restart() -> None:
+    """--restart: Botを停止→起動する."""
+    stopped = _stop_bot()
+    if stopped:
+        print("Stopped")
+
+    child_pid = _start_bot()
+    print(f"Running (PID={child_pid})")
+
+
+def cmd_status() -> None:
+    """--status: Botの状態を表示する."""
+    pid = read_pid_file()
+    if pid is not None and is_process_alive(pid):
+        print(f"Running (PID={pid})")
+        if LOG_FILE.exists():
+            print(f"Log: {LOG_FILE}")
+        sys.exit(0)
+    else:
+        print("Not running")
+        sys.exit(1)
+
+
+def handle_command(args: argparse.Namespace) -> None:
+    """管理コマンドを実行する."""
+    logging.basicConfig(level=logging.INFO)
+
+    if args.start:
+        cmd_start()
+    elif args.restart:
+        cmd_restart()
+    elif args.stop:
+        cmd_stop()
+    elif args.status:
+        cmd_status()
