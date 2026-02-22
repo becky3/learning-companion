@@ -172,9 +172,8 @@ sequenceDiagram
 
 1. `read_pid_file()` でBot PIDを取得
 2. `is_process_alive(pid)` で生存確認
-3. Botの子プロセスを先に停止（`_kill_process_tree()`）
-4. Bot本体を停止（`taskkill /PID {pid} /F`（Windows）/ `os.kill(pid, SIGTERM)`（Unix））
-5. PIDファイルを削除
+3. `_kill_process_tree(pid)` でプロセスツリー全体を停止（子プロセス→本体の順）
+4. PIDファイルを削除
 
 `taskkill /F` は Windows で `finally` ブロックを走らせないため、管理コマンド側でPIDファイル削除と子プロセスクリーンアップを行う。
 
@@ -189,8 +188,9 @@ sequenceDiagram
 
 #### ログファイル管理
 
-- `--start` / `--restart` 時に `.tmp/bot.log` に stderr をリダイレクト
+- `--start` / `--restart` 時に `.tmp/bot.log` に **stderr をリダイレクト** する（`stdout` は `PIPE` のまま、BOT_READY 等の制御メッセージに使用）
 - 管理コマンド側が `open(".tmp/bot.log", "a")` でファイルを開き、`Popen(stderr=log_file)` で渡す
+- Bot本体のアプリケーションログは `logging` モジュール経由で **stderr に出力される前提**（Python の `logging.basicConfig()` のデフォルト動作）
 - `.tmp/` ディレクトリが存在しない場合は自動作成
 - `--status` でログファイルのパスも表示する
 
@@ -278,12 +278,14 @@ if __name__ == "__main__":
 - `--start`: 既存プロセスありで拒否 — Already running（AC11）
 - `--start`: タイムアウト — 60秒以内にBOT_READY未受信（AC16）
 - `--start`: 子プロセス異常終了 — パイプ閉じ → エラー（AC10）
-- `--stop`: 正常停止 — 子プロセスkill → 本体kill → PIDファイル削除（AC12）
+- `--stop`: 正常停止 — プロセスツリー停止（子プロセス→本体の順）→ PIDファイル削除（AC12, AC17）
 - `--stop`: 未起動時 — Not running（AC13）
 - `--restart`: 既存あり → 停止 → 起動（AC14）
 - `--restart`: 既存なし → 起動のみ（AC14）
 - `--status`: 起動中 / 未起動（AC15）
 - ログファイル: `.tmp/bot.log` への出力（AC18）
+  - `.tmp/` ディレクトリが存在しない場合でも自動作成されること
+  - 既存のログファイルがある場合は追記モード（`"a"`）で書き込まれること
 - プロセスツリー停止: 子プロセスが先に停止されること（AC17）
 
 テスト名は `test_ac{N}_...` 形式で受け入れ条件と対応させる。

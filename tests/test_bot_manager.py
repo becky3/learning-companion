@@ -355,6 +355,35 @@ class TestStartBot:
         assert call_kwargs is not None
         assert call_kwargs.kwargs.get("stderr") is not None
 
+    def test_ac18_log_file_append_mode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC18: 既存ログファイルがある場合は追記モードで書き込まれる."""
+        log_dir = tmp_path / ".tmp"
+        log_dir.mkdir()
+        log_file = log_dir / "bot.log"
+        log_file.write_text("existing log\n", encoding="utf-8")
+        monkeypatch.setattr("src.bot_manager.LOG_DIR", log_dir)
+        monkeypatch.setattr("src.bot_manager.LOG_FILE", log_file)
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+
+        with (
+            patch("src.bot_manager.subprocess.Popen", return_value=mock_proc) as mock_popen,
+            patch("src.bot_manager._wait_for_ready"),
+        ):
+            pid = _start_bot()
+
+        assert pid == 12345
+        # Popen の stderr に渡されたファイルが追記モードであることを確認
+        call_kwargs = mock_popen.call_args
+        stderr_file = call_kwargs.kwargs.get("stderr")
+        assert stderr_file is not None
+        # 既存の内容が保持されている（上書きされていない）
+        content = log_file.read_text(encoding="utf-8")
+        assert "existing log" in content
+
     def test_ac16_start_timeout(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
