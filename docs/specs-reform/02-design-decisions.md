@@ -21,25 +21,29 @@ Issue: #572
 
 - 既存テスト名 `test_ac1_...` は名前ベースに移行する（各仕様書リファクタリング時にセットで対応）
 - docstring の AC参照も同様に更新
-- **規約の同期更新が必須**: CLAUDE.md・copilot-instructions.md・planner.md 等にテスト名規約（`test_ac{N}_...`）が明記されている。テスト名変更の開始前に、これらの規約文書を先行更新する（移行手順の Phase 0 参照）
+- **規約の同期更新が必須**: CLAUDE.md・copilot-instructions.md・planner.md 等にテスト名規約（`test_ac{N}_...`）が明記されている。テスト名変更の開始前に、これらの規約文書を先行更新する（移行手順の Phase 2 参照）
 
-## DD-2: f番号を廃止し名前ベースに移行する
+## DD-2: f番号を廃止しディレクトリ分類 + 名前ベースに移行する
 
-**決定**: `f1-chat.md` のような f番号による命名を廃止し、`chat.md` のような名前ベースに変更する。
+**決定**: `f1-chat.md` のような f番号による命名を廃止する。文書種別ごとにディレクトリで分類し（`docs/specs/{カテゴリ}/`）、ファイル名は名前ベース（`chat.md`）とする。
 
 **理由**:
 
 - 番号は異なる性質のものを同列に見せてしまう
 - 追加・削除時に番号の振り直しが発生する
 - 名前ベースの方が「何の仕様書か」が一目で分かる
+- ディレクトリ分類により文書の性質が構造で表現される
 
 **影響**:
 
+- ファイルパス: `docs/specs/f9-rag.md` → `docs/specs/{カテゴリ}/rag.md`
 - コミットメッセージ: `feat(f9):` → `feat(rag):` のように変更
 - ファイルパス参照（CLAUDE.md, docstring等）の一括更新が必要
 - 過去のコミット履歴は変更不可（割り切り）
 - ブランチ命名規約の更新: `feature/f{N}-{機能名}` → `feature/{機能名}`
-- 名前の一意性はファイル名で担保する（番号による一意性保証の代替）
+- 名前の一意性は `{カテゴリ}/{ファイル名}` で担保する
+
+**未決事項**: 具体的なカテゴリ分類は Phase 1（スタイルガイド策定）で確定する。
 
 ## DD-3: 技術詳細は What/Why 中心、How は反応的に追加
 
@@ -47,9 +51,16 @@ Issue: #572
 
 **理由**:
 
-- 業界調査の結果、主要フレームワーク（GitHub Spec Kit, AWS Kiro, JetBrains Junie）全てが Requirements → Design → Tasks の階層分離を採用
-- Martin Fowler チームの提言: 「最小限の仕様から始め、AIが誤った実装をした場合にのみ How を追加する」
-- 現状の仕様書は Requirements と Design と Tasks が1ファイルに混在しており、これが肥大化の根本原因
+- 業界調査の結果、主要フレームワークが Requirements → Design → Tasks の階層分離を採用しており、仕様書（What/Why）と実装詳細（How）の分離が業界標準となっている
+- 本プロジェクトの実績から、仕様書に Requirements と Design と Tasks が1ファイルに混在していることが肥大化の根本原因と判明した
+- 上記を踏まえ、How は「AIが誤った実装判断をした実績」をトリガーとして反応的に追加する方針を採用する
+
+**参考資料**:
+
+- [GitHub Spec Kit](https://github.com/github/spec-kit) — `/specify` → `/plan` → `/tasks` の三段階フロー
+- [AWS Kiro](https://kiro.dev/docs/specs/) — requirements.md → design.md → tasks.md の三段階構造
+- [JetBrains Junie: Spec-Driven Approach](https://blog.jetbrains.com/junie/2025/10/how-to-use-a-spec-driven-approach-for-coding-with-ai/) — requirements → plan の二段階構造
+- [Thoughtworks: Understanding Spec-Driven-Development](https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html) — 上記ツールの比較分析
 
 **仕様書に書くもの / 書かないもの**:
 
