@@ -15,6 +15,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 PID_FILE = Path("bot.pid")
+BOT_READY_SIGNAL = "BOT_READY"
 
 
 # ---------------------------------------------------------------------------

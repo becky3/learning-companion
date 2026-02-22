@@ -49,7 +49,16 @@ cp .env.example .env  # 各種トークン・APIキーを設定
 ## 起動
 
 ```bash
+# フォアグラウンドで直接起動
 uv run python -m src.main
+
+# バックグラウンドで起動（管理コマンド）
+uv run python -m src.main --start
+
+# 停止 / 再起動 / 状態確認
+uv run python -m src.main --stop
+uv run python -m src.main --restart
+uv run python -m src.main --status
 ```
 
 ## RAG評価CLI
@@ -90,7 +99,9 @@ src/
   llm/anthropic_provider.py
   llm/lmstudio_provider.py  # OpenAI SDK で base_url を localhost:1234 に向ける
   llm/factory.py     # プロバイダー生成ファクトリ
-  process_guard.py   # Bot重複起動防止
+  bot_manager.py     # Bot管理コマンド (--start/--stop/--restart/--status)
+  process_guard.py   # Bot重複起動防止・PIDファイル管理
+  compat.py          # プラットフォーム互換ユーティリティ
   mcp_bridge/
     __init__.py
     client_manager.py  # MCPサーバー接続管理

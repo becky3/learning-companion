@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from src.config.settings import get_settings, load_assistant_config
 from src.process_guard import (
+    BOT_READY_SIGNAL,
     check_already_running,
     cleanup_children,
     remove_pid_file,
@@ -194,6 +195,7 @@ async def main() -> None:
 
         # Socket Mode で起動（グレースフルシャットダウン対応）
         async with socket_mode_handler(app, settings) as handler:
+            print(BOT_READY_SIGNAL, flush=True)
             try:
                 await handler.start_async()  # type: ignore[no-untyped-call]
             except asyncio.CancelledError:
@@ -213,4 +215,19 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="AI Assistant Bot")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--start", action="store_true", help="Start the bot")
+    group.add_argument("--restart", action="store_true", help="Restart the bot")
+    group.add_argument("--stop", action="store_true", help="Stop the bot")
+    group.add_argument("--status", action="store_true", help="Show bot status")
+    args = parser.parse_args()
+
+    if args.start or args.restart or args.stop or args.status:
+        from src.bot_manager import handle_command
+
+        handle_command(args)
+    else:
+        asyncio.run(main())
