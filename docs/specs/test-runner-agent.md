@@ -6,7 +6,7 @@ pytest によるテスト実行およびコード品質チェック（lint・型
 
 ## 背景
 
-AI Assistantプロジェクトは仕様駆動開発を採用しており、各機能の受け入れ条件（AC）に対応するテストが `tests/` ディレクトリに配置されている。また、コーディング規約として `ruff` によるlintと `mypy` による型チェックの使用が `CLAUDE.md` で規定されている。
+AI Assistantプロジェクトは仕様駆動開発を採用しており、各機能の受け入れ条件（AC）に対応するテストが `tests/` ディレクトリに配置されている。コード品質チェック（ruff, mypy, markdownlint, shellcheck）は本エージェント経由で実行することが `CLAUDE.md` で規定されている。
 
 テスト実行およびコード品質チェックは開発フローの重要な部分だが、以下の課題がある:
 
@@ -400,7 +400,7 @@ test-runnerサブエージェントでカバレッジを測定してください
 | `docs/**/*.md`, `*.md`, `.claude/**/*.md` | Markdownチェック対象のファイル |
 | `.markdownlint-cli2.jsonc` | markdownlint設定ファイル |
 | `pyproject.toml` | pytest設定（asyncio_mode等）、ruff・mypy設定 |
-| `CLAUDE.md` | テスト実行コマンド、コーディング規約、ruff・mypy・markdownlint使用規定 |
+| `CLAUDE.md` | コーディング規約（test-runner エージェント経由での品質チェック実行を規定） |
 
 ## テスト方針
 

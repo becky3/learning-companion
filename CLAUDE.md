@@ -26,10 +26,8 @@
 
 - 各サービスクラスのdocstringに仕様書パスを記載: `仕様: docs/specs/f2-feed-collection.md`
 - テスト名は仕様書の受け入れ条件(AC)番号と対応: `test_ac1_rss_feed_is_fetched_and_parsed()`
-- ruff でリント、mypy (strict) で型チェック
-- markdownlint（`npx markdownlint-cli2@0.20.0`）でMarkdownチェック
-- shellcheck（`uv run shellcheck`）でシェルスクリプトチェック（`.github/scripts/` 配下）
-  - suppress コメントはディレクティブ行と説明行を分ける:
+- コード品質チェック（ruff, mypy, markdownlint, shellcheck）は test-runner エージェント経由で実行する
+- shellcheck の suppress コメントはディレクティブ行と説明行を分ける:
 
     ```bash
     # Reason for suppression

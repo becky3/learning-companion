@@ -18,7 +18,7 @@ permissionMode: default
 
 CLAUDE.md に記載されたコーディング規約に従う:
 
-- ruff でリント、mypy (strict) で型チェック
+- コード品質チェック（ruff, mypy, markdownlint, shellcheck）は test-runner エージェント経由で実行
 - 適切なインポートソートと拡張子
 - 適切なエラーハンドリングパターン
 - 一貫した命名規則
