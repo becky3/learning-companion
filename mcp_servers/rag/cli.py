@@ -48,6 +48,24 @@ class RegressionInfo(TypedDict):
 logger = logging.getLogger(__name__)
 
 
+def _validate_bm25_k1(value: str) -> float:
+    f = float(value)
+    if f < 0.0:
+        raise argparse.ArgumentTypeError(
+            f"--bm25-k1 must be >= 0.0 (got {f})"
+        )
+    return f
+
+
+def _validate_bm25_b(value: str) -> float:
+    f = float(value)
+    if not 0.0 <= f <= 1.0:
+        raise argparse.ArgumentTypeError(
+            f"--bm25-b must be between 0.0 and 1.0 (got {f})"
+        )
+    return f
+
+
 def main() -> None:
     """CLIエントリポイント."""
     parser = argparse.ArgumentParser(description="RAG評価CLI")
@@ -132,22 +150,6 @@ def main() -> None:
         required=True,
         help="チャンクオーバーラップ",
     )
-    def _validate_bm25_k1(value: str) -> float:
-        f = float(value)
-        if f < 0.0:
-            raise argparse.ArgumentTypeError(
-                f"--bm25-k1 must be >= 0.0 (got {f})"
-            )
-        return f
-
-    def _validate_bm25_b(value: str) -> float:
-        f = float(value)
-        if not 0.0 <= f <= 1.0:
-            raise argparse.ArgumentTypeError(
-                f"--bm25-b must be between 0.0 and 1.0 (got {f})"
-            )
-        return f
-
     eval_parser.add_argument(
         "--bm25-k1",
         type=_validate_bm25_k1,
@@ -195,6 +197,18 @@ def main() -> None:
         type=int,
         required=True,
         help="チャンクオーバーラップ",
+    )
+    init_parser.add_argument(
+        "--bm25-k1",
+        type=_validate_bm25_k1,
+        required=True,
+        help="BM25 k1パラメータ（例: 1.5）",
+    )
+    init_parser.add_argument(
+        "--bm25-b",
+        type=_validate_bm25_b,
+        required=True,
+        help="BM25 bパラメータ（例: 0.75）",
     )
 
     args = parser.parse_args()
@@ -266,8 +280,8 @@ def _build_bm25_index_from_fixture(
     *,
     chunk_size: int,
     chunk_overlap: int,
-    k1: float = 1.5,
-    b: float = 0.75,
+    k1: float,
+    b: float,
     persist_dir: str | None = None,
 ) -> "BM25Index":
     """テストドキュメントフィクスチャからBM25インデックスを構築する.
@@ -278,8 +292,8 @@ def _build_bm25_index_from_fixture(
         fixture_path: フィクスチャファイルのパス
         chunk_size: チャンクサイズ
         chunk_overlap: チャンクオーバーラップ
-        k1: BM25 用語頻度の飽和パラメータ（デフォルト: 1.5）
-        b: BM25 文書長の正規化パラメータ（デフォルト: 0.75）
+        k1: BM25 用語頻度の飽和パラメータ
+        b: BM25 文書長の正規化パラメータ
         persist_dir: BM25インデックスの永続化ディレクトリ（指定時は自動保存）
 
     Returns:
@@ -672,6 +686,8 @@ async def init_test_db(args: argparse.Namespace) -> None:
         str(fixture_path),
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,
+        k1=args.bm25_k1,
+        b=args.bm25_b,
         persist_dir=args.bm25_persist_dir,
     )
     logger.info(
