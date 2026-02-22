@@ -589,35 +589,49 @@ class RAGKnowledgeService:
         bm25_items: list[BM25SearchItem] = []
         if self._bm25_index is not None:
             bm25_results_raw = self._bm25_index.search(query, n_results=n_results)
-            for result in bm25_results_raw:
-                source_url = self._bm25_index.get_source_url(result.doc_id) or ""
+            for bm25_result in bm25_results_raw:
+                source_url = self._bm25_index.get_source_url(bm25_result.doc_id) or ""
                 bm25_items.append(
                     BM25SearchItem(
-                        text=result.text,
+                        text=bm25_result.text,
                         source_url=source_url,
-                        score=result.score,
-                        doc_id=result.doc_id,
+                        score=bm25_result.score,
+                        doc_id=bm25_result.doc_id,
                     )
                 )
 
         # デバッグログ出力
         if self._debug_log_enabled:
             logger.info("RAG retrieve_raw: query=%r", query)
-            for i, item in enumerate(vector_items, start=1):
+            for i, vec_item in enumerate(vector_items, start=1):
                 logger.info(
                     "RAG vector result %d: distance=%.3f source=%r",
-                    i, item.distance, item.source_url,
+                    i, vec_item.distance, vec_item.source_url,
                 )
-            for i, item in enumerate(bm25_items, start=1):
+            for i, bm25_log_item in enumerate(bm25_items, start=1):
                 logger.info(
                     "RAG bm25 result %d: score=%.3f source=%r",
-                    i, item.score, item.source_url,
+                    i, bm25_log_item.score, bm25_log_item.source_url,
                 )
 
         return RawSearchResults(
             vector_results=vector_items,
             bm25_results=bm25_items,
         )
+
+    async def get_full_page_text(self, source_url: str) -> str:
+        """ソースURLのページ全文を返す.
+
+        VectorStore から全チャンクを取得し、chunk_index 昇順で結合する。
+
+        Args:
+            source_url: ソースURL
+
+        Returns:
+            ページ全文テキスト
+        """
+        chunks = await self._vector_store.get_chunks_by_source(source_url)
+        return "\n".join(chunk.text for chunk in chunks)
 
     async def delete_source(self, source_url: str) -> int:
         """ソースURL指定で知識を削除.

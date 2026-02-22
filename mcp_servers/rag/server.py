@@ -28,6 +28,8 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 # サーバー起動時（メインスレッド）に全て import しておく。
 # bm25s が "resource module not available on Windows" を stdout に print する
 # 問題への対策として、import 時に stdout を抑制する。
+from .config import ensure_utf8_streams
+
 with contextlib.redirect_stdout(io.StringIO()):
     from .bm25_index import BM25Index
     from .config import get_settings
@@ -38,6 +40,10 @@ with contextlib.redirect_stdout(io.StringIO()):
     from .web_crawler import WebCrawler
 
 from mcp.server.fastmcp import FastMCP
+
+# Windows 環境で stderr が cp932 等の場合に UTF-8 へ再構成する
+# stdout は MCP stdio プロトコルが使うため変更しない
+ensure_utf8_streams()
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +142,7 @@ async def rag_search(query: str, n_results: int | None = None) -> str:
 
     Returns:
         検索結果テキスト。ベクトル検索結果とBM25検索結果をセクション分けして返す。
+        ヒットしたチャンクのページ全文を返却し、同一URLの重複は参照テキストで省略する。
         結果が0件の場合は「該当する情報が見つかりませんでした」を返す。
     """
     service = await _get_rag_service()
@@ -147,24 +154,52 @@ async def rag_search(query: str, n_results: int | None = None) -> str:
     if not raw.vector_results and not raw.bm25_results:
         return "該当する情報が見つかりませんでした"
 
+    # ページ全文キャッシュ（同一URLの多重DB問い合わせ防止）
+    page_cache: dict[str, str] = {}
+    # URL初出記録: url -> (セクション名, Result番号)
+    url_first_seen: dict[str, tuple[str, int]] = {}
+
+    async def _get_page_text(url: str) -> str:
+        if url not in page_cache:
+            page_cache[url] = await service.get_full_page_text(url)
+        return page_cache[url]
+
     parts: list[str] = []
 
     # ベクトル検索結果
     if raw.vector_results:
         parts.append("## ベクトル検索結果 (意味的類似度)\n")
-        for i, item in enumerate(raw.vector_results, start=1):
-            parts.append(f"### Result {i} [distance={item.distance:.3f}]")
-            parts.append(f"Source: {item.source_url}")
-            parts.append(item.text)
+        for i, vec_item in enumerate(raw.vector_results, start=1):
+            parts.append(f"### Result {i} [distance={vec_item.distance:.3f}]")
+            parts.append(f"Source: {vec_item.source_url}")
+
+            if vec_item.source_url not in url_first_seen:
+                url_first_seen[vec_item.source_url] = ("ベクトル検索結果", i)
+                full_text = await _get_page_text(vec_item.source_url)
+                parts.append(full_text)
+            else:
+                section, num = url_first_seen[vec_item.source_url]
+                parts.append(
+                    f"（この URL のページ全文は{section} Result {num} に掲載済み）"
+                )
             parts.append("")
 
     # BM25検索結果
     if raw.bm25_results:
         parts.append("## BM25検索結果 (キーワード一致)\n")
-        for i, item in enumerate(raw.bm25_results, start=1):
-            parts.append(f"### Result {i} [score={item.score:.3f}]")
-            parts.append(f"Source: {item.source_url}")
-            parts.append(item.text)
+        for i, bm25_item in enumerate(raw.bm25_results, start=1):
+            parts.append(f"### Result {i} [score={bm25_item.score:.3f}]")
+            parts.append(f"Source: {bm25_item.source_url}")
+
+            if bm25_item.source_url not in url_first_seen:
+                url_first_seen[bm25_item.source_url] = ("BM25検索結果", i)
+                full_text = await _get_page_text(bm25_item.source_url)
+                parts.append(full_text)
+            else:
+                section, num = url_first_seen[bm25_item.source_url]
+                parts.append(
+                    f"（この URL のページ全文は{section} Result {num} に掲載済み）"
+                )
             parts.append("")
 
     return "\n".join(parts).rstrip()

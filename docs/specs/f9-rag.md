@@ -542,6 +542,9 @@ class VectorStore:
     async def search(self, query: str, n_results: int = 5) -> list[RetrievalResult]:
         """クエリに類似するチャンクを検索する."""
 
+    async def get_chunks_by_source(self, source_url: str) -> list[RetrievalResult]:
+        """ソースURL指定で全チャンクを取得する（chunk_index 昇順）."""
+
     async def delete_by_source(self, source_url: str) -> int:
         """ソースURL指定でチャンクを削除. Returns: 削除件数."""
 
@@ -898,6 +901,9 @@ class RAGKnowledgeService:
         similarity_threshold=None で閾値フィルタなし。
         """
 
+    async def get_full_page_text(self, source_url: str) -> str:
+        """ソースURLのページ全文を返す（チャンクをchunk_index昇順で結合）."""
+
     async def delete_source(self, source_url: str) -> int:
         """ソースURL指定で知識を削除."""
 
@@ -1077,6 +1083,9 @@ async def rag_search(query: str, n_results: int | None = None) -> str:
 
     ベクトル検索（意味的類似度）とBM25検索（キーワード一致）の生結果を
     個別に返す。統合スコアリングは行わず、LLMが両方の結果を総合的に判断する。
+    ヒットしたチャンクのページ全文（get_full_page_text()）を返却し、
+    同一URLが複数結果に出現した場合は初出のみ全文を表示、
+    2回目以降は参照テキストで省略する。
 
     Returns:
         検索結果テキスト。以下の形式で返却:
@@ -1084,12 +1093,16 @@ async def rag_search(query: str, n_results: int | None = None) -> str:
         ## ベクトル検索結果 (意味的類似度)
         ### Result 1 [distance=0.234]
         Source: <ソースURL>
-        <本文テキスト>
+        <ページ全文テキスト>
+
+        ### Result 2 [distance=0.456]
+        Source: <同一URL>
+        （この URL のページ全文はベクトル検索結果 Result 1 に掲載済み）
 
         ## BM25検索結果 (キーワード一致)
         ### Result 1 [score=4.521]
         Source: <ソースURL>
-        <本文テキスト>
+        <ページ全文テキスト（または参照テキスト）>
 
         結果が0件の場合は「該当する情報が見つかりませんでした」を返す。
     """
@@ -1122,12 +1135,18 @@ async def rag_stats() -> str:
       "command": "python",
       "args": ["-m", "mcp_servers.rag.server"],
       "env": {},
-      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。ユーザーの質問がナレッジベースの内容に関連する可能性がある場合は、rag_search ツールで検索してください。検索クエリはユーザーの質問から重要なキーワードを抽出して構成してください。挨拶・雑談などナレッジベースと無関係な質問では検索不要です。",
-      "response_instruction": "ナレッジベースから取得した情報を回答に活用してください。"
+      "system_instruction": "あなたはナレッジベース（取り込み済みWebページの情報）にアクセスできます。ユーザーの質問には rag_search で検索してから回答してください。知らない用語こそ検索が有効です。挨拶のみの場合は検索不要です。",
+      "response_instruction": "以下のルールに従って、ナレッジベースの検索結果を使って回答してください。\n\n1. 検索結果ごとに質問のトピックに該当するかを判断し、該当する情報のみを使用せよ。\n2. 検索結果にない情報を推測で補うな。\n3. 関連情報が見つからない場合は、情報が見つからなかった旨を伝えよ。推測で補ってはならない。\n\n※ 各結果にはcosine distanceまたはBM25 scoreが付与されており、関連度順に並んでいる。スコアも判断材料として活用し、関連度が低い結果は使用を避けよ。"
     }
   }
 }
 ```
+
+**`response_instruction` の設計方針**:
+
+- **ハルシネーション防止**: 検索結果にない情報の推測を明示的に禁止する
+- **関連性判断の委譲**: 各結果のスコア（distance / score）を判断材料として LLM に活用させる。LLM は学習データから cosine distance・BM25 score の性質を理解している前提で指示する
+- **明確な失敗応答**: 関連情報が見つからない場合は、その旨を正直に伝えるよう指示する
 
 ### MCP経由のRAG統合（準Agentic Search）
 
@@ -1240,6 +1259,16 @@ class RAGSettings(BaseSettings):
 
 def get_settings() -> RAGSettings:
     return RAGSettings()
+
+def ensure_utf8_streams(*, include_stdout: bool = False) -> None:
+    """stderr（およびオプションで stdout）を UTF-8 に再構成する.
+
+    Windows 環境で stderr/stdout が cp932 等の場合に UTF-8 へ変換する。
+    MCP stdio プロトコルは stdout を使うため、stdout の再構成は CLI 用途に限定。
+
+    Args:
+        include_stdout: True の場合は stdout も UTF-8 に再構成する
+    """
 ```
 
 > **バリデーション**: 既存の `Settings` と同等の `Field()` 制約および `model_validator` を移植すること（例: `rag_chunk_overlap >= rag_chunk_size` の検出、`rag_similarity_threshold` の範囲制約等）。上記コード例では簡略化のため省略している。
@@ -1594,6 +1623,7 @@ RAG_DEBUG_LOG_ENABLED=false
 
 | 日付 | 内容 |
 |------|------|
+| 2026-02-22 | `rag_search` をページ全文返却に変更: `VectorStore.get_chunks_by_source()` / `RAGKnowledgeService.get_full_page_text()` 追加、URL重複排除（参照テキスト表示）、`response_instruction` 改善（ハルシネーション防止指示追加）、`ensure_utf8_streams()` による Windows UTF-8 対応（#575） |
 | 2026-02-21 | 参照元表示にエンジン種別・スコアを追加: `RagSource` dataclass 導入、`_extract_rag_sources_from_messages()` / `_inject_auto_context()` の戻り値を `list[RagSource]` に変更、表示形式を `• [vector: distance=X.XXX] URL` / `• [bm25: score=X.XXX] URL` に改善（#576） |
 | 2026-02-21 | 準Agentic Search 化: `auto_context_tool` 方式 → LLM 駆動のツール呼び出しに変更、`rag_search` の出力をベクトル/BM25生結果の個別返却に変更、`mcp_servers.json` から `auto_context_tool` 除去、`ChatService._extract_rag_sources_from_messages()` 追加、BM25常時初期化（#548） |
 | 2026-02-21 | チャット応答フローを `auto_context_tool` 方式に更新: LLM 任せ → コード側自動注入に変更、MCP経由のRAG統合セクション書き換え、`mcp_servers.json` 設定例に `system_instruction` / `response_instruction` / `auto_context_tool` 追加（#564） |

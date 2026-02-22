@@ -56,6 +56,9 @@ class TestRagSearchOutput:
     def _patch_rag_service(self) -> None:
         """rag_search のテスト用に RAGKnowledgeService をモックする."""
         self.mock_service = AsyncMock()
+        self.mock_service.get_full_page_text = AsyncMock(
+            return_value="ページ全文テキスト"
+        )
         self.mock_settings = MagicMock()
         self.mock_settings.rag_retrieval_count = 3
 
@@ -82,6 +85,9 @@ class TestRagSearchOutput:
                     ),
                 ],
             )
+        )
+        self.mock_service.get_full_page_text = AsyncMock(
+            side_effect=lambda url: f"{url} のページ全文"
         )
 
         with (
@@ -171,3 +177,112 @@ class TestRagSearchOutput:
             result = await mod.rag_search("存在しないクエリ")
 
         assert result == "該当する情報が見つかりませんでした"
+
+    async def test_output_contains_full_page_text(self) -> None:
+        """チャンクテキストの代わりにページ全文が返ること（#575）."""
+        mod = import_module("mcp_servers.rag.server")
+
+        self.mock_service.retrieve_raw_results = AsyncMock(
+            return_value=RawSearchResults(
+                vector_results=[
+                    VectorSearchItem(
+                        text="チャンク断片",
+                        source_url="https://example.com/page1",
+                        distance=0.1,
+                        chunk_index=0,
+                    ),
+                ],
+                bm25_results=[],
+            )
+        )
+        self.mock_service.get_full_page_text = AsyncMock(
+            return_value="これはページ全文のテキストです。複数チャンクが結合されています。"
+        )
+
+        with (
+            patch.object(mod, "_get_rag_service", return_value=self.mock_service),
+            patch.object(mod, "get_settings", return_value=self.mock_settings),
+        ):
+            result = await mod.rag_search("テスト")
+
+        assert "これはページ全文のテキストです。複数チャンクが結合されています。" in result
+        assert "チャンク断片" not in result
+
+    async def test_duplicate_url_cross_engine_shows_reference(self) -> None:
+        """ベクトル→BM25で同一URLが重複した場合、参照テキストが出ること（#575）."""
+        mod = import_module("mcp_servers.rag.server")
+
+        same_url = "https://example.com/same-page"
+        self.mock_service.retrieve_raw_results = AsyncMock(
+            return_value=RawSearchResults(
+                vector_results=[
+                    VectorSearchItem(
+                        text="ベクトルチャンク",
+                        source_url=same_url,
+                        distance=0.1,
+                        chunk_index=0,
+                    ),
+                ],
+                bm25_results=[
+                    BM25SearchItem(
+                        text="BM25チャンク",
+                        source_url=same_url,
+                        score=5.0,
+                        doc_id="doc1",
+                    ),
+                ],
+            )
+        )
+        self.mock_service.get_full_page_text = AsyncMock(
+            return_value="ページ全文テキスト"
+        )
+
+        with (
+            patch.object(mod, "_get_rag_service", return_value=self.mock_service),
+            patch.object(mod, "get_settings", return_value=self.mock_settings),
+        ):
+            result = await mod.rag_search("テスト")
+
+        # ベクトル検索結果にはページ全文が出る
+        assert "ページ全文テキスト" in result
+        # BM25検索結果には参照テキストが出る
+        assert "ベクトル検索結果 Result 1 に掲載済み" in result
+
+    async def test_duplicate_url_within_same_engine(self) -> None:
+        """同一エンジン内で同一URLが重複した場合、2回目以降は参照テキストが出ること（#575）."""
+        mod = import_module("mcp_servers.rag.server")
+
+        same_url = "https://example.com/same-page"
+        self.mock_service.retrieve_raw_results = AsyncMock(
+            return_value=RawSearchResults(
+                vector_results=[
+                    VectorSearchItem(
+                        text="チャンク1",
+                        source_url=same_url,
+                        distance=0.1,
+                        chunk_index=0,
+                    ),
+                    VectorSearchItem(
+                        text="チャンク2",
+                        source_url=same_url,
+                        distance=0.2,
+                        chunk_index=1,
+                    ),
+                ],
+                bm25_results=[],
+            )
+        )
+        self.mock_service.get_full_page_text = AsyncMock(
+            return_value="全文テキスト"
+        )
+
+        with (
+            patch.object(mod, "_get_rag_service", return_value=self.mock_service),
+            patch.object(mod, "get_settings", return_value=self.mock_settings),
+        ):
+            result = await mod.rag_search("テスト")
+
+        # Result 1 にはページ全文が出る
+        assert "全文テキスト" in result
+        # Result 2 には参照テキストが出る
+        assert "ベクトル検索結果 Result 1 に掲載済み" in result
