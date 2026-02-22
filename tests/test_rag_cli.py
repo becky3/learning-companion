@@ -322,6 +322,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
@@ -374,6 +378,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -426,6 +434,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
@@ -485,6 +497,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         with patch("mcp_servers.rag.cli._build_bm25_index_from_fixture", return_value=MagicMock()):
@@ -537,6 +553,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -590,6 +610,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -642,6 +666,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -691,6 +719,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=300,
             chunk_overlap=50,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -751,6 +783,8 @@ class TestCLIEvaluate:
             chunk_overlap=30,
             bm25_k1=2.0,
             bm25_b=0.5,
+            fixture="tests/fixtures/rag_test_documents.json",
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -805,6 +839,8 @@ class TestCLIEvaluate:
             chunk_overlap=30,
             bm25_k1=2.0,
             bm25_b=0.5,
+            fixture="tests/fixtures/rag_test_documents.json",
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -865,6 +901,10 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
+            min_combined_score=None,
         )
 
         mock_eval = AsyncMock(return_value=mock_report)
@@ -916,6 +956,9 @@ class TestCLIEvaluate:
             save_baseline=False,
             chunk_size=200,
             chunk_overlap=30,
+            fixture="tests/fixtures/rag_test_documents.json",
+            bm25_k1=1.5,
+            bm25_b=0.75,
             min_combined_score=0.65,
         )
 
