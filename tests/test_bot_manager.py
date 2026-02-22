@@ -345,6 +345,7 @@ class TestStartBot:
         with (
             patch("src.bot_manager.subprocess.Popen", return_value=mock_proc) as mock_popen,
             patch("src.bot_manager._wait_for_ready"),
+            patch("src.bot_manager.read_pid_file", return_value=12345),
         ):
             pid = _start_bot()
 
@@ -372,6 +373,7 @@ class TestStartBot:
         with (
             patch("src.bot_manager.subprocess.Popen", return_value=mock_proc) as mock_popen,
             patch("src.bot_manager._wait_for_ready"),
+            patch("src.bot_manager.read_pid_file", return_value=12345),
         ):
             pid = _start_bot()
 
@@ -383,6 +385,27 @@ class TestStartBot:
         # 既存の内容が保持されている（上書きされていない）
         content = log_file.read_text(encoding="utf-8")
         assert "existing log" in content
+
+    def test_ac10_pid_file_fallback_to_proc_pid(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """AC10: PIDファイルが読めない場合は proc.pid にフォールバックする."""
+        log_dir = tmp_path / ".tmp"
+        log_file = log_dir / "bot.log"
+        monkeypatch.setattr("src.bot_manager.LOG_DIR", log_dir)
+        monkeypatch.setattr("src.bot_manager.LOG_FILE", log_file)
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 99999
+
+        with (
+            patch("src.bot_manager.subprocess.Popen", return_value=mock_proc),
+            patch("src.bot_manager._wait_for_ready"),
+            patch("src.bot_manager.read_pid_file", return_value=None),
+        ):
+            pid = _start_bot()
+
+        assert pid == 99999
 
     def test_ac16_start_timeout(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

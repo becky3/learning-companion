@@ -139,7 +139,7 @@ def _stop_bot() -> bool:
 
 
 def _start_bot() -> int:
-    """Botを子プロセスとして起動し、BOT_READY を待つ. 子プロセスのPIDを返す."""
+    """Botを子プロセスとして起動し、BOT_READY を待つ. BotのPIDを返す."""
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     log_file = open(LOG_FILE, "a", encoding="utf-8")  # noqa: SIM115
 
@@ -164,7 +164,12 @@ def _start_bot() -> int:
     finally:
         log_file.close()
 
-    return proc.pid
+    # BOT_READY 受信後、Bot が write_pid_file() で記録した実際の PID を返す。
+    # Popen.pid はランチャー等の中間プロセスの場合があるため PID ファイルを参照する。
+    bot_pid = read_pid_file()
+    if bot_pid is None:
+        bot_pid = proc.pid
+    return bot_pid
 
 
 def _wait_for_ready(proc: subprocess.Popen[bytes]) -> None:
@@ -299,6 +304,9 @@ def cmd_status() -> None:
 
 def handle_command(args: argparse.Namespace) -> None:
     """管理コマンドを実行する."""
+    from src.compat import configure_stdio_encoding
+
+    configure_stdio_encoding()
     logging.basicConfig(level=logging.INFO)
 
     if args.start:
