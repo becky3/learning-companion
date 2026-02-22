@@ -2,7 +2,7 @@
 
 Issue: #572
 
-`docs/specs/` 配下の全32ファイルを総点検した結果をまとめる。
+`docs/specs/` 配下の全31ファイルを総点検した結果をまとめる。
 
 ---
 
@@ -86,7 +86,7 @@ ACは本来 Issue（作業単位）に書くべきもの。仕様書に書くべ
 
 ### AC番号の混乱
 
-- `f2-feed-collection.md`: AC13が2回出現、番号が非連続
+- `f2-feed-collection.md`: AC番号が非連続に配置（AC7→AC13→AC8の順で、番号順と記載順が一致しない）
 - `code-review-agent.md`: AC1〜13の後にAC20が出現（14〜19は後方に散在）
 - `doc-review-agent.md`: AC10が欠番
 
