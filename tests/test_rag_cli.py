@@ -1008,6 +1008,8 @@ class TestCLIInitTestDb:
             fixture=str(fixture_path),
             chunk_size=200,
             chunk_overlap=30,
+            bm25_k1=1.5,
+            bm25_b=0.75,
         )
 
         with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
@@ -1056,6 +1058,8 @@ class TestCLIInitTestDb:
             fixture=str(fixture_path),
             chunk_size=200,
             chunk_overlap=30,
+            bm25_k1=1.5,
+            bm25_b=0.75,
         )
 
         with patch("mcp_servers.rag.cli.create_rag_service") as mock_create_service:
