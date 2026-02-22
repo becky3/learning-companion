@@ -6,6 +6,8 @@
 # エラー方針: API失敗/不正値 → デフォルト0で続行
 
 set -euo pipefail
+# 動的パス解決のため静的解析不可
+# shellcheck disable=SC1091
 source "$(dirname "$0")/_common.sh"
 
 require_env PR_NUMBER GH_REPO GITHUB_OUTPUT

@@ -13,7 +13,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
+DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234"
 
 
 class Settings(BaseSettings):

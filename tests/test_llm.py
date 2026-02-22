@@ -34,6 +34,14 @@ def test_ac3_lmstudio_uses_openai_sdk() -> None:
     """AC3: LM StudioはOpenAI SDKでbase_url変更で対応."""
     provider = LMStudioProvider(base_url=DEFAULT_LMSTUDIO_BASE_URL)
     assert provider._client.base_url.host == "localhost"
+    # base_url にホストのみ指定しても /v1 がコード側で付加される
+    assert provider._client.base_url.path == "/v1/"
+
+
+def test_lmstudio_base_url_with_v1_suffix_no_duplication() -> None:
+    """base_url に /v1 が既に含まれている場合、/v1/v1 にならないこと."""
+    provider = LMStudioProvider(base_url="http://localhost:1234/v1")
+    assert provider._client.base_url.path == "/v1/"
 
 
 def test_ac4_factory_creates_openai_provider(monkeypatch: pytest.MonkeyPatch) -> None:

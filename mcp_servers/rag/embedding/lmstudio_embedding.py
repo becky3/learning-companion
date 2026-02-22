@@ -29,7 +29,10 @@ class LMStudioEmbedding(EmbeddingProvider):
         model: str = "nomic-embed-text",
         prefix_enabled: bool = False,
     ) -> None:
-        self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
+        normalized = base_url.rstrip("/")
+        if not normalized.endswith("/v1"):
+            normalized = f"{normalized}/v1"
+        self._client = AsyncOpenAI(base_url=normalized, api_key="lm-studio")
         self._model = model
         self._prefix_enabled = prefix_enabled
 

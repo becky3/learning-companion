@@ -14,6 +14,8 @@
 
 # _common.sh を auto-fix/ から相対パスで source
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# 動的パス解決のため静的解析不可
+# shellcheck disable=SC1091
 source "$SCRIPT_DIR/../auto-fix/_common.sh"
 
 require_env PR_NUMBER

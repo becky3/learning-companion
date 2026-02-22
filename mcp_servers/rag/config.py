@@ -14,7 +14,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # LM Studio のデフォルトベースURL
-DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
+DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234"
 
 # MCP サーバー専用 .env（プロジェクトルートの .env とは独立）
 _ENV_FILE = Path(__file__).parent / ".env"
