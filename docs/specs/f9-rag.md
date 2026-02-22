@@ -363,11 +363,14 @@ class LMStudioEmbedding(EmbeddingProvider):
 
     def __init__(
         self,
-        base_url: str = "http://localhost:1234/v1",
+        base_url: str = "http://localhost:1234",
         model: str = "nomic-embed-text",
         prefix_enabled: bool = False,
     ) -> None:
-        self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
+        normalized = base_url.rstrip("/")
+        if not normalized.endswith("/v1"):
+            normalized = f"{normalized}/v1"
+        self._client = AsyncOpenAI(base_url=normalized, api_key="lm-studio")
         self._model = model
         self._prefix_enabled = prefix_enabled
 
@@ -1178,7 +1181,7 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
+DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234"
 
 # MCP サーバー専用 .env（プロジェクトルートの .env とは独立）
 _ENV_FILE = Path(__file__).parent / ".env"
@@ -1269,7 +1272,7 @@ EMBEDDING_PROVIDER=local
 EMBEDDING_MODEL_LOCAL=nomic-embed-text
 EMBEDDING_MODEL_ONLINE=text-embedding-3-small
 EMBEDDING_PREFIX_ENABLED=true
-LMSTUDIO_BASE_URL=http://localhost:1234/v1
+LMSTUDIO_BASE_URL=http://localhost:1234
 OPENAI_API_KEY=
 
 # Storage

@@ -75,7 +75,10 @@ class LMStudioProvider(LLMProvider):
     """LM Studio (OpenAI互換API) を使用するローカルLLMプロバイダー."""
 
     def __init__(self, base_url: str = DEFAULT_LMSTUDIO_BASE_URL, model: str = "local-model") -> None:
-        self._client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
+        normalized = base_url.rstrip("/")
+        if not normalized.endswith("/v1"):
+            normalized = f"{normalized}/v1"
+        self._client = AsyncOpenAI(base_url=normalized, api_key="lm-studio")
         self._model = model
 
     async def complete(self, messages: list[Message]) -> LLMResponse:

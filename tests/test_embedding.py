@@ -177,17 +177,26 @@ def test_lmstudio_embedding_default_params() -> None:
     """LMStudioEmbedding のデフォルトパラメータが正しいこと."""
     provider = LMStudioEmbedding()
     assert provider._client.base_url.host == "localhost"
+    # base_url にホストのみ指定しても /v1 がコード側で付加される
+    assert provider._client.base_url.path == "/v1/"
     assert provider._model == "nomic-embed-text"
 
 
 def test_lmstudio_embedding_custom_params() -> None:
     """LMStudioEmbedding のカスタムパラメータが反映されること."""
     provider = LMStudioEmbedding(
-        base_url="http://192.168.1.100:5000/v1",
+        base_url="http://192.168.1.100:5000",
         model="custom-embed",
     )
     assert provider._client.base_url.host == "192.168.1.100"
+    assert provider._client.base_url.path == "/v1/"
     assert provider._model == "custom-embed"
+
+
+def test_lmstudio_embedding_base_url_with_v1_suffix_no_duplication() -> None:
+    """base_url に /v1 が既に含まれている場合、/v1/v1 にならないこと."""
+    provider = LMStudioEmbedding(base_url="http://localhost:1234/v1")
+    assert provider._client.base_url.path == "/v1/"
 
 
 # --- Embedding prefix tests (Issue #517) ---
