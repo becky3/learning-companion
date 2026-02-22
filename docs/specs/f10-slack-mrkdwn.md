@@ -111,7 +111,7 @@ if self._slack_format_instruction:
 ## 受け入れ条件
 
 - [x] AC1: `config/assistant.yaml` に `slack_format_instruction` が定義されている
-- [x] AC2: `slack_format_instruction` がシステムプロンプトの末尾に追加される（RAGコンテキストの後）
+- [x] AC2: `slack_format_instruction` がシステムプロンプトの先頭に追加される
 - [x] AC3: `slack_format_instruction` が空の場合、システムプロンプトに影響しない
 
 ## 関連ファイル
