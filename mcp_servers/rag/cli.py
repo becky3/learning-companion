@@ -151,14 +151,14 @@ def main() -> None:
     eval_parser.add_argument(
         "--bm25-k1",
         type=_validate_bm25_k1,
-        default=1.5,
-        help="BM25 k1パラメータ（デフォルト: 1.5）",
+        required=True,
+        help="BM25 k1パラメータ（例: 1.5）",
     )
     eval_parser.add_argument(
         "--bm25-b",
         type=_validate_bm25_b,
-        default=0.75,
-        help="BM25 bパラメータ（デフォルト: 0.75）",
+        required=True,
+        help="BM25 bパラメータ（例: 0.75）",
     )
     eval_parser.add_argument(
         "--min-combined-score",
@@ -322,9 +322,9 @@ async def run_evaluation(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     # BM25インデックスをテストドキュメントから構築（ハイブリッド検索用）
-    fixture_path = getattr(args, "fixture", "tests/fixtures/rag_test_documents.json")
-    bm25_k1: float = getattr(args, "bm25_k1", 1.5)
-    bm25_b: float = getattr(args, "bm25_b", 0.75)
+    fixture_path = args.fixture
+    bm25_k1: float = args.bm25_k1
+    bm25_b: float = args.bm25_b
     bm25_index = _build_bm25_index_from_fixture(
         fixture_path,
         chunk_size=args.chunk_size,
@@ -334,7 +334,7 @@ async def run_evaluation(args: argparse.Namespace) -> None:
     )
 
     # RAGサービス初期化（BM25込みでハイブリッド検索を有効化）
-    min_combined_score: float | None = getattr(args, "min_combined_score", None)
+    min_combined_score: float | None = args.min_combined_score
     rag_service = await create_rag_service(
         chunk_size=args.chunk_size,
         chunk_overlap=args.chunk_overlap,

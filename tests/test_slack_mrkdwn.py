@@ -34,8 +34,8 @@ async def test_ac1_format_instruction_in_assistant_yaml() -> None:
     assert config["format_instruction"].strip() != ""
 
 
-async def test_ac2_slack_format_appended_to_system_prompt(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC2: format_instruction がシステムプロンプトの末尾に追加される."""
+async def test_ac2_slack_format_prepended_to_system_prompt(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """AC2: format_instruction がシステムプロンプトの先頭に追加される."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
@@ -54,7 +54,7 @@ async def test_ac2_slack_format_appended_to_system_prompt(db_session_factory) ->
     assert messages[0].role == "system"
     assert personality in messages[0].content
     assert slack_format in messages[0].content
-    assert messages[0].content.endswith(slack_format)
+    assert messages[0].content.startswith(slack_format)
 
 
 async def test_ac3_empty_slack_format_no_effect(db_session_factory) -> None:  # type: ignore[no-untyped-def]

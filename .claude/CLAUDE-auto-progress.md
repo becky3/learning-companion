@@ -64,6 +64,8 @@ uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdo
 
 分類（Critical/Warning/Suggestion）は参考情報であり、判断に誤りが含まれる場合もある。各指摘について対応すべきかそれぞれ判断し、修正する。
 
+**検出した問題のスキップ禁止**: テスト失敗・リント違反・型エラー・レビュー指摘を「対応範囲外」「既存問題」としてスキップしてはならない。軽微な問題はその場で修正し、大きな問題は Issue を作成して記録すること。判断に迷う問題は PR/Issue コメントに問題事項を記載し、作業を中断する。
+
 ### ステップ 3/4: ドキュメントレビュー
 
 `docs/` や `CLAUDE.md` に変更がある場合、仕様書との整合性を確認する。
@@ -74,7 +76,7 @@ uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdo
 ### ステップ 4/4: 完了処理（commit / push / PR作成 / Issue完了コメント）
 
 1. `git status --porcelain` で変更確認（空なら停止）
-2. `git add -A`
+2. `git add -A`（GA環境ではリポジトリに機密情報がない前提のため許容）
 3. `git diff --cached --stat` で差分サマリ表示
 4. 変更内容からコミットメッセージ自動生成（優先順位: fix > feat > docs > ci）
 5. `git commit -m "生成したメッセージ"`

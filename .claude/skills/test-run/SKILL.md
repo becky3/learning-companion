@@ -151,9 +151,17 @@ diff モードでは変更された `*.sh` ファイルのみを対象にする�
 - 具体的な修正案（ファイルパス、行番号、修正コード）
 - 修正の優先度（Critical/Warning/Suggestion）
 
-### 11. 修正適用と再実行（オプション）
+### 11. 検出した問題への対処（必須）
 
-- ユーザーが承認した場合、Edit ツールで修正を適用
+検出した問題を「対応範囲外」「既存問題」としてスキップしてはならない。以下のルールに従って必ず対処すること:
+
+- **軽微な問題**（typo、lint エラー、簡単な型エラー等）: その場で修正する
+- **大きな問題**（設計変更が必要、影響範囲が広い等）: Issue を作成して記録する
+- **判断に迷う場合**: ユーザーに相談する（自己判断でスキップしない）
+
+### 12. 修正適用と再実行
+
+- 修正が必要な場合、Edit ツールで修正を適用
 - markdownlint の場合は `--fix` オプションで自動修正を適用
 - 修正後に再度テスト・リント・型チェック・Markdown チェック・shellcheck を実行して確認
 
@@ -285,7 +293,10 @@ RAG 精度テストが必要と判断した場合、確認なしで自動実行�
    ```bash
    python -m mcp_servers.rag.cli evaluate \
      --persist-dir .tmp/test_chroma_db \
-     --output-dir reports/rag-evaluation
+     --output-dir reports/rag-evaluation \
+     --chunk-size 200 --chunk-overlap 30 \
+     --vector-weight 0.6 \
+     --bm25-k1 1.5 --bm25-b 0.75
    ```
 
 3. 結果を報告: レポート（`reports/rag-evaluation/report.md`）の内容を表示
