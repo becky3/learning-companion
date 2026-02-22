@@ -49,6 +49,12 @@ _rag_service = None
 _init_lock = asyncio.Lock()
 
 
+def _reset_rag_service() -> None:
+    """グローバルな RAGKnowledgeService をリセットする（テスト用）."""
+    global _rag_service
+    _rag_service = None
+
+
 async def _get_rag_service() -> RAGKnowledgeService:
     """RAGKnowledgeService を遅延初期化して返す."""
     global _rag_service

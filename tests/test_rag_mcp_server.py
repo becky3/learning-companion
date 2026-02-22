@@ -17,6 +17,13 @@ from mcp_servers.rag.rag_knowledge import (
     RawSearchResults,
     VectorSearchItem,
 )
+from mcp_servers.rag.server import _reset_rag_service
+
+
+@pytest.fixture(autouse=True)
+def _reset_rag_global_state() -> None:
+    """各テスト前にRAGサービスのグローバル状態をリセットする."""
+    _reset_rag_service()
 
 
 @pytest.mark.asyncio
