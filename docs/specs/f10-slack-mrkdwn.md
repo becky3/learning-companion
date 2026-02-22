@@ -52,7 +52,7 @@ LLM出力後にMarkdown→mrkdwn変換を行う方式は以下の理由で不採
 
 ### 入力
 
-- `config/assistant.yaml` の `slack_format_instruction` フィールド
+- `config/assistant.yaml` の `format_instruction` フィールド
 
 ### 出力
 
@@ -64,7 +64,7 @@ LLM出力後にMarkdown→mrkdwn変換を行う方式は以下の理由で不採
 ### 1. `config/assistant.yaml` に指示文を追加
 
 ```yaml
-slack_format_instruction: |
+format_instruction: |
   【出力フォーマット】
   Slackに表示されるため、Slack mrkdwn形式で出力してください:
   • 太字: *テキスト*
@@ -82,37 +82,36 @@ slack_format_instruction: |
 
 ```python
 system_prompt = assistant.get("personality", "")
-slack_format = assistant.get("slack_format_instruction", "")
+slack_format = assistant.get("format_instruction", "")
 
 chat_service = ChatService(
     llm=chat_llm,
     session_factory=session_factory,
     system_prompt=system_prompt,
-    slack_format_instruction=slack_format,
+    format_instruction=slack_format,
     ...
 )
 ```
 
-### 3. `src/services/chat.py` でシステムプロンプトの最後に追加
+### 3. `src/services/chat.py` でシステムプロンプトの先頭に追加
 
-ChatService は RAG コンテキストやツール応答指示の後に mrkdwn 指示を追加することで、
-常に最終段に配置されることを保証する:
+ChatService は `format_instruction` を personality より前に配置する:
 
 ```python
-# RAGコンテキスト追加後
-if self._slack_format_instruction:
-    system_content = (
-        system_content + "\n\n" + self._slack_format_instruction
-        if system_content
-        else self._slack_format_instruction
-    )
+# 構成順: format_instruction → personality
+parts: list[str] = []
+if self._format_instruction:
+    parts.append(self._format_instruction)
+if self._system_prompt:
+    parts.append(self._system_prompt)
+system_content = "\n\n".join(parts)
 ```
 
 ## 受け入れ条件
 
-- [x] AC1: `config/assistant.yaml` に `slack_format_instruction` が定義されている
-- [x] AC2: `slack_format_instruction` がシステムプロンプトの先頭に追加される
-- [x] AC3: `slack_format_instruction` が空の場合、システムプロンプトに影響しない
+- [x] AC1: `config/assistant.yaml` に `format_instruction` が定義されている
+- [x] AC2: `format_instruction` がシステムプロンプトの先頭に追加される
+- [x] AC3: `format_instruction` が空の場合、システムプロンプトに影響しない
 
 ## 関連ファイル
 
@@ -125,6 +124,6 @@ if self._slack_format_instruction:
 
 ## テスト方針
 
-- `slack_format_instruction` が設定されている場合、システムプロンプトに追加されることを確認
-- `slack_format_instruction` が未設定の場合、システムプロンプトが変化しないことを確認
+- `format_instruction` が設定されている場合、システムプロンプトに追加されることを確認
+- `format_instruction` が未設定の場合、システムプロンプトが変化しないことを確認
 - LLMに渡されるメッセージにmrkdwn指示が含まれることを確認
