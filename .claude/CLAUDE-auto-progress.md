@@ -76,7 +76,7 @@ uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdo
 ### ステップ 4/4: 完了処理（commit / push / PR作成 / Issue完了コメント）
 
 1. `git status --porcelain` で変更確認（空なら停止）
-2. `git add -A`
+2. `git add -A`（GA環境ではリポジトリに機密情報がない前提のため許容）
 3. `git diff --cached --stat` で差分サマリ表示
 4. 変更内容からコミットメッセージ自動生成（優先順位: fix > feat > docs > ci）
 5. `git commit -m "生成したメッセージ"`
