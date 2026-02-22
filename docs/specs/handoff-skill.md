@@ -101,7 +101,7 @@ MEMORY.md に新たなプロジェクト知見があれば追記する。
 
 ### ステップ3: journal/ に新規ファイル作成
 
-セッションの記録をジャーナルディレクトリに個別ファイルとして作成する。既存の `journal-guidelines.md` のフォーマットに従う。
+セッションの記録をジャーナルディレクトリに個別ファイルとして作成する。既存の `{MEMORY_DIR}/journal-guidelines.md` のフォーマットに従う。
 
 **ファイル名の生成:**
 
@@ -116,7 +116,7 @@ FILENAME="${TIMESTAMP}-${SLUG}.md"
 
 **ファイル内容:**
 
-`journal-guidelines.md` のフォーマットに従う。
+`{MEMORY_DIR}/journal-guidelines.md` のフォーマットに従う。
 
 必須項目:
 
