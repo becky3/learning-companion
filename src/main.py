@@ -10,6 +10,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from src.config.settings import get_settings, load_assistant_config
@@ -20,26 +21,17 @@ from src.process_guard import (
     remove_pid_file,
     write_pid_file,
 )
-from src.db.session import init_db, get_session_factory
-from src.llm.factory import get_provider_for_service
-from src.mcp_bridge.client_manager import MCPClientManager, MCPServerConfig
-from src.messaging.router import MessageRouter
-from src.messaging.slack_adapter import SlackAdapter
-from src.services.chat import ChatService
-from src.services.feed_collector import FeedCollector
-from src.services.ogp_extractor import OgpExtractor
-from src.services.summarizer import Summarizer
-from src.services.thread_history import ThreadHistoryService
-from src.services.topic_recommender import TopicRecommender
-from src.services.user_profiler import UserProfiler
-from src.slack.app import create_app, socket_mode_handler
-from src.slack.handlers import register_handlers
+
+if TYPE_CHECKING:
+    from src.mcp_bridge.client_manager import MCPServerConfig
 
 logger = logging.getLogger(__name__)
 
 
 def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
     """MCPサーバー設定ファイルを読み込む."""
+    from src.mcp_bridge.client_manager import MCPServerConfig
+
     path = Path(config_path)
     if not path.exists():
         logger.warning("MCP設定ファイル '%s' が見つかりません。", config_path)
@@ -76,6 +68,21 @@ async def main() -> None:
     # 重複起動検知: 既に動いていたら警告して終了
     check_already_running()
     write_pid_file()
+
+    from src.db.session import get_session_factory, init_db
+    from src.llm.factory import get_provider_for_service
+    from src.mcp_bridge.client_manager import MCPClientManager
+    from src.messaging.router import MessageRouter
+    from src.messaging.slack_adapter import SlackAdapter
+    from src.services.chat import ChatService
+    from src.services.feed_collector import FeedCollector
+    from src.services.ogp_extractor import OgpExtractor
+    from src.services.summarizer import Summarizer
+    from src.services.thread_history import ThreadHistoryService
+    from src.services.topic_recommender import TopicRecommender
+    from src.services.user_profiler import UserProfiler
+    from src.slack.app import create_app, socket_mode_handler
+    from src.slack.handlers import register_handlers
 
     mcp_manager: MCPClientManager | None = None
     try:
