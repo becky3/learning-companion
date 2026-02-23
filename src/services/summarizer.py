@@ -42,7 +42,14 @@ class Summarizer:
     async def summarize(
         self, title: str, url: str, description: str = "", lang: str = ""
     ) -> str:
-        """記事を要約する."""
+        """記事を要約する.
+
+        Args:
+            title: 記事タイトル。
+            url: 記事のURL。
+            description: 記事の概要。空文字の場合は「なし」として扱う。
+            lang: ログ記録用の言語識別子（デフォルト: ""）。
+        """
         prompt = SUMMARIZE_PROMPT.format(title=title, url=url, description=description or "なし")
         try:
             response = await self._llm.complete([
