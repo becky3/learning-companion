@@ -94,3 +94,33 @@ async def test_summarize_fallback_to_title_on_exception(mock_llm: AsyncMock) -> 
     result = await summarizer.summarize("エラーテスト", "https://example.com/article")
 
     assert result == "エラーテスト"
+
+
+async def test_ac8_exception_log_contains_url_and_lang(
+    mock_llm: AsyncMock, caplog: pytest.LogCaptureFixture
+) -> None:
+    """例外時のログにURLとlang情報が含まれる."""
+    mock_llm.complete.side_effect = RuntimeError("LLM error")
+    summarizer = Summarizer(llm=mock_llm)
+
+    await summarizer.summarize(
+        "テスト記事", "https://example.com/article", lang="ja"
+    )
+
+    assert "url=https://example.com/article" in caplog.text
+    assert "lang=ja" in caplog.text
+
+
+async def test_ac8_empty_response_log_contains_url_and_lang(
+    mock_llm: AsyncMock, caplog: pytest.LogCaptureFixture
+) -> None:
+    """空応答時のログにURLとlang情報が含まれる."""
+    mock_llm.complete.return_value = LLMResponse(content="")
+    summarizer = Summarizer(llm=mock_llm)
+
+    await summarizer.summarize(
+        "テスト記事", "https://example.com/article", lang="en"
+    )
+
+    assert "url=https://example.com/article" in caplog.text
+    assert "lang=en" in caplog.text
