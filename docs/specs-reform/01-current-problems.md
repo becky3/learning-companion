@@ -43,8 +43,8 @@ f1〜f11 で通し番号を振ることで「全て同じ種類の機能」と�
 
 **深刻なファイル:**
 
-- `f5-mcp-integration.md` — 全クラスの骨格・メソッドシグネチャ・疑似コード（669行）
-- `f8-thread-support.md` — `ThreadHistoryService` の完全実装、ハンドラのコード（449行）
+- `f5-mcp-integration.md` — 全クラスの骨格・メソッドシグネチャ・疑似コード（600行超）
+- `f8-thread-support.md` — `ThreadHistoryService` の完全実装、ハンドラのコード（400行超）
 - `f9-rag.md` — ABC定義・全継承クラスの実装・数式・パラメータチューニングガイド（1000行超）
 - `bot-process-guard.md` — PIDFile管理クラス・プロセス確認の疑似コード全体
 
@@ -81,7 +81,7 @@ ACは本来 Issue（作業単位）に書くべきもの。仕様書に書くべ
 ### AC番号の混乱
 
 - `f2-feed-collection.md`: AC番号が非連続に配置（AC7→AC13→AC8の順で、番号順と記載順が一致しない）
-- `code-review-agent.md`: AC1〜13の後にAC20が出現（14〜19は後方に散在）
+- `code-review-agent.md`: AC1〜13の後にAC20が出現し、AC14〜19はその後方にまとめて配置（番号順と記載順が不一致）
 - `doc-review-agent.md`: AC10が欠番
 
 ### ACの内容の問題
