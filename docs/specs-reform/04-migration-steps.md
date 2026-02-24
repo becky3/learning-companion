@@ -63,7 +63,7 @@ Issue: #572
 
 1. 被参照ゼロのファイル（f3, f4, f6, f7, f10, topic-skill, handoff-skill 等）を先に着手（リスク低）
 2. 単独参照のファイル群
-3. 相互参照クラスタ（auto-progress / copilot-auto-fix / auto-fix-structure 等）はまとめて移行
+3. 相互参照クラスタ（auto-progress / copilot-auto-fix 等）はまとめて移行
 4. `overview.md` は最後に移行（6ファイルから参照されており、カスケード影響が大きい）
 
 **順序決定の定量的基準**:
@@ -72,12 +72,11 @@ Issue: #572
 - テスト数（影響を受けるテストファイル・関数の数）
 - 関連する進行中 Issue/PR の有無
 
-### Phase 4: 休止中文書の整理
+### Phase 4: 陳腐化した文書の整理
 
 **前提**: Phase 1 完了（Phase 3 と並行可能）
 
-- `auto-fix-structure.md` のアーカイブ化
-- `auto-progress.md` の整理
+- `agent-teams/mixed-genius.md` のプレースホルダー解決
 - その他の陳腐化した内容の除去
 
 ### Phase 5: 関連文書・設定の更新
@@ -98,7 +97,7 @@ Issue: #572
 - 仕様書内の AC セクションがゼロになっている（AC は全て Issue に移行済み）
 - 全テスト名が名前ベースに移行されている（`test_ac{N}_` パターンがゼロ）
 - 規約文書（CLAUDE.md, git-flow.md 等）が新体系と整合している
-- 休止中・陳腐化した文書が整理されている
+- 陳腐化した文書が整理されている
 
 ## 注意事項
 
