@@ -33,7 +33,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # REPO_OWNER_PAT を使用: GITHUB_TOKEN で作成されたPRイベントでは
-          # pr-review.yml が再トリガーされないため（GitHub の無限ループ防止仕様）
+          # 他ワークフローが再トリガーされないため（GitHub の無限ループ防止仕様）
           github_token: ${{ secrets.REPO_OWNER_PAT }}
           bot_name: "claude[bot]"
           bot_id: "209825114"
@@ -68,7 +68,6 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # REPO_OWNER_PAT を使用: Copilot 自動レビューのトリガーに必要
-          # auto/ ブランチプレフィックスにより pr-review.yml のスキップ条件で判定
           github_token: ${{ secrets.REPO_OWNER_PAT }}
           branch_prefix: "auto/"
           bot_name: "claude[bot]"

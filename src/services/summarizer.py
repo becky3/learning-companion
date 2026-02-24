@@ -39,8 +39,17 @@ class Summarizer:
     def __init__(self, llm: LLMProvider) -> None:
         self._llm = llm
 
-    async def summarize(self, title: str, url: str, description: str = "") -> str:
-        """記事を要約する."""
+    async def summarize(
+        self, title: str, url: str, description: str = "", lang: str = ""
+    ) -> str:
+        """記事を要約する.
+
+        Args:
+            title: 記事タイトル。
+            url: 記事のURL。
+            description: 記事の概要。空文字の場合は「なし」として扱う。
+            lang: ログ記録用の言語識別子（デフォルト: ""）。
+        """
         prompt = SUMMARIZE_PROMPT.format(title=title, url=url, description=description or "なし")
         try:
             response = await self._llm.complete([
@@ -48,9 +57,15 @@ class Summarizer:
             ])
             content = response.content.strip()
             if not content:
-                logger.warning("LLM returned empty summary for article: %s", url)
+                logger.warning(
+                    "LLM returned empty summary for article: url=%s, lang=%s",
+                    url,
+                    lang,
+                )
                 return title
             return content
         except Exception:
-            logger.exception("Failed to summarize article: %s", url)
+            logger.exception(
+                "Failed to summarize article: url=%s, lang=%s", url, lang
+            )
             return title
