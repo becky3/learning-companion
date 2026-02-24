@@ -2,7 +2,7 @@
 
 ## 概要
 
-GitHub Copilot のネイティブレビュー結果に基づき、レビュー指摘の自動修正と自動マージを行うワークフロー。PRKit ベースの pr-review.yml + auto-fix.yml ループに代わる方式。
+GitHub Copilot のネイティブレビュー結果に基づき、レビュー指摘の自動修正と自動マージを行うワークフロー。
 
 **コンセプト**: 「Copilot が1回レビュー → 指摘があれば修正 → マージ。ループしない。」
 
@@ -10,9 +10,9 @@ GitHub Copilot のネイティブレビュー結果に基づき、レビュー�
 
 ## 背景
 
-### PRKit ベース方式の問題（Issue #351）
+### 旧方式の問題（Issue #351）
 
-PRKit（prt-silent-failure-hunter）の正答率が17%（CRITICAL 判定の正答率20%）と低く、レビュー→修正→再レビューのループが収束しない問題があった。
+旧方式（auto-fix.yml）ではレビュー→修正→再レビューのループが収束しない問題があった。
 
 **根本原因**: 再レビュー時に、修正済みコードが「初見のコード」として再評価され、同じコードに別の観点で新規指摘が出続ける構造。
 
@@ -314,12 +314,12 @@ auto-fix が禁止ファイルの変更を取り消す可能性があるため�
 |------|------|-----------|
 | `copilot-review-poll.yml` | sleep ポーリングに移行したため不要 | **削除** |
 
-**不要になるスクリプト（PRKit 方式固有、削除せず残す）:**
+**不要になるスクリプト（削除せず残す）:**
 
 | スクリプト | 理由 |
 |-----------|------|
-| `check-loop-count.sh` | 再レビューループ廃止のため不要（PRKit 方式復帰時に必要となるため削除せず残す） |
-| `remove-label.sh` | `auto:fix-requested` ラベル除去（Copilot 方式では不使用。同上、削除せず残す） |
+| `check-loop-count.sh` | 再レビューループ廃止のため不要 |
+| `remove-label.sh` | `auto:fix-requested` ラベル除去（不使用） |
 
 ## エラーハンドリング
 
@@ -337,23 +337,6 @@ auto-fix が禁止ファイルの変更を取り消す可能性があるため�
 5. Actions タブ → 「Copilot Auto Fix」 → 「Run workflow」 → PR 番号を入力して再実行
 
 **旧設計との差異**: 旧設計では `auto:failed` 除去 → Copilot 再レビュー → `copilot-review-poll.yml` が検知 → `auto:copilot-reviewed` ラベル → `copilot-auto-fix.yml` トリガーという間接的な復旧フローだった。新設計では `workflow_dispatch` による直接再実行で、障害ポイントが少なくシンプル。
-
-## PRKit 方式との比較
-
-| 項目 | PRKit ベース（休止中） | Copilot ベース（本方式） |
-|------|----------------------|------------------------|
-| レビュー実行 | claude-code-action（pr-review.yml） | Copilot ネイティブ（GitHub 組み込み） |
-| レビューコスト | ~$1/回 | $0（サブスク込み） |
-| 修正ワークフロー | auto-fix.yml | copilot-auto-fix.yml |
-| 修正コスト | ~$3/回（平均1.5ラウンド） | ~$2/回（1ラウンドのみ） |
-| トリガー | `pull_request[labeled]`（auto:fix-requested） | `pull_request[opened]` + `workflow_dispatch` |
-| Copilot 検知 | N/A | ワークフロー内 sleep ポーリング |
-| 再レビューループ | あり（最大3回） | **なし**（単方向フロー） |
-| レビュー精度 | 正答率17%（silent-failure-hunter） | 高（PR #350 実績） |
-| 収束性 | 収束しない | 収束する（ループなし） |
-| マージ判定ロジック | check-review-result.sh | **同じ**（流用） |
-| 外部依存 | なし | なし（旧設計は copilot-review-poll.yml に依存） |
-| 設計書 | `auto-fix-structure.md` | 本ドキュメント |
 
 ## ラベル体系
 
@@ -426,9 +409,9 @@ copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト
 | `.github/scripts/auto-fix/wait-for-copilot.sh` | Copilot レビュー検知スクリプト（**新規**） |
 | `.github/scripts/auto-fix/` | 共通スクリプト群（流用、`handle-errors.sh` のみ変更あり） |
 | `.github/prompts/auto-fix-check-pr.md` | auto-fix 用プロンプトテンプレート（流用） |
-| `.github/workflows/auto-fix.yml` | PRKit ベースの自動修正（**無効化対象**） |
-| `docs/specs/auto-progress.md` | 全体パイプライン仕様（参照元、本PRで更新済み） |
-| `docs/specs/auto-fix-structure.md` | PRKit ベースの設計書（休止中） |
+| `.github/workflows/auto-fix.yml` | 自動修正（**無効化**） |
+| `docs/specs/auto-progress.md` | 全体パイプライン仕様 |
+| `docs/specs/auto-fix-structure.md` | auto-fix.yml の設計書（**無効化**） |
 
 ### 廃止するファイル
 

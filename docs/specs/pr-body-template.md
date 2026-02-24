@@ -2,20 +2,16 @@
 
 ## 概要
 
-PR作成時の body を `.github/pull_request_template.md` で標準化し、記載内容の統一と prt 自動レビューツールへのコンテキスト提供を改善する。
+PR作成時の body を `.github/pull_request_template.md` で標準化し、記載内容の統一を改善する。
 
 ## 背景
 
-- PR #338 で設計書先行更新のPRに対し、prt ツールが「設計書とコードの不整合」として4件の誤検知を出した
-- 原因: PR body に「設計書の先行更新であり、コードとの不整合は意図的」と明記されていなかった
-- CLAUDE.md に暫定ルールを追記したが、自由記述では記載漏れが発生しやすい
+- PR body の記載内容が自由記述のため、記載漏れが発生しやすかった
 - テンプレートとして構造化することで、記載漏れを防止する
-- ただし、prt が PR body を直接参照する仕組みは現状ないため、pr-review.yml の prompt にも PR body の Change type を参照する指示を追加する必要がある
 
 ## ユーザーストーリー
 
 - 開発者として、PR作成時に何を書くべきか迷わずに済むテンプレートが欲しい
-- 開発者として、設計書先行更新PRで prt 自動レビューの誤検知を防ぎたい
 - 開発者として、小さな修正でも過剰な記載を求められないテンプレートが欲しい
 
 ## 設計方針
@@ -24,7 +20,7 @@ PR作成時の body を `.github/pull_request_template.md` で標準化し、記
 |---|------|------|
 | 1 | セクション数は4つに制限 | 5-7を超えると形骸化（N/A で埋められる）するリスクが高い |
 | 2 | テンプレートを SSOT（Single Source of Truth）とする | CLAUDE.md・auto-finalize スキルはテンプレート参照に正規化 |
-| 3 | prt 誤検知防止が最優先目的 | 変更種別の明示 + pr-review.yml の prompt 更新で実現 |
+| 3 | 変更種別の明示が目的 | Change type により変更の意図が伝わる |
 | 4 | AI・人間の両方に使いやすく | CLI（`gh pr create --body`）では自動適用されないため、CLAUDE.md にもルールを記載 |
 
 ## 技術仕様
@@ -165,15 +161,6 @@ PR body は `.github/pull_request_template.md` の形式に従うこと。
 
 > **注記**: 現在の auto-finalize の種別判定ロジックは `fix > feat > docs > ci` の4種のみ。テンプレートの `refactor` / `test` は自動判定の対象外。これらの種別判定の拡張は別 Issue で対応する。
 
-### pr-review.yml の prompt 更新
-
-prt 自動レビューが PR body の Change type を参照して判断精度を向上させるためには、`pr-review.yml` の prompt に以下の指示を追加する必要がある:
-
-- PR body の Change type を確認すること
-- `docs(pre-impl)` が選択されている場合、コードとの不整合を検出対象外とすること
-
-現状の `pr-review.yml` は PR body を prt の prompt に明示的に渡していない。テンプレート導入と合わせて prompt を更新することで、prt 誤検知防止の目的を達成する。
-
 ## 移行時の注意事項
 
 - テンプレート導入 PR のマージ後、以降の PR から適用される
@@ -186,7 +173,6 @@ prt 自動レビューが PR body の Change type を参照して判断精度を
 | `.github/pull_request_template.md` | 新規作成（テンプレート本体） | 必須 |
 | `CLAUDE.md` | PR body の `--body` 例を**全箇所**テンプレート形式に更新（通常開発・hotfix・auto-progress ステップ4/4） | 必須 |
 | `.claude/skills/auto-finalize/SKILL.md` | 手順6の body 生成をテンプレート形式に更新 | 必須 |
-| `.github/workflows/pr-review.yml` | prt prompt に PR body の Change type 参照指示を追加 | 必須 |
 | `docs/specs/git-flow.md` | 「PRテンプレートは現行を維持」の記述を更新 | 必須 |
 
 ### CLAUDE.md の更新方針
@@ -204,8 +190,7 @@ prt 自動レビューが PR body の Change type を参照して判断精度を
 - [ ] AC5: auto-finalize スキルの body 生成がテンプレート形式に更新されている
 - [ ] AC6: テンプレートのセクション数が5個以下である
 - [ ] AC7: docs(pre-impl) 選択時に不整合が意図的である旨の注記がテンプレート内に表示される
-- [ ] AC8: pr-review.yml の prompt が PR body の Change type を参照し、`docs(pre-impl)` 時にコードとの不整合を検出対象外とする
-- [ ] AC9: git-flow.md の「PRテンプレートは現行を維持」の記述が更新されている
+- [ ] AC8: git-flow.md の「PRテンプレートは現行を維持」の記述が更新されている
 
 ## テスト方針
 
@@ -215,7 +200,6 @@ prt 自動レビューが PR body の Change type を参照して判断精度を
 - Web UI での PR 作成時にテンプレートが表示されること（マージ後に確認）
 - CLAUDE.md 内の**全ての** `gh pr create --body` 記述がテンプレート形式に更新されていること（通常開発・hotfix・auto-progress ステップ4/4）
 - auto-finalize スキルの body 生成がテンプレート形式に更新されていること
-- pr-review.yml の prompt に Change type 参照の指示が含まれていること
 
 ## 関連ファイル
 
@@ -225,9 +209,8 @@ prt 自動レビューが PR body の Change type を参照して判断精度を
 | `CLAUDE.md` | PR body ルール・`gh pr create` の例 |
 | `.claude/skills/auto-finalize/SKILL.md` | auto-finalize スキルの PR 作成手順 |
 | `docs/specs/git-flow.md` | git-flow 運用仕様（PR テンプレートの参照あり） |
-| `.github/workflows/pr-review.yml` | prt 自動レビュー（prompt に Change type 参照指示を追加） |
 
 ## 参考
 
 - [Issue #341](https://github.com/becky3/ai-assistant/issues/341): PR body テンプレートの導入
-- PR #338: 設計書先行更新で prt 誤検知が発生した事例
+- PR #338: 設計書先行更新で誤検知が発生した事例

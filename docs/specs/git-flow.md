@@ -270,11 +270,6 @@ sequenceDiagram
 - **対応**: claude-code-action の設定で `default_branch` をリポジトリのデフォルトブランチから取得するため、GitHub上でデフォルトブランチを `develop` に変更すれば自動で対応される
 - ワークフローのトリガー条件に変更は不要
 
-### pr-review.yml（PR自動レビュー）
-
-- `base_ref` をdiffの基点として使用しており、ブランチ名に依存しない設計
-- **対応不要**（`develop` ベースのPRでも正しく動作する）
-
 ## 変更が必要なファイル一覧
 
 | ファイル | 変更内容 | 優先度 |
@@ -295,7 +290,6 @@ sequenceDiagram
 ### GitHub Actions の変更
 
 - `claude.yml`: 変更不要（デフォルトブランチ変更で自動対応）
-- `pr-review.yml`: 変更不要（base_ref動的取得のため）
 
 ## 移行手順
 
@@ -321,7 +315,7 @@ sequenceDiagram
 - [x] AC4: `docs/specs/overview.md` のGit運用セクションが更新されている
 - [x] AC5: `README.md` の開発フロー概要が更新されている
 - [x] AC6: feature/bugfix ブランチは `develop` からの分岐・マージで運用される（bugfix は `release/*` からの分岐・マージも可）
-- [x] AC7: GitHub Actions（claude.yml, pr-review.yml）が `develop` ベースで正しく動作する
+- [x] AC7: GitHub Actions（claude.yml）が `develop` ベースで正しく動作する
 - [ ] AC8: `main` への反映は `release/v{X.Y.Z}` ブランチを経由して行われる
 - [ ] AC9: `release/v{X.Y.Z}` → `main` は squash マージで行われる
 - [ ] AC10: リリース後に `main` → `develop` の差分反映が行われる
@@ -337,4 +331,3 @@ sequenceDiagram
 - `docs/specs/overview.md` — Git運用セクション
 - `README.md` — 開発フロー概要
 - `.github/workflows/claude.yml` — Claude Code Action
-- `.github/workflows/pr-review.yml` — PR自動レビュー

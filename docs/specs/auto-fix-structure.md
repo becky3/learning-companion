@@ -1,5 +1,7 @@
 # auto-fix.yml 構造リファクタリング設計書
 
+> **注記**: auto-fix.yml は無効化済み（`workflow_dispatch` のみ）。本設計書は参考情報として残す。
+
 ## 概要
 
 `auto-fix.yml`（937行、16個の `run: |` ブロック + 1個の `uses:` アクション）のシェルスクリプトを外部ファイルに切り出し、`prompt` を外部Markdownファイルに分離する。動作を変えず、保守性・テスト可能性・レビュー品質を向上させる。
@@ -429,7 +431,7 @@ disable=SC2154
 
 ### CI への組み込み
 
-`.github/workflows/auto-fix.yml` のテストではなく、既存の CI（pr-review.yml 等）に shellcheck ステップを追加する方針を推奨。ただし、auto-fix.yml 自体のスコープからは外れるため、別 Issue で対応する。
+`.github/workflows/auto-fix.yml` のテストではなく、既存の CI に shellcheck ステップを追加する方針を推奨。ただし、auto-fix.yml 自体のスコープからは外れるため、別 Issue で対応する。
 
 **暫定対応**: PR レビュー時に手動で `shellcheck` を実行。
 

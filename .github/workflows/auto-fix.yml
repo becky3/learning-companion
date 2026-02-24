@@ -20,8 +20,7 @@ permissions:
   issues: write
   id-token: write
 
-# 休止中: Copilot ネイティブレビューベースの copilot-auto-fix.yml に移行。
-# PRKit 方式の精度改善時に再有効化の可能性があるため、削除せず workflow_dispatch で無効化。
+# 無効化: copilot-auto-fix.yml に移行済み。workflow_dispatch のみで無効化。
 on:
   workflow_dispatch:
 
@@ -305,9 +304,8 @@ jobs:
             exit 1
           fi
 
-          # REPO_OWNER_PAT で /fix コメントを投稿（pr-review.yml の再トリガー + auto:fix-requested 付与）
-          # NOTE: pr-review.yml の if 条件は github.actor == 'becky3' を要求する。
-          # REPO_OWNER_PAT の所有者がリポジトリオーナー (becky3) である前提で動作する。
+          # REPO_OWNER_PAT で /fix コメントを投稿
+          # NOTE: REPO_OWNER_PAT の所有者がリポジトリオーナー (becky3) である前提で動作する。
           gh_safe gh pr comment "$PR_NUMBER" --body "/fix"
         env:
           GH_TOKEN: ${{ secrets.REPO_OWNER_PAT }}
