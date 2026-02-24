@@ -192,7 +192,6 @@ uv run mypy src
 - [PR body テンプレート](docs/specs/pr-body-template.md)
 - [Bot プロセスガード](docs/specs/bot-process-guard.md)
 - [自動進行管理](docs/specs/auto-progress.md)
-- [auto-fix.yml 構造設計](docs/specs/auto-fix-structure.md)
 - [Copilot 自動修正ワークフロー](docs/specs/copilot-auto-fix.md)
 
 ### Claude Code 関連

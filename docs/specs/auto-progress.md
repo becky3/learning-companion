@@ -331,10 +331,6 @@ PR作成 → copilot-auto-fix.yml 起動（pull_request[opened]、auto/ ブラ�
 
 **既存スクリプトの流用**: `check-review-result.sh`, `check-forbidden.sh`, `merge-check.sh`, `merge-or-dryrun.sh` 等はそのまま利用可能。
 
-### auto-fix.yml 設計（無効化）
-
-レビュー指摘自動修正ワークフロー。詳細は `auto-fix-structure.md` を参照。現在は `workflow_dispatch` のみで無効化されている。
-
 ## Resolve conversation 自動化
 
 ### 概要
@@ -791,7 +787,6 @@ GitHub Actions の実行時間（ubuntu-latest）は無料枠（2,000分/月）�
 | `.github/workflows/auto-fix.yml` | 自動修正ループ（**無効化**） |
 | `.github/workflows/post-merge.yml` | マージ後処理 |
 | `docs/specs/copilot-auto-fix.md` | copilot-auto-fix.yml の詳細設計書 |
-| `docs/specs/auto-fix-structure.md` | auto-fix.yml の詳細設計書（**無効化**） |
 | `.github/scripts/auto-fix/resolve-threads.sh` | レビュースレッド resolve スクリプト |
 | `.github/scripts/post-merge/update-review-issue.sh` | レビューIssue更新スクリプト（全PRをコメント記録） |
 | `.github/scripts/post-merge/pick-next-issue.sh` | 次Issue候補ピックアップスクリプト |

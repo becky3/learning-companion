@@ -411,7 +411,6 @@ copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト
 | `.github/prompts/auto-fix-check-pr.md` | auto-fix 用プロンプトテンプレート（流用） |
 | `.github/workflows/auto-fix.yml` | 自動修正（**無効化**） |
 | `docs/specs/auto-progress.md` | 全体パイプライン仕様 |
-| `docs/specs/auto-fix-structure.md` | auto-fix.yml の設計書（**無効化**） |
 
 ### 廃止するファイル
 

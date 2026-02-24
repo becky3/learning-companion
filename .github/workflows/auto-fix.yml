@@ -2,7 +2,7 @@
 #
 # コンセプト: 「YAMLはオーケストレーションのみ、ロジックはスクリプトに」
 # スクリプト: .github/scripts/auto-fix/
-# 設計書: docs/specs/auto-fix-structure.md
+# スクリプト設計は .github/scripts/auto-fix/ 内を参照
 #
 # エラーハンドリング方針:
 #   認証/権限エラー        → exit 1（即停止）
