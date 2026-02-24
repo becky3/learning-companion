@@ -412,12 +412,6 @@ copilot-auto-fix.yml 固有のテストケース（auto-progress.md のテスト
 | `.github/workflows/auto-fix.yml` | 自動修正（**無効化**） |
 | `docs/specs/auto-progress.md` | 全体パイプライン仕様 |
 
-### 廃止するファイル
-
-| ファイル | 理由 |
-|---------|------|
-| `.github/workflows/copilot-review-poll.yml` | sleep ポーリングに移行したため完全に不要 |
-
 ## 参考資料
 
 - Issue #351: auto-fix パイプラインのレビュー収束問題の解決
