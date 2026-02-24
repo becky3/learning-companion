@@ -86,6 +86,8 @@ uv run python -m mcp_servers.rag.cli evaluate \
 
 ## プロジェクト構造
 
+> **将来改善予定**: このセクションは ARCHITECTURE.md に切り出し、モジュール間の関係図や仕様書との対応表を追加予定（[#626](https://github.com/becky3/ai-assistant/issues/626)）
+
 ```
 src/
   main.py           # エントリーポイント
