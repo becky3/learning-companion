@@ -1,6 +1,6 @@
 """CLIエントリーポイント — REPL + ワンショットモード.
 
-仕様: docs/specs/f11-cli-adapter.md
+仕様: docs/specs/features/cli-adapter.md
 
 使用方法:
     # REPL モード
