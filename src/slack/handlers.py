@@ -1,5 +1,5 @@
 """Slack イベントハンドラ
-仕様: docs/specs/f1-chat.md, docs/specs/f6-auto-reply.md, docs/specs/f11-cli-adapter.md
+仕様: docs/specs/f1-chat.md, docs/specs/features/auto-reply.md, docs/specs/f11-cli-adapter.md
 
 イベント→IncomingMessage変換 + MessageRouter委譲の薄いラッパー。
 ビジネスロジックは MessageRouter (src/messaging/router.py) に集約。
@@ -57,9 +57,9 @@ def register_handlers(
 
     @app.event("message")
     async def handle_message(event: dict, say: object) -> None:  # type: ignore[type-arg]
-        """自動返信チャンネルでのメッセージ処理 (F6).
+        """自動返信チャンネルでのメッセージ処理.
 
-        フィルタリング (F6-AC2, AC3, AC6, AC7):
+        フィルタリング:
         - bot_id がある → 無視（Bot自身の投稿）
         - subtype がある → 無視（編集、削除など）
         - channel が auto_reply_channels に含まれない → 無視

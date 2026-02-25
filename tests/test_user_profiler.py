@@ -29,8 +29,8 @@ def _make_llm_response(data: dict) -> LLMResponse:  # type: ignore[type-arg]
     return LLMResponse(content=json.dumps(data, ensure_ascii=False))
 
 
-async def test_ac1_extract_interests_skills_goals(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC1: 会話メッセージからinterests/skills/goalsをLLMで抽出できる."""
+async def test_extract_interests_skills_goals(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """会話メッセージからinterests/skills/goalsをLLMで抽出できる."""
     llm = AsyncMock()
     llm.complete.return_value = _make_llm_response({
         "interests": ["Python", "機械学習"],
@@ -53,8 +53,8 @@ async def test_ac1_extract_interests_skills_goals(db_session_factory) -> None:  
         assert json.loads(profile.goals) == ["MLエンジニアになりたい"]
 
 
-async def test_ac2_merge_existing_profile(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC2: 抽出結果を既存プロファイルとマージできる."""
+async def test_merge_existing_profile(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """抽出結果を既存プロファイルとマージできる."""
     llm = AsyncMock()
 
     # 1回目
@@ -91,8 +91,8 @@ async def test_ac2_merge_existing_profile(db_session_factory) -> None:  # type: 
         assert goals == ["転職したい", "フロントエンドも学びたい"]
 
 
-async def test_ac3_async_execution_via_create_task() -> None:
-    """AC3: asyncio.create_taskによる非同期実行."""
+async def test_async_execution_via_create_task() -> None:
+    """asyncio.create_taskによる非同期実行."""
     from src.messaging.router import _safe_extract_profile
 
     profiler = AsyncMock()
@@ -104,8 +104,8 @@ async def test_ac3_async_execution_via_create_task() -> None:
     profiler.extract_profile.assert_called_once_with("U1", "hello")
 
 
-async def test_ac3_safe_extract_profile_logs_exception() -> None:
-    """AC3: 非同期抽出でエラーが発生してもログに記録しクラッシュしない."""
+async def test_safe_extract_profile_logs_exception() -> None:
+    """非同期抽出でエラーが発生してもログに記録しクラッシュしない."""
     from src.messaging.router import _safe_extract_profile
 
     profiler = AsyncMock()
@@ -116,8 +116,8 @@ async def test_ac3_safe_extract_profile_logs_exception() -> None:
         mock_logger.exception.assert_called_once()
 
 
-async def test_ac4_get_profile_formatted(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC4: ユーザーが自分のプロファイルを確認できる."""
+async def test_get_profile_formatted(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """ユーザーが自分のプロファイルを確認できる."""
     # DBにプロファイルを直接作成
     async with db_session_factory() as session:
         session.add(UserProfile(
@@ -139,16 +139,16 @@ async def test_ac4_get_profile_formatted(db_session_factory) -> None:  # type: i
     assert "データサイエンティストになりたい" in result
 
 
-async def test_ac4_get_profile_returns_none_when_empty(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC4: プロファイルが存在しない場合はNoneを返す."""
+async def test_get_profile_returns_none_when_no_record(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """プロファイルが存在しない場合はNoneを返す."""
     llm = AsyncMock()
     profiler = UserProfiler(llm=llm, session_factory=db_session_factory)
     result = await profiler.get_profile("UNOTFOUND")
     assert result is None
 
 
-async def test_ac5_json_parse_failure_skips(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC5: LLMの抽出結果がJSON形式でない場合、ログに記録し処理をスキップする."""
+async def test_json_parse_failure_skips_extraction(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """LLMの抽出結果がJSON形式でない場合、ログに記録し処理をスキップする."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="これはJSONではありません")
 
@@ -166,8 +166,8 @@ async def test_ac5_json_parse_failure_skips(db_session_factory) -> None:  # type
         assert result.scalar_one_or_none() is None
 
 
-async def test_ac5_malformed_types_are_filtered(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC5: LLMがJSON構造は正しいが型が不正な場合、不正データをフィルタする."""
+async def test_malformed_types_are_filtered(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """LLMがJSON構造は正しいが型が不正な場合、不正データをフィルタする."""
     llm = AsyncMock()
     llm.complete.return_value = _make_llm_response({
         "interests": {"not": "a list"},
@@ -188,8 +188,8 @@ async def test_ac5_malformed_types_are_filtered(db_session_factory) -> None:  # 
         assert json.loads(profile.goals) == ["有効な目標"]
 
 
-async def test_ac4_get_profile_returns_none_for_empty_arrays(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC4: DBにプロファイルが存在するが全フィールドが空配列の場合Noneを返す."""
+async def test_get_profile_returns_none_for_empty_arrays(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """DBにプロファイルが存在するが全フィールドが空配列の場合Noneを返す."""
     async with db_session_factory() as session:
         session.add(UserProfile(
             slack_user_id="UEMPTY",
@@ -205,8 +205,8 @@ async def test_ac4_get_profile_returns_none_for_empty_arrays(db_session_factory)
     assert result is None
 
 
-async def test_ac4_profile_keyword_handler() -> None:
-    """AC4: プロファイル確認キーワードでget_profileが呼ばれる."""
+async def test_profile_keyword_triggers_get_profile() -> None:
+    """プロファイル確認キーワードでget_profileが呼ばれる."""
     from src.messaging.port import IncomingMessage
     from src.messaging.router import MessageRouter
 

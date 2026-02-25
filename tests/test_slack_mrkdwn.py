@@ -1,6 +1,6 @@
 """Slack mrkdwn形式対応のテスト (Issue #89).
 
-仕様: docs/specs/f10-slack-mrkdwn.md
+仕様: docs/specs/features/slack-formatting.md
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ async def db_session_factory():  # type: ignore[no-untyped-def]
     await engine.dispose()
 
 
-async def test_ac1_format_instruction_in_assistant_yaml() -> None:
-    """AC1: config/assistant.yaml に format_instruction が定義されている."""
+async def test_format_instruction_defined_in_config() -> None:
+    """設定ファイルに format_instruction が定義されている."""
     from src.config.settings import load_assistant_config
 
     config = load_assistant_config()
@@ -34,8 +34,8 @@ async def test_ac1_format_instruction_in_assistant_yaml() -> None:
     assert config["format_instruction"].strip() != ""
 
 
-async def test_ac2_slack_format_prepended_to_system_prompt(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC2: format_instruction がシステムプロンプトの先頭に追加される."""
+async def test_format_instruction_prepended_to_system_prompt(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """format_instruction がシステムプロンプトの先頭に追加される."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
@@ -57,8 +57,8 @@ async def test_ac2_slack_format_prepended_to_system_prompt(db_session_factory) -
     assert messages[0].content.startswith(slack_format)
 
 
-async def test_ac3_empty_slack_format_no_effect(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC3: format_instruction が空の場合、システムプロンプトに影響しない."""
+async def test_empty_format_instruction_has_no_effect(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """format_instruction が空の場合、システムプロンプトに影響しない."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
