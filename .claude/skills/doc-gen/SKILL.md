@@ -10,6 +10,8 @@ argument-hint: "spec [feature-name]"
 
 プロジェクトドキュメントを自動生成する。Issue/PR/コミット履歴から情報を収集し、CLAUDE.mdのルールに従ったフォーマットで出力する。
 
+仕様: docs/specs/agentic/skills/doc-gen-skill.md
+
 ## 引数
 
 `$ARGUMENTS` の形式:

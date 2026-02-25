@@ -10,6 +10,8 @@ argument-hint: "<file-path> [update-reason]"
 
 既存のプロジェクトドキュメントを安全に更新・修正する。ファイル構造を保持しながら必要な変更を加える。
 
+仕様: docs/specs/agentic/skills/doc-gen-skill.md
+
 ## 引数
 
 `$ARGUMENTS` の形式:
