@@ -18,19 +18,18 @@ GitHub PR や Issue で `@claude` メンションすることで Claude Code を
 | ガード | 内容 |
 | --- | --- |
 | ユーザー制限 | 許可ユーザーのみ実行可能 |
-| イベントフィルタリング | `@claude` メンションを含むコメントのみ実行 |
+| イベントフィルタリング | 対象イベントのコメントまたは本文に `@claude` メンションを含む場合のみ実行 |
 | トークン保護 | シークレット経由で参照（ハードコードしない） |
 | ターン制限 | 無限ループ防止のためターン数を制限 |
 
 ### 認証方式
 
-OAuth 認証（`CLAUDE_CODE_OAUTH_TOKEN`）を使用する。
+OAuth 認証を使用する。
 
-セットアップ手順:
+前提条件:
 
-1. Claude GitHub App をリポジトリにインストール
-2. OAuth トークンを取得
-3. リポジトリシークレットに `CLAUDE_CODE_OAUTH_TOKEN` を登録
+- GitHub Actions から Claude Code 用の OAuth アクセストークンを参照できること
+- リポジトリシークレット `CLAUDE_CODE_OAUTH_TOKEN`: Claude GitHub App により発行された OAuth トークンを格納する
 
 ## トリガー条件
 
@@ -75,4 +74,5 @@ flowchart TD
 
 ## 関連ドキュメント
 
-- `workflows/github/auto-progress` — 自動進行管理（`auto-implement` ラベルトリガーを含む）
+<!-- auto-progress は未移行。#648 で一括修正予定 -->
+- [auto-progress](auto-progress.md) — 自動進行管理（`auto-implement` ラベルトリガーを含む）
