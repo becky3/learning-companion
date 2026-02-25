@@ -1,6 +1,6 @@
 """ベクトルストアのテスト (Issue #116).
 
-仕様: docs/specs/f9-rag.md — AC8〜AC11
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ class TestAC8AddDocuments:
     """AC8: VectorStore.add_documents() でチャンクをEmbedding→ChromaDBに保存できること."""
 
     @pytest.mark.asyncio
-    async def test_ac8_add_single_document(self, ephemeral_store: VectorStore) -> None:
+    async def test_add_single_document(self, ephemeral_store: VectorStore) -> None:
         """単一のドキュメントを追加できる."""
         chunk = DocumentChunk(
             id="doc1_0",
@@ -62,7 +62,7 @@ class TestAC8AddDocuments:
         assert count == 1
 
     @pytest.mark.asyncio
-    async def test_ac8_add_multiple_documents(self, ephemeral_store: VectorStore) -> None:
+    async def test_add_multiple_documents(self, ephemeral_store: VectorStore) -> None:
         """複数のドキュメントを追加できる."""
         chunks = [
             DocumentChunk(
@@ -76,13 +76,13 @@ class TestAC8AddDocuments:
         assert count == 5
 
     @pytest.mark.asyncio
-    async def test_ac8_add_empty_list(self, ephemeral_store: VectorStore) -> None:
+    async def test_add_empty_list(self, ephemeral_store: VectorStore) -> None:
         """空のリストを渡すと0を返す."""
         count = await ephemeral_store.add_documents([])
         assert count == 0
 
     @pytest.mark.asyncio
-    async def test_ac8_embedding_is_called(
+    async def test_embedding_is_called(
         self,
         mock_embedding: MockEmbeddingProvider,
         ephemeral_store: VectorStore,
@@ -101,7 +101,7 @@ class TestAC9SearchSimilarChunks:
     """AC9: VectorStore.search() でクエリに類似するチャンクを検索できること."""
 
     @pytest.mark.asyncio
-    async def test_ac9_search_returns_results(self, ephemeral_store: VectorStore) -> None:
+    async def test_search_returns_results(self, ephemeral_store: VectorStore) -> None:
         """検索結果が返される."""
         # ドキュメントを追加
         chunks = [
@@ -120,7 +120,7 @@ class TestAC9SearchSimilarChunks:
         assert all(isinstance(r, RetrievalResult) for r in results)
 
     @pytest.mark.asyncio
-    async def test_ac9_search_returns_text_and_metadata(
+    async def test_search_returns_text_and_metadata(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -138,7 +138,7 @@ class TestAC9SearchSimilarChunks:
         assert results[0].metadata["source_url"] == "https://example.com/test"
 
     @pytest.mark.asyncio
-    async def test_ac9_search_returns_distance(self, ephemeral_store: VectorStore) -> None:
+    async def test_search_returns_distance(self, ephemeral_store: VectorStore) -> None:
         """検索結果にdistanceが含まれる."""
         chunk = DocumentChunk(
             id="doc1_0",
@@ -152,13 +152,13 @@ class TestAC9SearchSimilarChunks:
         assert isinstance(results[0].distance, float)
 
     @pytest.mark.asyncio
-    async def test_ac9_search_empty_store(self, ephemeral_store: VectorStore) -> None:
+    async def test_search_empty_store(self, ephemeral_store: VectorStore) -> None:
         """空のストアを検索すると空のリストを返す."""
         results = await ephemeral_store.search("テスト", n_results=5)
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_ac9_search_respects_n_results(self, ephemeral_store: VectorStore) -> None:
+    async def test_search_respects_n_results(self, ephemeral_store: VectorStore) -> None:
         """n_resultsで返却数を制限できる."""
         chunks = [
             DocumentChunk(
@@ -178,7 +178,7 @@ class TestAC10DeleteBySource:
     """AC10: VectorStore.delete_by_source() でソースURL指定のチャンクを削除できること."""
 
     @pytest.mark.asyncio
-    async def test_ac10_delete_by_source_url(self, ephemeral_store: VectorStore) -> None:
+    async def test_delete_by_source_url(self, ephemeral_store: VectorStore) -> None:
         """ソースURL指定で削除できる."""
         # 2つの異なるソースからドキュメントを追加
         chunks = [
@@ -209,7 +209,7 @@ class TestAC10DeleteBySource:
         assert stats["total_chunks"] == 1
 
     @pytest.mark.asyncio
-    async def test_ac10_delete_nonexistent_source(self, ephemeral_store: VectorStore) -> None:
+    async def test_delete_nonexistent_source(self, ephemeral_store: VectorStore) -> None:
         """存在しないソースURLを指定すると0を返す."""
         chunk = DocumentChunk(
             id="doc1_0",
@@ -225,14 +225,14 @@ class TestAC10DeleteBySource:
 class TestAC11GetStats:
     """AC11: VectorStore.get_stats() でナレッジベースの統計情報を取得できること."""
 
-    def test_ac11_get_stats_empty_store(self, ephemeral_store: VectorStore) -> None:
+    def test_get_stats_empty_store(self, ephemeral_store: VectorStore) -> None:
         """空のストアの統計."""
         stats = ephemeral_store.get_stats()
         assert stats["total_chunks"] == 0
         assert stats["source_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_ac11_get_stats_with_documents(self, ephemeral_store: VectorStore) -> None:
+    async def test_get_stats_with_documents(self, ephemeral_store: VectorStore) -> None:
         """ドキュメントがある場合の統計."""
         chunks = [
             DocumentChunk(
@@ -306,7 +306,7 @@ class TestAC38SimilarityThreshold:
     """AC38: 類似度閾値フィルタリングのテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac38_threshold_filters_distant_results(
+    async def test_threshold_filters_distant_results(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -335,7 +335,7 @@ class TestAC38SimilarityThreshold:
         assert len(results_strict) < len(results_no_threshold)
 
     @pytest.mark.asyncio
-    async def test_ac38_threshold_none_returns_all(
+    async def test_threshold_none_returns_all(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -358,7 +358,7 @@ class TestAC38SimilarityThreshold:
         assert len(results) == 3
 
     @pytest.mark.asyncio
-    async def test_ac38_threshold_respects_n_results(
+    async def test_threshold_respects_n_results(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -383,7 +383,7 @@ class TestAC38SimilarityThreshold:
         assert len(results) <= 3
 
     @pytest.mark.asyncio
-    async def test_ac38_threshold_returns_empty_when_all_filtered(
+    async def test_threshold_returns_empty_when_all_filtered(
         self,
         ephemeral_store: VectorStore,
     ) -> None:
@@ -407,7 +407,7 @@ class TestAC38SimilarityThreshold:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_ac38_threshold_filtering_logs_excluded_count(
+    async def test_threshold_filtering_logs_excluded_count(
         self,
         ephemeral_store: VectorStore,
         caplog: pytest.LogCaptureFixture,

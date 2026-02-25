@@ -1,6 +1,6 @@
 """Embeddingプロバイダーのテスト (Issue #115).
 
-仕様: docs/specs/f9-rag.md — AC1〜AC4
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from mcp_servers.rag.embedding.lmstudio_embedding import LMStudioEmbedding
 from mcp_servers.rag.embedding.openai_embedding import OpenAIEmbedding
 
 
-def test_ac1_embedding_provider_interface() -> None:
+def test_embedding_provider_interface() -> None:
     """AC1: EmbeddingProvider 抽象基底クラスが embed() と is_available() メソッドを定義すること."""
     assert hasattr(EmbeddingProvider, "embed")
     assert hasattr(EmbeddingProvider, "is_available")
@@ -26,18 +26,18 @@ def test_ac1_embedding_provider_interface() -> None:
         EmbeddingProvider()  # type: ignore[abstract]
 
 
-def test_ac1_lmstudio_is_subclass() -> None:
+def test_lmstudio_is_subclass() -> None:
     """AC1: LMStudioEmbedding が EmbeddingProvider のサブクラスであること."""
     assert issubclass(LMStudioEmbedding, EmbeddingProvider)
 
 
-def test_ac1_openai_is_subclass() -> None:
+def test_openai_is_subclass() -> None:
     """AC1: OpenAIEmbedding が EmbeddingProvider のサブクラスであること."""
     assert issubclass(OpenAIEmbedding, EmbeddingProvider)
 
 
 @pytest.mark.asyncio
-async def test_ac2_lmstudio_embedding_converts_text() -> None:
+async def test_lmstudio_embedding_converts_text() -> None:
     """AC2: LMStudioEmbedding が LM Studio 経由でテキストをベクトルに変換できること."""
     provider = LMStudioEmbedding(
         base_url=DEFAULT_LMSTUDIO_BASE_URL,
@@ -65,7 +65,7 @@ async def test_ac2_lmstudio_embedding_converts_text() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac2_lmstudio_embedding_is_available_true() -> None:
+async def test_lmstudio_embedding_is_available_true() -> None:
     """AC2: LMStudioEmbedding の is_available() が接続成功時に True を返すこと."""
     provider = LMStudioEmbedding()
     provider._client.models.list = AsyncMock(return_value=MagicMock())  # type: ignore[method-assign]
@@ -74,7 +74,7 @@ async def test_ac2_lmstudio_embedding_is_available_true() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac2_lmstudio_embedding_is_available_false() -> None:
+async def test_lmstudio_embedding_is_available_false() -> None:
     """AC2: LMStudioEmbedding の is_available() が接続失敗時に False を返すこと."""
     provider = LMStudioEmbedding()
     provider._client.models.list = AsyncMock(side_effect=Exception("connection refused"))  # type: ignore[method-assign]
@@ -83,7 +83,7 @@ async def test_ac2_lmstudio_embedding_is_available_false() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac3_openai_embedding_converts_text() -> None:
+async def test_openai_embedding_converts_text() -> None:
     """AC3: OpenAIEmbedding が OpenAI Embeddings API でテキストをベクトルに変換できること."""
     provider = OpenAIEmbedding(api_key="sk-test", model="text-embedding-3-small")
 
@@ -105,7 +105,7 @@ async def test_ac3_openai_embedding_converts_text() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac3_openai_embedding_is_available() -> None:
+async def test_openai_embedding_is_available() -> None:
     """AC3: OpenAIEmbedding の is_available() が APIキー有無で判定すること."""
     provider_with_key = OpenAIEmbedding(api_key="sk-test")
     assert await provider_with_key.is_available() is True
@@ -114,14 +114,14 @@ async def test_ac3_openai_embedding_is_available() -> None:
     assert await provider_without_key.is_available() is False
 
 
-def test_ac4_factory_returns_correct_provider_local() -> None:
+def test_factory_returns_correct_provider_local() -> None:
     """AC4: get_embedding_provider() が 'local' 設定で LMStudioEmbedding を返すこと."""
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     provider = get_embedding_provider(settings, "local")
     assert isinstance(provider, LMStudioEmbedding)
 
 
-def test_ac4_factory_returns_correct_provider_online(
+def test_factory_returns_correct_provider_online(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """AC4: get_embedding_provider() が 'online' 設定で OpenAIEmbedding を返すこと."""
@@ -131,7 +131,7 @@ def test_ac4_factory_returns_correct_provider_online(
     assert isinstance(provider, OpenAIEmbedding)
 
 
-def test_ac4_factory_uses_settings_model_local() -> None:
+def test_factory_uses_settings_model_local() -> None:
     """AC4: ファクトリが Settings の embedding_model_local を使用すること."""
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     provider = get_embedding_provider(settings, "local")
@@ -139,7 +139,7 @@ def test_ac4_factory_uses_settings_model_local() -> None:
     assert provider._model == settings.embedding_model_local
 
 
-def test_ac4_factory_uses_settings_model_online(
+def test_factory_uses_settings_model_online(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """AC4: ファクトリが Settings の embedding_model_online を使用すること."""
@@ -151,7 +151,7 @@ def test_ac4_factory_uses_settings_model_online(
     assert provider._model == "text-embedding-3-large"
 
 
-def test_ac4_embedding_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_embedding_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     """AC4: Embedding関連設定のデフォルト値が正しいこと."""
     monkeypatch.delenv("EMBEDDING_PROVIDER", raising=False)
     monkeypatch.delenv("EMBEDDING_MODEL_LOCAL", raising=False)
@@ -162,7 +162,7 @@ def test_ac4_embedding_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> Non
     assert settings.embedding_model_online == "text-embedding-3-small"
 
 
-def test_ac4_embedding_settings_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_embedding_settings_configurable(monkeypatch: pytest.MonkeyPatch) -> None:
     """AC4: Embedding関連設定が環境変数で変更可能であること."""
     monkeypatch.setenv("EMBEDDING_PROVIDER", "online")
     monkeypatch.setenv("EMBEDDING_MODEL_LOCAL", "custom-embed-model")

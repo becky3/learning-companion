@@ -1,6 +1,6 @@
 """テーブルチャンキングのテスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from mcp_servers.rag.table_chunker import chunk_table_data
@@ -9,12 +9,12 @@ from mcp_servers.rag.table_chunker import chunk_table_data
 class TestChunkTableData:
     """chunk_table_data関数のテスト."""
 
-    def test_ac1_empty_text_returns_empty_list(self) -> None:
+    def test_empty_text_returns_empty_list(self) -> None:
         """空のテキストは空リストを返す."""
         assert chunk_table_data("") == []
         assert chunk_table_data("   ") == []
 
-    def test_ac2_markdown_table_chunks_by_row(self) -> None:
+    def test_markdown_table_chunks_by_row(self) -> None:
         """Markdownテーブルを行単位でチャンキングする."""
         text = """| 名前 | HP | MP |
 |------|-----|-----|
@@ -35,7 +35,7 @@ class TestChunkTableData:
         assert chunks[2].entity_name == "スライム"
         assert "8" in chunks[2].formatted_text
 
-    def test_ac3_tab_separated_table_chunks_by_row(self) -> None:
+    def test_tab_separated_table_chunks_by_row(self) -> None:
         """タブ区切りテーブルを行単位でチャンキングする."""
         text = "名前\tHP\tMP\nりゅうおう\t200\t100\nゾーマ\t500\t255"
 
@@ -45,7 +45,7 @@ class TestChunkTableData:
         assert chunks[0].entity_name == "りゅうおう"
         assert chunks[1].entity_name == "ゾーマ"
 
-    def test_ac4_header_included_in_each_chunk(self) -> None:
+    def test_header_included_in_each_chunk(self) -> None:
         """各チャンクにヘッダー情報が含まれる."""
         text = """| 名前 | HP | MP |
 |------|-----|-----|
@@ -57,7 +57,7 @@ class TestChunkTableData:
         assert "HP" in chunks[0].header
         assert "MP" in chunks[0].header
 
-    def test_ac5_formatted_text_contains_entity_and_attributes(self) -> None:
+    def test_formatted_text_contains_entity_and_attributes(self) -> None:
         """フォーマット済みテキストにエンティティと属性が含まれる."""
         text = """| 名前 | HP | MP |
 |------|-----|-----|
@@ -70,7 +70,7 @@ class TestChunkTableData:
         assert "HP" in formatted
         assert "200" in formatted
 
-    def test_ac6_context_rows_included(self) -> None:
+    def test_context_rows_included(self) -> None:
         """コンテキスト行が含まれる."""
         text = """| 名前 | HP |
 |------|-----|
@@ -86,7 +86,7 @@ class TestChunkTableData:
         # rows には前後の行も含まれる
         assert len(chunks[1].rows) == 3  # A, B, C
 
-    def test_ac7_single_row_table(self) -> None:
+    def test_single_row_table(self) -> None:
         """1行のみのテーブルも処理できる."""
         text = """| 名前 | HP |
 |------|-----|

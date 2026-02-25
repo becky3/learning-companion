@@ -1,6 +1,6 @@
 """RAG MCP サーバー設定管理.
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 分離制約: src/ 配下のモジュールは一切importしない。
 """
 
@@ -25,7 +25,7 @@ _ENV_FILE = Path(__file__).parent / ".env"
 class RAGSettings(BaseSettings):
     """RAG MCP サーバーの設定.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     model_config = SettingsConfigDict(

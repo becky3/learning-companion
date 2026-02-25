@@ -1,6 +1,6 @@
 """ハイブリッド検索モジュール
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ class HybridSearchResult:
 class HybridSearchEngine:
     """ベクトル検索とBM25を組み合わせたハイブリッド検索.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     def __init__(
@@ -132,7 +132,7 @@ class HybridSearchEngine:
     ) -> list[HybridSearchResult]:
         """ハイブリッド検索を実行する.
 
-        仕様: docs/specs/f9-rag.md
+        仕様: docs/specs/infrastructure/rag-knowledge.md
 
         1. ベクトル検索で候補を取得
         2. BM25検索で候補を取得

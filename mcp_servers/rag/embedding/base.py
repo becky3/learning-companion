@@ -1,5 +1,5 @@
 """Embedding生成の抽象基底クラス
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import abc
 class EmbeddingProvider(abc.ABC):
     """Embedding生成の抽象基底クラス.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     @abc.abstractmethod

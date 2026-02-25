@@ -1,6 +1,6 @@
 """WebCrawler テスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ class TestCrawledPage:
 class TestWebCrawlerValidation:
     """WebCrawler URL検証のテスト."""
 
-    def test_ac31_non_http_scheme_rejected(self) -> None:
+    def test_non_http_scheme_rejected(self) -> None:
         """AC31: http/https 以外のスキームが拒否されること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -237,19 +237,19 @@ class TestWebCrawlerValidation:
         with pytest.raises(ValueError, match="リンクローカルアドレス"):
             crawler.validate_url("http://169.254.169.254/latest/meta-data/")
 
-    def test_ac36_validate_url_strips_fragment(self) -> None:
+    def test_validate_url_strips_fragment(self) -> None:
         """AC36: validate_url() がURLフラグメントを除去すること."""
         crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://example.com/page#section1")
         assert result == "https://example.com/page"
 
-    def test_ac36_validate_url_strips_fragment_with_path(self) -> None:
+    def test_validate_url_strips_fragment_with_path(self) -> None:
         """AC36: パス付きURLのフラグメントも除去されること."""
         crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://example.com/path/to/page#anchor")
         assert result == "https://example.com/path/to/page"
 
-    def test_ac36_validate_url_without_fragment_unchanged(self) -> None:
+    def test_validate_url_without_fragment_unchanged(self) -> None:
         """AC36: フラグメントのないURLはそのまま返されること."""
         crawler = WebCrawler(respect_robots_txt=False)
         result = crawler.validate_url("https://example.com/page")
@@ -296,7 +296,7 @@ class TestWebCrawlerCrawlIndexPage:
     """WebCrawler.crawl_index_page のテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac12_crawl_index_page_extracts_urls(self) -> None:
+    async def test_crawl_index_page_extracts_urls(self) -> None:
         """AC12: リンク集ページからURLリストを抽出できること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -320,7 +320,7 @@ class TestWebCrawlerCrawlIndexPage:
         assert len(urls) == 5  # 外部ドメイン1件を除く
 
     @pytest.mark.asyncio
-    async def test_ac13_url_pattern_filtering(self) -> None:
+    async def test_url_pattern_filtering(self) -> None:
         """AC13: URLパターン（正規表現）によるフィルタリングが機能すること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -338,7 +338,7 @@ class TestWebCrawlerCrawlIndexPage:
         assert all(url.endswith(".html") for url in urls)
 
     @pytest.mark.asyncio
-    async def test_ac41_crawl_index_page_skips_external_domain_links(self) -> None:
+    async def test_crawl_index_page_skips_external_domain_links(self) -> None:
         """AC41: 外部ドメインのリンクがスキップされること（クロール範囲の制御）."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -371,7 +371,7 @@ class TestWebCrawlerCrawlIndexPage:
         assert not any("fc2.com" in url for url in urls)
 
     @pytest.mark.asyncio
-    async def test_ac37_crawl_index_page_deduplicates_fragment_urls(self) -> None:
+    async def test_crawl_index_page_deduplicates_fragment_urls(self) -> None:
         """AC37: アンカー違いの同一ページURLが重複除去されること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -401,7 +401,7 @@ class TestWebCrawlerCrawlIndexPage:
         assert "https://example.com/other" in urls
 
     @pytest.mark.asyncio
-    async def test_ac34_max_crawl_pages_limit(self) -> None:
+    async def test_max_crawl_pages_limit(self) -> None:
         """AC34: 1回のクロールで取得するページ数が max_pages で制限されること."""
         crawler = WebCrawler(max_pages=2, respect_robots_txt=False)
 
@@ -418,7 +418,7 @@ class TestWebCrawlerCrawlPage:
     """WebCrawler.crawl_page のテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac14_crawl_page_extracts_text(self) -> None:
+    async def test_crawl_page_extracts_text(self) -> None:
         """AC14: 単一ページの本文テキストを取得できること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -505,7 +505,7 @@ class TestWebCrawlerCrawlPages:
     """WebCrawler.crawl_pages のテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac15_crawl_pages_isolates_errors(self) -> None:
+    async def test_crawl_pages_isolates_errors(self) -> None:
         """AC15: 複数ページを並行クロールし、ページ単位のエラーを隔離すること."""
         crawler = WebCrawler(crawl_delay=0, respect_robots_txt=False)
 
@@ -559,7 +559,7 @@ class TestWebCrawlerCrawlPages:
         assert fail_url not in page_urls
 
     @pytest.mark.asyncio
-    async def test_ac35_crawl_delay_between_requests(self) -> None:
+    async def test_crawl_delay_between_requests(self) -> None:
         """AC35: 同一ドメインへの連続リクエスト間に crawl_delay の待機が挿入されること."""
         crawler = WebCrawler(crawl_delay=0.1, respect_robots_txt=False)
 
@@ -686,7 +686,7 @@ class TestWebCrawlerEncodingDetection:
     """WebCrawler エンコーディング自動検出のテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac14_shift_jis_encoding_detected(self) -> None:
+    async def test_shift_jis_encoding_detected(self) -> None:
         """AC14: Shift_JISエンコードされたHTMLが正しくデコードされること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -705,7 +705,7 @@ class TestWebCrawlerEncodingDetection:
         assert "これはShift_JISでエンコードされたページです" in page.text
 
     @pytest.mark.asyncio
-    async def test_ac14_utf8_encoding_detected(self) -> None:
+    async def test_utf8_encoding_detected(self) -> None:
         """AC14: UTF-8エンコードされたHTMLが正しくデコードされること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -723,7 +723,7 @@ class TestWebCrawlerEncodingDetection:
         assert "これは記事の本文です" in page.text
 
     @pytest.mark.asyncio
-    async def test_ac14_euc_jp_encoding_detected(self) -> None:
+    async def test_euc_jp_encoding_detected(self) -> None:
         """AC14: EUC-JPエンコードされたHTMLが正しくデコードされること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -742,7 +742,7 @@ class TestWebCrawlerEncodingDetection:
         assert "これはEUC-JPでエンコードされたページです" in page.text
 
     @pytest.mark.asyncio
-    async def test_ac14_encoding_detection_fallback(self) -> None:
+    async def test_encoding_detection_fallback(self) -> None:
         """AC14: エンコーディング検出に失敗した場合、UTF-8でフォールバックすること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -761,7 +761,7 @@ class TestWebCrawlerEncodingDetection:
         assert "Test content" in page.text
 
     @pytest.mark.asyncio
-    async def test_ac14_crawl_index_page_with_shift_jis(self) -> None:
+    async def test_crawl_index_page_with_shift_jis(self) -> None:
         """AC14: crawl_index_pageでもShift_JISが正しくデコードされること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -922,7 +922,7 @@ class TestRobotsChecker:
         assert delay is None
 
     @pytest.mark.asyncio
-    async def test_ac74_fail_open_on_fetch_error(self) -> None:
+    async def test_fail_open_on_fetch_error(self) -> None:
         """AC74: robots.txt の取得に失敗した場合、フェイルオープンでクロールを許可すること."""
         checker = RobotsChecker()
         timeout = aiohttp.ClientTimeout(total=10)
@@ -937,7 +937,7 @@ class TestRobotsChecker:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_ac74_fail_open_on_404(self) -> None:
+    async def test_fail_open_on_404(self) -> None:
         """AC74: robots.txt が 404 の場合、全てのクロールを許可すること."""
         checker = RobotsChecker()
         timeout = aiohttp.ClientTimeout(total=10)
@@ -951,7 +951,7 @@ class TestRobotsChecker:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_ac75_cache_hit(self) -> None:
+    async def test_cache_hit(self) -> None:
         """AC75: robots.txt がキャッシュされ、TTL 内は再取得されないこと."""
         checker = RobotsChecker(cache_ttl=3600)
         timeout = aiohttp.ClientTimeout(total=10)
@@ -974,7 +974,7 @@ class TestRobotsChecker:
         assert second_call_count == first_call_count
 
     @pytest.mark.asyncio
-    async def test_ac75_cache_expiry(self) -> None:
+    async def test_cache_expiry(self) -> None:
         """AC75: キャッシュ TTL 超過後は再取得されること."""
         checker = RobotsChecker(cache_ttl=0)  # TTL=0 で即時期限切れ
         timeout = aiohttp.ClientTimeout(total=10)
@@ -1020,7 +1020,7 @@ class TestWebCrawlerRobotsTxt:
     """WebCrawler robots.txt 統合テスト."""
 
     @pytest.mark.asyncio
-    async def test_ac71_crawl_page_skips_disallowed_url(self) -> None:
+    async def test_crawl_page_skips_disallowed_url(self) -> None:
         """AC71: robots.txt で Disallow されたパスのクロールがスキップされること."""
         crawler = WebCrawler(respect_robots_txt=True)
 
@@ -1037,7 +1037,7 @@ class TestWebCrawlerRobotsTxt:
         assert page is None
 
     @pytest.mark.asyncio
-    async def test_ac71_crawl_page_allows_permitted_url(self) -> None:
+    async def test_crawl_page_allows_permitted_url(self) -> None:
         """AC71: robots.txt で許可されたパスはクロールされること."""
         crawler = WebCrawler(respect_robots_txt=True)
 
@@ -1054,7 +1054,7 @@ class TestWebCrawlerRobotsTxt:
         assert "これは記事の本文です" in page.text
 
     @pytest.mark.asyncio
-    async def test_ac72_crawl_page_ignores_robots_when_disabled(self) -> None:
+    async def test_crawl_page_ignores_robots_when_disabled(self) -> None:
         """AC72: respect_robots_txt=False の場合、robots.txt を無視してクロールすること."""
         crawler = WebCrawler(respect_robots_txt=False)
 
@@ -1068,7 +1068,7 @@ class TestWebCrawlerRobotsTxt:
         assert page is not None
 
     @pytest.mark.asyncio
-    async def test_ac71_crawl_index_page_filters_disallowed_urls(self) -> None:
+    async def test_crawl_index_page_filters_disallowed_urls(self) -> None:
         """AC71: crawl_index_page で Disallow されたURLがフィルタリングされること."""
         crawler = WebCrawler(respect_robots_txt=True)
 
@@ -1103,7 +1103,7 @@ class TestWebCrawlerRobotsTxt:
         assert not any("/admin/" in url for url in urls)
 
     @pytest.mark.asyncio
-    async def test_ac73_crawl_delay_from_robots_txt(self) -> None:
+    async def test_crawl_delay_from_robots_txt(self) -> None:
         """AC73: robots.txt の Crawl-delay が設定値より大きい場合、そちらが採用されること."""
         # crawl_delay=1.0 だが、robots.txt の Crawl-delay=5
         crawler = WebCrawler(
@@ -1121,7 +1121,7 @@ class TestWebCrawlerRobotsTxt:
         assert delay == 5
 
     @pytest.mark.asyncio
-    async def test_ac73_configured_delay_when_larger(self) -> None:
+    async def test_configured_delay_when_larger(self) -> None:
         """AC73: 設定値が robots.txt の Crawl-delay より大きい場合、設定値が採用されること."""
         crawler = WebCrawler(
             crawl_delay=10.0,

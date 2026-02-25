@@ -1,6 +1,6 @@
 """テキストチャンキングモジュール
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ def chunk_text(
 ) -> list[str]:
     """テキストをオーバーラップ付きチャンクに分割する.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
 
     分割優先順: 段落 → 文 → 文字数
     外部依存なし（LangChain不要）。

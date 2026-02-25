@@ -1,6 +1,6 @@
 """RAG評価CLIテスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ class TestLoadBaseline:
 class TestWriteJsonReport:
     """JSONレポート出力テスト."""
 
-    def test_ac6_json_report_format(self, tmp_path: Path) -> None:
+    def test_json_report_format(self, tmp_path: Path) -> None:
         """AC6: JSON形式のレポートが出力されること."""
         report = EvaluationReport(
             queries_evaluated=2,
@@ -148,7 +148,7 @@ class TestWriteJsonReport:
 class TestWriteMarkdownReport:
     """Markdownレポート出力テスト."""
 
-    def test_ac7_markdown_report_format(self, tmp_path: Path) -> None:
+    def test_markdown_report_format(self, tmp_path: Path) -> None:
         """AC7: Markdown形式のレポートが出力されること."""
         report = EvaluationReport(
             queries_evaluated=1,
@@ -191,7 +191,7 @@ class TestWriteMarkdownReport:
 class TestRegressionInfo:
     """リグレッション情報付きレポートのテスト."""
 
-    def test_ac10_regression_detection(self, tmp_path: Path) -> None:
+    def test_regression_detection(self, tmp_path: Path) -> None:
         """AC10: F1スコアの低下がしきい値を超えたらリグレッション判定すること."""
         report = EvaluationReport(
             queries_evaluated=1,
@@ -233,7 +233,7 @@ class TestRegressionInfo:
 class TestSaveBaseline:
     """ベースライン保存テスト."""
 
-    def test_ac12_save_baseline(self, tmp_path: Path) -> None:
+    def test_save_baseline(self, tmp_path: Path) -> None:
         """AC12: --save-baseline指定時に現在の結果をベースラインとして保存すること."""
         report = EvaluationReport(
             queries_evaluated=2,
@@ -263,7 +263,7 @@ class TestCLIEvaluate:
     """CLI evaluateコマンドのテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac1_evaluate_command_runs(self, tmp_path: Path) -> None:
+    async def test_evaluate_command_runs(self, tmp_path: Path) -> None:
         """AC1: python -m mcp_servers.rag.cli evaluate で評価が実行できること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -343,7 +343,7 @@ class TestCLIEvaluate:
         assert (output_dir / "report.md").exists()
 
     @pytest.mark.asyncio
-    async def test_ac2_dataset_option(self, tmp_path: Path) -> None:
+    async def test_dataset_option(self, tmp_path: Path) -> None:
         """AC2: --dataset オプションでデータセットパスを指定できること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -399,7 +399,7 @@ class TestCLIEvaluate:
                     assert call_kwargs[1]["dataset_path"] == str(custom_dataset)
 
     @pytest.mark.asyncio
-    async def test_ac3_output_dir_option(self, tmp_path: Path) -> None:
+    async def test_output_dir_option(self, tmp_path: Path) -> None:
         """AC3: --output-dir オプションでレポート出力先を指定できること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -456,7 +456,7 @@ class TestCLIEvaluate:
         assert (custom_output / "report.md").exists()
 
     @pytest.mark.asyncio
-    async def test_ac11_fail_on_regression_exit_code(self, tmp_path: Path) -> None:
+    async def test_fail_on_regression_exit_code(self, tmp_path: Path) -> None:
         """AC11: --fail-on-regression指定時、リグレッション検出でexit code 1になること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -517,7 +517,7 @@ class TestCLIEvaluate:
                     assert exc_info.value.code == 1
 
     @pytest.mark.asyncio
-    async def test_ac4_n_results_option(self, tmp_path: Path) -> None:
+    async def test_n_results_option(self, tmp_path: Path) -> None:
         """AC4: --n-results オプションがevaluate_retrievalに正しく伝播すること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -574,7 +574,7 @@ class TestCLIEvaluate:
                     assert call_kwargs[1]["n_results"] == custom_n_results
 
     @pytest.mark.asyncio
-    async def test_ac5_threshold_option(self, tmp_path: Path) -> None:
+    async def test_threshold_option(self, tmp_path: Path) -> None:
         """AC5: --threshold オプションがcreate_rag_serviceに正しく伝播すること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -631,7 +631,7 @@ class TestCLIEvaluate:
                     assert call_kwargs[1]["threshold"] == custom_threshold
 
     @pytest.mark.asyncio
-    async def test_ac8_vector_weight_option(self, tmp_path: Path) -> None:
+    async def test_vector_weight_option(self, tmp_path: Path) -> None:
         """AC8: --vector-weight オプションがcreate_rag_serviceに正しく伝播すること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -686,7 +686,7 @@ class TestCLIEvaluate:
                     assert call_kwargs[1]["vector_weight"] == custom_vector_weight
 
     @pytest.mark.asyncio
-    async def test_ac9_chunk_params_propagation(self, tmp_path: Path) -> None:
+    async def test_chunk_params_propagation(self, tmp_path: Path) -> None:
         """AC9: --chunk-size/--chunk-overlap がcreate_rag_serviceとBM25構築に正しく伝播すること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -748,7 +748,7 @@ class TestCLIEvaluate:
                     assert call_kwargs[1]["chunk_overlap"] == 50
 
     @pytest.mark.asyncio
-    async def test_ac10_bm25_params_propagation(self, tmp_path: Path) -> None:
+    async def test_bm25_params_propagation(self, tmp_path: Path) -> None:
         """AC10: --bm25-k1/--bm25-b が_build_bm25_index_from_fixtureに正しく伝播すること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -804,7 +804,7 @@ class TestCLIEvaluate:
                     assert bm25_kwargs[1]["b"] == 0.5
 
     @pytest.mark.asyncio
-    async def test_ac13_params_in_json_report(self, tmp_path: Path) -> None:
+    async def test_params_in_json_report(self, tmp_path: Path) -> None:
         """AC13: レポートに評価パラメータが含まれること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -865,7 +865,7 @@ class TestCLIEvaluate:
         assert data["params"]["b"] == 0.5
 
     @pytest.mark.asyncio
-    async def test_ac6_persist_dir_option(self, tmp_path: Path) -> None:
+    async def test_persist_dir_option(self, tmp_path: Path) -> None:
         """AC6: --persist-dir オプションがcreate_rag_serviceに正しく伝播すること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -923,7 +923,7 @@ class TestCLIEvaluate:
 
 
     @pytest.mark.asyncio
-    async def test_ac11_min_combined_score_propagation(self, tmp_path: Path) -> None:
+    async def test_min_combined_score_propagation(self, tmp_path: Path) -> None:
         """AC11: --min-combined-score が create_rag_service に正しく伝播すること."""
         from mcp_servers.rag.cli import run_evaluation
         from argparse import Namespace
@@ -981,7 +981,7 @@ class TestCLIInitTestDb:
     """CLI init-test-dbコマンドのテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac67_init_test_db_creates_chromadb(self, tmp_path: Path) -> None:
+    async def test_init_test_db_creates_chromadb(self, tmp_path: Path) -> None:
         """init-test-dbコマンドでChromaDBが初期化されること."""
         from mcp_servers.rag.cli import init_test_db
         from argparse import Namespace
@@ -1030,7 +1030,7 @@ class TestCLIInitTestDb:
             mock_service._ingest_crawled_page.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_ac67_init_test_db_creates_bm25_index(self, tmp_path: Path) -> None:
+    async def test_init_test_db_creates_bm25_index(self, tmp_path: Path) -> None:
         """init-test-dbコマンドでBM25インデックスも永続化されること."""
         from mcp_servers.rag.cli import init_test_db
         from mcp_servers.rag.bm25_index import BM25Index

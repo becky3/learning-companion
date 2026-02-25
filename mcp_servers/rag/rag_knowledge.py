@@ -1,6 +1,6 @@
 """RAGナレッジ管理サービス
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def smart_chunk(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
     """コンテンツタイプに応じた適切なチャンキング手法を選択する.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
 
     - TABLE: テーブルデータとして行単位でチャンキング
     - HEADING/MIXED: 見出し単位でチャンキング
@@ -70,7 +70,7 @@ def smart_chunk(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
 class RAGRetrievalResult:
     """RAG検索結果.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
 
     Attributes:
         context: フォーマット済みテキスト（システムプロンプト注入用）
@@ -85,7 +85,7 @@ class RAGRetrievalResult:
 class VectorSearchItem:
     """ベクトル検索の生結果アイテム.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
 
     Attributes:
         text: チャンクテキスト
@@ -104,7 +104,7 @@ class VectorSearchItem:
 class BM25SearchItem:
     """BM25検索の生結果アイテム.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
 
     Attributes:
         text: チャンクテキスト
@@ -123,7 +123,7 @@ class BM25SearchItem:
 class RawSearchResults:
     """ベクトル検索・BM25検索の生結果（準Agentic Search用）.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
 
     統合パイプライン（min-max正規化 + CC結合）を迂回し、
     各エンジンの生結果を個別にLLMに渡して判断を委譲する。
@@ -140,7 +140,7 @@ class RawSearchResults:
 class RAGKnowledgeService:
     """RAGナレッジ管理サービス.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     def __init__(
@@ -345,7 +345,7 @@ class RAGKnowledgeService:
     def _smart_chunk(self, text: str) -> list[str]:
         """コンテンツタイプに応じた適切なチャンキング手法を選択する.
 
-        仕様: docs/specs/f9-rag.md
+        仕様: docs/specs/infrastructure/rag-knowledge.md
         """
         return smart_chunk(text, self._chunk_size, self._chunk_overlap)
 
@@ -417,7 +417,7 @@ class RAGKnowledgeService:
 
         ChatService から呼ばれる。結果なしの場合は空のRAGRetrievalResult。
 
-        仕様: docs/specs/f9-rag.md
+        仕様: docs/specs/infrastructure/rag-knowledge.md
 
         Args:
             query: 検索クエリ
@@ -496,7 +496,7 @@ class RAGKnowledgeService:
     ) -> RAGRetrievalResult:
         """ハイブリッド検索（ベクトル＋BM25）で検索を実行する.
 
-        仕様: docs/specs/f9-rag.md
+        仕様: docs/specs/infrastructure/rag-knowledge.md
 
         Args:
             query: 検索クエリ
@@ -557,7 +557,7 @@ class RAGKnowledgeService:
 
         統合パイプラインを迂回し、各エンジンの生スコアをそのままLLMに渡す。
 
-        仕様: docs/specs/f9-rag.md
+        仕様: docs/specs/infrastructure/rag-knowledge.md
 
         Args:
             query: 検索クエリ
