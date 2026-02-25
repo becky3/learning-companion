@@ -176,7 +176,7 @@ git diff --no-index /dev/null $FILE_PATH 2>/dev/null || git diff $FILE_PATH
 更新理由: Issue #45でリトライ機能が追加されたため
 
 git diff:
-+- [ ] エラー発生時に3回までリトライする
++- エラー発生時に3回までリトライする
 +| `src/services/retry_handler.py` | リトライロジック |
 ```
 
