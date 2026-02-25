@@ -1,6 +1,6 @@
 """メッセージングポート/アダプター層.
 
-仕様: docs/specs/f11-cli-adapter.md
+仕様: docs/specs/features/cli-adapter.md
 """
 
 from src.messaging.port import IncomingMessage, MessagingPort

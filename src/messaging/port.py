@@ -1,6 +1,6 @@
 """MessagingPort ABC と IncomingMessage データクラス.
 
-仕様: docs/specs/f11-cli-adapter.md
+仕様: docs/specs/features/cli-adapter.md
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ class IncomingMessage:
 class MessagingPort(abc.ABC):
     """メッセージ送受信の抽象インターフェース.
 
-    仕様: docs/specs/f11-cli-adapter.md
+    仕様: docs/specs/features/cli-adapter.md
     """
 
     @abc.abstractmethod

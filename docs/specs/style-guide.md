@@ -37,20 +37,6 @@ docs/specs/
 | フック | `agentic/hooks/` | エージェントのフック機能の定義 |
 | メタ文書 | `docs/specs/` 直下 | 仕様書全体に関わる横断的な文書 |
 
-### ファイル所属一覧
-
-| カテゴリ | ファイル |
-|---------|--------|
-| `features/` | chat-response, feed-management, user-profiling, topic-recommend, auto-reply, bot-status, thread-support, slack-formatting |
-| `infrastructure/` | mcp-integration, rag-knowledge, cli-adapter, bot-process-guard |
-| `workflows/github/` | auto-progress, copilot-auto-fix, claude-code-actions |
-| `workflows/` | git-flow |
-| `agentic/agents/` | code-review-agent, doc-review-agent, planner-agent, test-runner-agent |
-| `agentic/skills/` | check-review-batch-skill, doc-gen-skill, handoff-skill, topic-skill |
-| `agentic/teams/` | common, fixed-theme, mixed-genius |
-| `agentic/hooks/` | claude-code-hooks |
-| ルート直下 | style-guide, overview, pr-body-template |
-
 ## 2. ファイル命名規則
 
 ### 基本ルール
@@ -322,3 +308,35 @@ Phase 2 末尾で `docs/specs/` → `docs/specs-old/`、`docs/specs-new/` → `d
 ### 関連ドキュメントのリンク
 
 移行中は「関連ドキュメント」セクションのリンク先ファイル名が旧名称（f番号付き等）のままでもよい。全ファイルの移行完了後に、Phase 3 末尾でリンクをまとめて新ファイル名に一括修正する。
+
+### ファイル所属一覧
+
+移行先のカテゴリ・ファイル名の対応。移行完了後に本セクションごと削除する。
+
+**features/**:
+chat-response, feed-management, user-profiling, topic-recommend,
+auto-reply, bot-status, thread-support, slack-formatting, cli-adapter
+
+**infrastructure/**:
+mcp-integration, rag-knowledge, bot-process-guard
+
+**workflows/github/**:
+auto-progress, copilot-auto-fix, claude-code-actions
+
+**workflows/**:
+git-flow
+
+**agentic/agents/**:
+code-review-agent, doc-review-agent, planner-agent, test-runner-agent
+
+**agentic/skills/**:
+check-review-batch-skill, doc-gen-skill, handoff-skill, topic-skill
+
+**agentic/teams/**:
+common, fixed-theme, mixed-genius
+
+**agentic/hooks/**:
+claude-code-hooks
+
+**ルート直下**:
+style-guide, overview, pr-body-template

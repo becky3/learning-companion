@@ -1,6 +1,6 @@
 """Slack用メッセージングアダプター.
 
-仕様: docs/specs/f11-cli-adapter.md
+仕様: docs/specs/features/cli-adapter.md
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class SlackAdapter(MessagingPort):
     """Slack API をラップするアダプター.
 
-    仕様: docs/specs/f11-cli-adapter.md
+    仕様: docs/specs/features/cli-adapter.md
     """
 
     def __init__(
