@@ -1,5 +1,5 @@
 """学習トピック提案サービス
-仕様: docs/specs/f4-topic-recommend.md
+仕様: docs/specs/features/topic-recommend.md
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ _EMPTY_PROFILE_MESSAGE = (
 class TopicRecommender:
     """学習トピック提案サービス.
 
-    仕様: docs/specs/f4-topic-recommend.md
+    仕様: docs/specs/features/topic-recommend.md
     """
 
     def __init__(
