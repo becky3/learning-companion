@@ -1,0 +1,324 @@
+# 仕様書スタイルガイド
+
+仕様書（`docs/specs/` 配下）の分類・構成・記述ルールを定義する。
+全ての仕様書はこのスタイルガイドに準拠すること。
+
+---
+
+## 1. ディレクトリ構造
+
+```
+docs/specs/
+  features/           → ユーザー向けプロダクト機能
+  infrastructure/     → 基盤・内部システム・開発ツール
+  workflows/          → 開発プロセス・CI/CD
+    github/           → GitHub Actions 関連
+  agentic/            → AI エージェント関連
+    agents/           → エージェント定義
+    skills/           → スキル定義
+    teams/            → チーム定義
+    hooks/            → フック定義
+  style-guide.md      → 本ファイル（スタイルガイド）
+  overview.md         → プロジェクト俯瞰
+  pr-body-template.md → PR テンプレート仕様
+```
+
+### 分類基準
+
+| カテゴリ | 配置先 | 判断基準 |
+|---------|--------|---------|
+| ユーザー向け機能 | `features/` | ユーザーが直接触る・意識するプロダクト機能 |
+| 基盤・ツール | `infrastructure/` | ユーザーが直接意識しない裏側の仕組み、開発ツール |
+| 開発プロセス | `workflows/` | 開発フロー・CI/CD・自動化プロセスの定義 |
+| GitHub 固有 | `workflows/github/` | GitHub Actions 上で動く仕組み |
+| エージェント | `agentic/agents/` | AI エージェントの振る舞い・観点の定義 |
+| スキル | `agentic/skills/` | スキルの手順・入出力の定義 |
+| チーム | `agentic/teams/` | チーム運用・構成パターンの定義 |
+| フック | `agentic/hooks/` | エージェントのフック機能の定義 |
+| メタ文書 | `docs/specs/` 直下 | 仕様書全体に関わる横断的な文書 |
+
+### ファイル所属一覧
+
+| カテゴリ | ファイル |
+|---------|--------|
+| `features/` | chat-response, feed-management, user-profiling, topic-recommend, auto-reply, bot-status, thread-support, slack-formatting |
+| `infrastructure/` | mcp-integration, rag-knowledge, cli-adapter, bot-process-guard |
+| `workflows/github/` | auto-progress, copilot-auto-fix, claude-code-actions |
+| `workflows/` | git-flow |
+| `agentic/agents/` | code-review-agent, doc-review-agent, planner-agent, test-runner-agent |
+| `agentic/skills/` | check-review-batch-skill, doc-gen-skill, handoff-skill, topic-skill |
+| `agentic/teams/` | common, fixed-theme, mixed-genius |
+| `agentic/hooks/` | claude-code-hooks |
+| ルート直下 | style-guide, overview, pr-body-template |
+
+## 2. ファイル命名規則
+
+### 基本ルール
+
+- **ケバブケース**（ハイフン区切り）を使用: `chat-response.md`
+- f番号は使用しない（廃止）
+- サフィックス（`-agent`, `-skill`）はディレクトリで種別がわかる場合も維持する
+  - 理由: ファイル単体で見ても種別が判別できる
+
+### 命名の原則
+
+- ファイル名だけで機能の概要がわかること
+- 略語のみ（`rag`, `mcp`）は避け、補足を付ける（`rag-knowledge`, `mcp-integration`）
+- 実装手段ではなく機能の目的を表す名前にする
+
+### f番号からの移行対応表
+
+| 旧名 | 新名 | 変更理由 |
+|------|------|---------|
+| f1-chat | chat-response | 「応答」機能であることを明示 |
+| f2-feed-collection | feed-management | 収集・配信・管理を包含する名前に |
+| f3-user-profiling | user-profiling | f番号のみ除去 |
+| f4-topic-recommend | topic-recommend | f番号のみ除去 |
+| f5-mcp-integration | mcp-integration | f番号のみ除去 |
+| f6-auto-reply | auto-reply | f番号のみ除去 |
+| f7-bot-status | bot-status | f番号のみ除去 |
+| f8-thread-support | thread-support | f番号のみ除去 |
+| f9-rag | rag-knowledge | 「ナレッジ」を補足。蓄積+検索を包含 |
+| f10-slack-mrkdwn | slack-formatting | Slack 固有用語 "mrkdwn" を一般的な表現に |
+| f11-cli-adapter | cli-adapter | f番号のみ除去 |
+
+## 3. コミットメッセージ規約
+
+### 基本形式
+
+```
+type(scope): 説明 (#Issue番号)
+```
+
+### scope のルール
+
+- 仕様書のファイル名（拡張子なし）を使用する
+- 複数機能にまたがる場合はカンマ区切り: `feat(chat-response,thread-support):`
+- 仕様書に対応しない変更は従来通り: `docs:`, `chore:`, `ci:` 等
+
+### type 一覧
+
+| type | 用途 |
+|------|------|
+| `feat` | 新機能・機能追加 |
+| `fix` | バグ修正 |
+| `docs` | ドキュメントのみの変更 |
+| `refactor` | リファクタリング（機能変更なし） |
+| `test` | テストの追加・修正 |
+| `chore` | ビルド・設定等の雑務 |
+| `ci` | CI/CD 関連 |
+
+### 例
+
+```
+feat(rag-knowledge): RAG 検索精度を改善 (#123)
+feat(chat-response,thread-support): スレッド履歴を応答に統合 (#456)
+fix(feed-management): RSS 取得タイムアウト修正 (#789)
+docs(git-flow): ブランチ命名規約を更新
+```
+
+## 4. PR テンプレートでの記載
+
+PR の Change type や関連仕様の記載には、カテゴリを含むフルパスを使用する:
+
+```
+features/chat-response
+features/thread-support
+infrastructure/rag-knowledge
+workflows/github/auto-progress
+agentic/agents/code-review-agent
+```
+
+## 5. ブランチ命名規約
+
+f番号を使用せず、機能名ベースで命名する:
+
+```
+feature/{機能名}-#{Issue番号}
+bugfix/{修正内容}-#{Issue番号}
+```
+
+### 例
+
+```
+feature/rag-knowledge-#123
+feature/chat-response-#456
+bugfix/feed-timeout-#789
+```
+
+## 6. 記述ルール
+
+仕様書に記載する内容の基準を定義する。
+
+**例外の扱い**: 各ルールの禁止事項は原則禁止だが、記載しないと仕様の理解が著しく困難になる場合は、プロジェクトオーナーの許可を得た上で例外的に記載できる。
+
+### 6.1 技術詳細
+
+**方針**: What（何をするか）/ Why（なぜそうするか）を中心に書く。How（どう実装するか）は原則書かない。
+
+How を追加する場合は、AI が誤った実装判断をした実績に基づき、制約として追記する。追加時は理由を HTML コメントで記録する:
+
+```markdown
+<!-- How追加理由: PR #140 で os.kill の Windows 非互換が検出 -->
+```
+
+**許容例**:
+
+- 振る舞いの要件（入出力、制約、不変条件）
+- コンポーネント間の関係
+- 具体例（エッジケースを含む）
+- 「こうしてはいけない」制約
+
+**禁止例**:
+
+- 疑似コード・メソッド実装
+- クラス名・メソッドシグネチャ
+- 実装ステップ・タスクリスト
+
+### 6.2 設定値
+
+**方針**: 具体値を仕様書にハードコードしない。設定ファイルや環境変数の存在と意味のみ記述する。
+
+**許容例**:
+
+- 設定項目の存在・意味・挙動の記述（環境変数名、設定キー名、未設定時の振る舞い等）
+- 出力フォーマット例に含まれる例示値（ホスト名・日時等。フォーマット構造を示すための値）
+
+**禁止例**:
+
+- ポート番号・URL: `http://localhost:1234`
+- 数値定数: `TOOL_LOOP_MAX_ITERATIONS = 10`
+- テーブル名・カラム名: `conversations`, `user_profiles`
+- ユーザー名: `becky3`
+- モデル名: `Claude Sonnet 4.5`
+- パラメータ閾値: `α = 0.8 ~ 0.95`
+
+### 6.3 コード
+
+**方針**: プロダクションコードの形式（Python クラス・関数定義・疑似コード等）をそのまま仕様書に貼らない。設計情報は仕様書の形式（自然言語・テーブル・mermaid 図）で表現する。
+
+**許容例**:
+
+- 自然言語での機能・振る舞いの説明
+- Markdown テーブルでのデータ構造・項目定義
+- mermaid 図（フロー図、クラス図、ER 図等）
+- CLI コマンド例（`git checkout -b`, `gh pr create` 等）
+- 設定ファイルの構造例（JSON, YAML 等）
+- shellcheck ディレクティブ等の書式例
+- 出力フォーマット例（ユーザーが目にする応答形式の定義）
+
+**禁止例**:
+
+- dataclass 定義のコピペ
+- クラス・関数の実装コード
+- 疑似コード
+
+### 6.4 受け入れ条件（AC）
+
+**方針**: 仕様書に AC を書かない。AC は Issue の「完了基準」セクションに記載する（セクション8参照）。
+
+仕様書に書くべきは「このシステムは常にこうあるべき」という恒久的な要件・制約であり、「この作業が完了したか」の判定基準（AC）は一時的な作業単位である Issue に紐づく。
+
+### 6.5 過去情報
+
+**方針**: 以下の情報を仕様書に書かない。これらは Git や GitHub の機能で管理する。
+
+- 変更履歴（Git で管理）
+- 実装ステータス・PR 番号（GitHub で管理）
+- 関連 Issue 番号（GitHub Issue のリンク機能で管理）
+- 取り消し線付きの旧 AC・完了済み AC
+
+### 6.6 実験データ・コスト見積もり
+
+**方針**: 仕様書に書かない。意思決定の根拠として残す場合は Issue の「実験データ」セクションに記録する（セクション8参照）。
+
+### 6.7 図・表
+
+- **図**（フローチャート、シーケンス図等）: mermaid 形式を使用する。ASCII 図は使用しない
+- **表**: Markdown テーブルを使用する
+
+### 6.8 テスト方針
+
+**方針**: 仕様書に書かない。テスト方針は Issue の「テスト方針」セクションに記載し、テストファイル冒頭にコメントとして転記する（セクション8参照）。
+
+## 7. 文書種別テンプレート
+
+テンプレート本体は `docs/specs/templates/` に配置する。各テンプレートは自己完結しており、ヘッダー形式・セクション定義はすべてテンプレート内に記載されている。
+
+ルート直下のメタ文書（style-guide, overview, pr-body-template）はテンプレート対象外とする。個別性が高く、共通テンプレートの適用が困難なため。
+
+仕様書のセクション構成はテンプレートに定義されたものに限定する。テンプレートにないセクションの追加はセクション6の例外ルールに従う。
+
+### テンプレート一覧
+
+| テンプレート | 対象カテゴリ | 概要 |
+|---|---|---|
+| `features.md` | `features/` | ユーザーが直接触る・意識するプロダクト機能 |
+| `infrastructure.md` | `infrastructure/` | ユーザーが直接意識しない基盤システム・内部ツール |
+| `workflows.md` | `workflows/` | 開発プロセス・運用フロー（種別固有セクションは後日確定） |
+| `workflows-github.md` | `workflows/github/` | GitHub Actions 上で動くワークフロー |
+| `agentic-agents.md` | `agentic/agents/` | AI エージェントの振る舞い・観点 |
+| `agentic-skills.md` | `agentic/skills/` | スキルの手順・入出力 |
+| `agentic-teams.md` | `agentic/teams/` | チーム運用・構成パターン |
+| `agentic-hooks.md` | `agentic/hooks/` | エージェントのフック機能 |
+
+## 8. Issue テンプレート
+
+Issue の種類に応じたテンプレートを定義する。テンプレート本体は `docs/specs/templates/issues/` に配置する。
+
+### Issue の種類
+
+| Issue の種類 | いつ作るか | 固有セクション |
+|---|---|---|
+| **仕様書作成・改善** | 新機能の設計時、既存仕様の修正時 | 対象、詳細内容、(実験データ) |
+| **機能実装** | 仕様書の準備ができて実装に入るとき | 関連仕様書、実装方針、テスト方針、(実験データ) |
+| **バグ修正** | 不具合を発見したとき | 再現手順、修正方針、(原因)、(テスト方針) |
+
+※ 共通セクション（概要・背景・影響範囲・完了基準・関連）は全種別に含む。() は任意。
+
+### 共通セクション
+
+| セクション | 義務 | 内容 |
+|---|---|---|
+| 概要 | 必須 | 何をするかを簡潔に記載 |
+| 背景 | 必須 | なぜこの Issue が必要か。レビュー等で発見した問題の切出し時は発見経緯もここに記載 |
+| 影響範囲 | 必須 | 変更が及ぶファイル・機能・他 Issue との関係 |
+| 完了基準 | 必須 | この Issue が「完了した」と判定する基準。作業のチェックリスト（`- [ ]` 形式） |
+| 関連 | 任意 | 関連 Issue・PR・仕様書へのリンク |
+
+### セクション順序
+
+```
+概要 → 背景 → [固有セクション] → 影響範囲 → 完了基準 → (関連)
+```
+
+### テンプレート一覧
+
+| テンプレート | 対象 | 概要 |
+|---|---|---|
+| `spec.md` | 仕様書作成・改善 | 仕様書の新設・変更 |
+| `feature.md` | 機能実装 | 仕様書に基づく実装 |
+| `bugfix.md` | バグ修正 | 不具合の報告・修正 |
+
+## 9. 移行作業ガイド
+
+<!-- このセクションは移行完了後に削除する（#628 で対応） -->
+
+旧仕様書を本スタイルガイドに準拠させる移行作業についての指示。
+
+### ディレクトリ構成
+
+| ディレクトリ | 用途 |
+|---|---|
+| `docs/specs/` | 移行先（最終パス）。セクション1のカテゴリ別構造 |
+| `docs/specs-old/` | 旧仕様書の参照用アーカイブ。移行完了後に削除（#628） |
+
+Phase 2 末尾で `docs/specs/` → `docs/specs-old/`、`docs/specs-new/` → `docs/specs/` のフォルダ切り替えを実施済み。Phase 3 以降は `docs/specs/` に直接配置する。
+
+### AC の移行
+
+旧仕様書から AC を除去する際、AC に含まれる恒久的な振る舞い要件は仕様書本文の該当セクションに移行すること。
+
+### 関連ドキュメントのリンク
+
+移行中は「関連ドキュメント」セクションのリンク先ファイル名が旧名称（f番号付き等）のままでもよい。全ファイルの移行完了後に、Phase 3 末尾でリンクをまとめて新ファイル名に一括修正する。
