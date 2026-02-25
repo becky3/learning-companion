@@ -414,7 +414,7 @@ class TestConfiguration:
 
 
 class TestRAGDebugLog:
-    """RAG検索結果のログ出力テスト (AC1-4, f9-rag.md)."""
+    """RAG検索結果のログ出力テスト."""
 
     @pytest.fixture
     def rag_service_log_enabled(
@@ -560,7 +560,7 @@ class TestRAGDebugLog:
 
 
 class TestRAGRetrievalResultSources:
-    """RAG検索結果のソース情報テスト (AC5-6, f9-rag.md)."""
+    """RAG検索結果のソース情報テスト."""
 
     async def test_retrieve_returns_sources(
         self,

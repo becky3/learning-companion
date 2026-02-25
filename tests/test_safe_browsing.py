@@ -143,8 +143,8 @@ class TestSafeBrowsingClientAsync:
     """SafeBrowsingClient の非同期テスト."""
 
     @pytest.mark.asyncio
-    async def test_ac2_check_url_safe(self) -> None:
-        """AC1, AC2: API呼び出しと安全なURLのチェック."""
+    async def test_check_url_safe(self) -> None:
+        """API呼び出しと安全なURLのチェック."""
         client = SafeBrowsingClient(api_key="test-key")
         mock_response = MockResponse(200, {})  # 空 = 脅威なし
 
