@@ -50,8 +50,8 @@ argument-hint: "spec [feature-name]"
 **手順**:
 
 1. カテゴリの決定
-   - `docs/specs/` 配下のスタイルガイド（セクション1: ディレクトリ構成）を参照
-   - 機能仕様は `features/`、運用系は `operations/`、開発基盤は `development/` 等に配置
+   - `docs/specs/style-guide.md`（セクション1: ディレクトリ構成）を参照
+   - `features/`（ユーザー向け機能）、`infrastructure/`（基盤・ツール）、`workflows/`（開発プロセス）、`agentic/`（エージェント・スキル）から選択
    - 既存仕様書のカテゴリ分類に従う
 
 2. Issue情報の収集
