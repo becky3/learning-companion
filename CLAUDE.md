@@ -24,8 +24,8 @@
 
 ### コーディング規約
 
-- 各サービスクラスのdocstringに仕様書パスを記載: `仕様: docs/specs/f2-feed-collection.md`
-- テスト名は仕様書の受け入れ条件(AC)番号と対応: `test_ac1_rss_feed_is_fetched_and_parsed()`
+- 各サービスクラスのdocstringに仕様書パスを記載: `仕様: docs/specs/features/feed-management.md`
+- テスト名は `test_` プレフィックス + snake_case で、テスト対象の振る舞いがわかる名前をつける（例: `test_rss_feed_is_fetched_and_parsed()`）
 - コード品質チェック（ruff, mypy, markdownlint, shellcheck）は test-runner エージェント経由で実行する
 - shellcheck の suppress コメントはディレクティブ行と説明行を分ける:
 
@@ -53,8 +53,8 @@
 詳細は `docs/specs/git-flow.md` を参照。
 
 - **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
-- **作業ブランチ**: `feature/f{N}-{機能名}-#{Issue番号}` / `bugfix/{修正内容}-#{Issue番号}` / `release/v{X.Y.Z}` / `hotfix/{修正内容}-#{Issue番号}`
-- コミット: `feat(f{N}): 説明 (#{Issue番号})`
+- **作業ブランチ**: `feature/{機能名}-#{Issue番号}` / `bugfix/{修正内容}-#{Issue番号}` / `release/v{X.Y.Z}` / `hotfix/{修正内容}-#{Issue番号}`
+- コミット: `type(scope): 説明 (#Issue番号)` ※scope は仕様書ファイル名（拡張子なし）
 - PR作成時に `Closes #{Issue番号}` で紐付け
 - **PRのbaseブランチ**: 通常は `develop`、リリース/hotfix は `main`、リリース中の bugfix は `release/*`
 - **マージ方式**: feature/bugfix → develop は通常マージ、bugfix → release は通常マージ、release → main は squash マージ、sync → develop は通常マージ

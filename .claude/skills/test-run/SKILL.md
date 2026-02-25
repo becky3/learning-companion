@@ -303,14 +303,14 @@ RAG 精度テストが必要と判断した場合、確認なしで自動実行�
 
 ## テスト名規約
 
-このプロジェクトではテスト名が受け入れ条件（AC）と対応している:
+このプロジェクトではテスト名は `test_` プレフィックス + snake_case で、テスト対象の振る舞いがわかる名前をつける:
 
 ```python
-def test_ac1_rss_feed_is_fetched_and_parsed():  # AC1に対応
-def test_ac2_duplicate_articles_skipped():  # AC2に対応
+def test_rss_feed_is_fetched_and_parsed():
+def test_duplicate_articles_skipped():
 ```
 
-失敗したテストの AC 番号から、該当する仕様書（`docs/specs/`）の受け入れ条件を参照することで、テストの意図をより深く理解できる。
+失敗したテストのテスト名から振る舞いを把握し、該当する仕様書（`docs/specs/`）の受け入れ条件を参照することで、テストの意図をより深く理解できる。
 
 ## 注意事項
 

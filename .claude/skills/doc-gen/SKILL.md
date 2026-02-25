@@ -45,14 +45,14 @@ argument-hint: "spec [feature-name]"
 
 ### A. 仕様書生成 (`spec <feature-name>`)
 
-**出力先**: `docs/specs/f{N}-{feature-name}.md`
+**出力先**: `docs/specs/{category}/{feature-name}.md`
 
 **手順**:
 
-1. 機能番号の決定
-   - 既存の仕様書一覧から最大のf{N}を取得
-   - 新規機能は次の番号を割り当て（例: f5, f6, ...）
-   - 既存機能を指定された場合はその番号を使用
+1. カテゴリの決定
+   - `docs/specs/` 配下のスタイルガイド（セクション1: ディレクトリ構成）を参照
+   - 機能仕様は `features/`、運用系は `operations/`、開発基盤は `development/` 等に配置
+   - 既存仕様書のカテゴリ分類に従う
 
 2. Issue情報の収集
 
@@ -77,7 +77,7 @@ argument-hint: "spec [feature-name]"
    - **関連ファイル**: テーブル形式
    - **テスト方針**: テスト戦略
 
-**参考**: `docs/specs/f1-chat.md` のフォーマットを踏襲
+**参考**: `docs/specs/` 配下の既存仕様書とスタイルガイドのテンプレートを踏襲
 
 ## エラーハンドリング
 
@@ -106,7 +106,7 @@ argument-hint: "spec [feature-name]"
 ## 出力例
 
 ```
-✓ 仕様書を生成しました: docs/specs/f5-notification.md
+✓ 仕様書を生成しました: docs/specs/features/notification.md
 
 内容:
 - Issue #42 の要件を反映

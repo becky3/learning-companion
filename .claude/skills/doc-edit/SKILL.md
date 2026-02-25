@@ -20,7 +20,7 @@ argument-hint: "<file-path> [update-reason]"
 **例**:
 
 ```bash
-/doc-edit docs/specs/f2-feed-collection.md
+/doc-edit docs/specs/features/feed-management.md
 /doc-edit CLAUDE.md "スキル使用方法を追加"
 ```
 
@@ -63,7 +63,7 @@ fi
 
 ```bash
 # 関連するコード変更を確認
-git log --oneline --grep="f{N}" -10
+git log --oneline --grep="<feature-name>" -10
 
 # 関連PR
 gh pr list --search "in:title <feature-name>" --state all
@@ -105,19 +105,19 @@ git diff --no-index /dev/null $FILE_PATH 2>/dev/null || git diff $FILE_PATH
 
 ## ドキュメント種別ごとの更新パターン
 
-### A. 仕様書 (`docs/specs/*.md`)
+### A. 仕様書 (`docs/specs/**/*.md`)
 
 **よくある更新**:
 
-- 受け入れ条件 (AC) の追加・修正
+- 受け入れ条件の追加・修正
 - 技術仕様の詳細化
 - 関連ファイルの追加
 - テスト方針の更新
 
 **注意点**:
 
-- ACの番号を変更しない（既存のテストコードと紐づいている）
-- 新しいACは末尾に追加
+- 既存の受け入れ条件を削除・変更する場合は影響範囲を確認
+- 新しい要件は末尾に追加
 
 ### B. CLAUDE.md
 
@@ -165,17 +165,17 @@ git diff --no-index /dev/null $FILE_PATH 2>/dev/null || git diff $FILE_PATH
 ## 出力例
 
 ```
-✓ ドキュメントを更新しました: docs/specs/f2-feed-collection.md
+✓ ドキュメントを更新しました: docs/specs/features/feed-management.md
 
 変更内容:
-- AC7を追加: エラー発生時のリトライ処理
+- 受け入れ条件を追加: エラー発生時のリトライ処理
 - 関連ファイルにretry_handler.pyを追加
 - テスト方針にリトライのテストケースを追記
 
 更新理由: Issue #45でリトライ機能が追加されたため
 
 git diff:
-+- [ ] AC7: エラー発生時に3回までリトライする
++- [ ] エラー発生時に3回までリトライする
 +| `src/services/retry_handler.py` | リトライロジック |
 ```
 
