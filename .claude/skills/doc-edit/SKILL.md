@@ -10,7 +10,7 @@ argument-hint: "<file-path> [update-reason]"
 
 既存のプロジェクトドキュメントを安全に更新・修正する。ファイル構造を保持しながら必要な変更を加える。
 
-仕様: docs/specs/agentic/skills/doc-gen-skill.md
+仕様: docs/specs/agentic/skills/doc-edit-skill.md
 
 ## 引数
 
@@ -111,14 +111,13 @@ git diff --no-index /dev/null $FILE_PATH 2>/dev/null || git diff $FILE_PATH
 
 **よくある更新**:
 
-- 受け入れ条件の追加・修正
-- 技術仕様の詳細化
+- 振る舞い要件・制約の追加・修正
 - 関連ファイルの追加
-- テスト方針の更新
+- コンポーネント構成の更新
 
 **注意点**:
 
-- 既存の受け入れ条件を削除・変更する場合は影響範囲を確認
+- 既存の要件を削除・変更する場合は影響範囲を確認
 - 新しい要件は末尾に追加
 
 ### B. CLAUDE.md
@@ -170,9 +169,9 @@ git diff --no-index /dev/null $FILE_PATH 2>/dev/null || git diff $FILE_PATH
 ✓ ドキュメントを更新しました: docs/specs/features/feed-management.md
 
 変更内容:
-- 受け入れ条件を追加: エラー発生時のリトライ処理
+- 振る舞い要件を追加: エラー発生時のリトライ処理
 - 関連ファイルにretry_handler.pyを追加
-- テスト方針にリトライのテストケースを追記
+- コンポーネント構成を更新
 
 更新理由: Issue #45でリトライ機能が追加されたため
 
