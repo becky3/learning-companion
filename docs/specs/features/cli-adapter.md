@@ -108,6 +108,6 @@ flowchart LR
 
 ## 関連ドキュメント
 
-<!-- リンク先は未移行。#648 で一括修正予定 -->
+<!-- chat-response は未移行。#648 で一括修正予定 -->
 - [chat-response](chat-response.md) — チャット応答（メッセージルーターの主要な処理先）
 - [auto-reply](auto-reply.md) — 自動返信チャンネル機能

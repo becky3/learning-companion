@@ -1,6 +1,6 @@
 """AI Assistant エントリーポイント
 仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md, docs/specs/f8-thread-support.md,
-      docs/specs/bot-process-guard.md, docs/specs/features/cli-adapter.md
+      docs/specs/infrastructure/bot-process-guard.md, docs/specs/features/cli-adapter.md
 """
 
 from __future__ import annotations
