@@ -330,7 +330,7 @@ git-flow
 code-review-agent, doc-review-agent, planner-agent, test-runner-agent
 
 **agentic/skills/**:
-check-review-batch-skill, doc-gen-skill, handoff-skill, topic-skill
+check-review-batch-skill, doc-gen-skill, doc-edit-skill, handoff-skill, topic-skill
 
 **agentic/teams/**:
 common, fixed-theme, mixed-genius
