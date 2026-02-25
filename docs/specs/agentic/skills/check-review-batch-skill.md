@@ -36,7 +36,7 @@ flowchart TD
 
 ### PR 番号の抽出
 
-Issue body およびコメントから PR 番号を抽出する。コメントフォーマットは `update-review-issue.sh` の出力形式に準拠する。
+Issue body およびコメントから PR 番号を抽出する。コメントフォーマットは `.github/scripts/post-merge/update-review-issue.sh` の出力形式に準拠する。
 
 ### 各 PR のチェック項目
 
