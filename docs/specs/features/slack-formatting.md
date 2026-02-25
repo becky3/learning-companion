@@ -44,7 +44,7 @@ LLM からの返信を Slack の mrkdwn 形式で出力し、太字・リスト�
 | 太字 | `**text**` | `*text*` |
 | イタリック | `*text*` | `_text_` |
 | 取り消し線 | `~~text~~` | `~text~` |
-| リンク | `[text](url)` | `<url\|text>` |
+| リンク | `[text](url)` | `<url&#124;text>` |
 | 順序なしリスト | `- item` | `• item` |
 | 見出し | `# heading` | `*heading*`（太字で代替） |
 | 引用 | `> text` | `> text`（同じ） |

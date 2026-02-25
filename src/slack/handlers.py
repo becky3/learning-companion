@@ -57,9 +57,9 @@ def register_handlers(
 
     @app.event("message")
     async def handle_message(event: dict, say: object) -> None:  # type: ignore[type-arg]
-        """自動返信チャンネルでのメッセージ処理 (F6).
+        """自動返信チャンネルでのメッセージ処理.
 
-        フィルタリング (F6-AC2, AC3, AC6, AC7):
+        フィルタリング:
         - bot_id がある → 無視（Bot自身の投稿）
         - subtype がある → 無視（編集、削除など）
         - channel が auto_reply_channels に含まれない → 無視
