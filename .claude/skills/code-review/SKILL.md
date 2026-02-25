@@ -20,7 +20,7 @@ argument-hint: "[file-path|diff]"
 
 ## 仕様書の参照
 
-レビューを開始する前に、必ず `docs/specs/code-review-agent.md` を Read ツールで読み、以下の情報を確認すること:
+レビューを開始する前に、必ず `docs/specs/agentic/agents/code-review-agent.md` を Read ツールで読み、以下の情報を確認すること:
 
 - レビュー観点（10カテゴリ）の詳細
 - 優先度の判定基準（Critical / Warning / Suggestion）
@@ -32,7 +32,7 @@ argument-hint: "[file-path|diff]"
 
 ### 1. レビュー基準の把握
 
-`docs/specs/code-review-agent.md` を Read で読み込み、レビュー観点と判定基準を確認する。
+`docs/specs/agentic/agents/code-review-agent.md` を Read で読み込み、レビュー観点と判定基準を確認する。
 
 ### 2. レビュー対象の特定
 
@@ -49,7 +49,7 @@ argument-hint: "[file-path|diff]"
 
 ### 4. レビュー実施
 
-仕様書に記載された10のレビュー観点（詳細は `docs/specs/code-review-agent.md` 参照）に基づいて検査を実施する。
+仕様書に記載された10のレビュー観点（詳細は `docs/specs/agentic/agents/code-review-agent.md` 参照）に基づいて検査を実施する。
 
 主なレビュー観点の概要:
 

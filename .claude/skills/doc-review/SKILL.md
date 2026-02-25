@@ -21,7 +21,7 @@ argument-hint: "[diff|full] [file-path]"
 
 ## 仕様書の参照
 
-レビューを開始する前に、必ず `docs/specs/doc-review-agent.md` を Read ツールで読み、以下の情報を確認すること:
+レビューを開始する前に、必ず `docs/specs/agentic/agents/doc-review-agent.md` を Read ツールで読み、以下の情報を確認すること:
 
 - レビュー対象の範囲
 - レビュー基準（仕様書向け・README.md 向け）
@@ -34,7 +34,7 @@ argument-hint: "[diff|full] [file-path]"
 
 ### 1. レビュー基準の把握
 
-`docs/specs/doc-review-agent.md` を Read で読み込み、レビュー基準と許容パターンを確認する。
+`docs/specs/agentic/agents/doc-review-agent.md` を Read で読み込み、レビュー基準と許容パターンを確認する。
 
 ### 2. レビューモードの判定
 
@@ -72,7 +72,7 @@ argument-hint: "[diff|full] [file-path]"
 
 ### 7. レビュー実施
 
-仕様書 `docs/specs/doc-review-agent.md` に記載されたレビュー基準に基づいて検査を実施する。許容パターンに該当する項目は指摘対象外とする。
+仕様書 `docs/specs/agentic/agents/doc-review-agent.md` に記載されたレビュー基準に基づいて検査を実施する。許容パターンに該当する項目は指摘対象外とする。
 
 ### 8. レポート生成
 
