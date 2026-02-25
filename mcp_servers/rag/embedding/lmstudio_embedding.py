@@ -1,5 +1,5 @@
 """LM Studio経由のEmbeddingプロバイダー
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class LMStudioEmbedding(EmbeddingProvider):
     """LM Studio経由のEmbeddingプロバイダー.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     DOCUMENT_PREFIX = "search_document: "

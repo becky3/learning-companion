@@ -1,6 +1,6 @@
 """BM25インデックスのテスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 import json
@@ -14,19 +14,19 @@ from mcp_servers.rag.bm25_index import BM25Index, METADATA_FILENAME, tokenize_ja
 class TestTokenizeJapanese:
     """tokenize_japanese関数のテスト."""
 
-    def test_ac7_empty_text_returns_empty_list(self) -> None:
+    def test_empty_text_returns_empty_list(self) -> None:
         """AC7: 空のテキストは空リストを返す."""
         assert tokenize_japanese("") == []
         assert tokenize_japanese("   ") == []
 
-    def test_ac7_japanese_text_tokenized(self) -> None:
+    def test_japanese_text_tokenized(self) -> None:
         """日本語テキストがトークン化される."""
         tokens = tokenize_japanese("りゅうおうはボスモンスターです")
 
         # 何らかのトークンが生成される
         assert len(tokens) > 0
 
-    def test_ac7_stopwords_removed(self) -> None:
+    def test_stopwords_removed(self) -> None:
         """AC7: ストップワードが除去される."""
         tokens = tokenize_japanese("これは本です")
 
@@ -35,7 +35,7 @@ class TestTokenizeJapanese:
         assert "は" not in tokens
         assert "です" not in tokens
 
-    def test_ac7_mixed_text_tokenized(self) -> None:
+    def test_mixed_text_tokenized(self) -> None:
         """AC7: 日本語と英数字の混合テキストがトークン化される."""
         tokens = tokenize_japanese("Python3とJavaScript")
 
@@ -46,7 +46,7 @@ class TestTokenizeJapanese:
 class TestBM25Index:
     """BM25Indexクラスのテスト."""
 
-    def test_ac6_add_and_search_documents(self) -> None:
+    def test_add_and_search_documents(self) -> None:
         """ドキュメントの追加と検索ができる."""
         index = BM25Index()
 
@@ -66,7 +66,7 @@ class TestBM25Index:
         assert len(results) > 0
         assert any("りゅうおう" in r.text for r in results)
 
-    def test_ac6_delete_by_source(self) -> None:
+    def test_delete_by_source(self) -> None:
         """ソースURL指定でドキュメントを削除できる."""
         index = BM25Index()
 
@@ -84,13 +84,13 @@ class TestBM25Index:
         # 残りは1件
         assert index.get_document_count() == 1
 
-    def test_ac6_search_empty_index_returns_empty_list(self) -> None:
+    def test_search_empty_index_returns_empty_list(self) -> None:
         """AC6: 空のインデックスへの検索は空リストを返す."""
         index = BM25Index()
         results = index.search("テスト")
         assert results == []
 
-    def test_ac6_search_with_no_matches_returns_empty_list(self) -> None:
+    def test_search_with_no_matches_returns_empty_list(self) -> None:
         """AC6: マッチするドキュメントがない場合は空リストを返す."""
         index = BM25Index()
         index.add_documents([("doc1", "りゅうおう", "source1")])
@@ -104,7 +104,7 @@ class TestBM25Index:
         # 結果があってもスコアが0より大きいもののみ
         assert all(r.score > 0 for r in results)
 
-    def test_ac6_update_existing_document(self) -> None:
+    def test_update_existing_document(self) -> None:
         """AC6: 既存ドキュメントの更新."""
         index = BM25Index()
 
@@ -130,7 +130,7 @@ class TestBM25Index:
         old_results = index.search("dragon quest")
         assert not any("dragon" in r.text for r in old_results)
 
-    def test_ac10_bm25_parameters(self) -> None:
+    def test_bm25_parameters(self) -> None:
         """BM25パラメータのカスタマイズ."""
         # カスタムパラメータでインスタンス化
         index = BM25Index(k1=2.0, b=0.5)
@@ -143,7 +143,7 @@ class TestBM25Index:
 class TestBM25IndexPersistence:
     """BM25Index永続化のテスト.
 
-    仕様: docs/specs/f9-rag.md (AC79〜AC81)
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     @pytest.fixture()
@@ -160,7 +160,7 @@ class TestBM25IndexPersistence:
             ("doc4", "final fantasy crystal chronicles", "source4"),
         ]
 
-    def test_ac79_save_and_load(self, persist_dir: str) -> None:
+    def test_save_and_load(self, persist_dir: str) -> None:
         """AC79: save後に新インスタンスでloadし、データ・検索が復元される."""
         # 1. インデックスを作成してドキュメントを追加
         index = BM25Index(persist_dir=persist_dir)
@@ -184,7 +184,7 @@ class TestBM25IndexPersistence:
         assert index2.get_source_url("doc1") == "source1"
         assert index2.get_source_url("doc4") == "source4"
 
-    def test_ac80_none_dir_means_in_memory(self) -> None:
+    def test_none_dir_means_in_memory(self) -> None:
         """AC80: persist_dir=Noneで従来のインメモリ動作."""
         index = BM25Index(persist_dir=None)
         index.add_documents(self._sample_docs())
@@ -193,7 +193,7 @@ class TestBM25IndexPersistence:
         # persist_dir が None なのでファイルは作られない
         assert index._persist_dir is None
 
-    def test_ac79_delete_triggers_save(self, persist_dir: str) -> None:
+    def test_delete_triggers_save(self, persist_dir: str) -> None:
         """AC79: delete後に永続化され、再ロードで反映."""
         index = BM25Index(persist_dir=persist_dir)
         index.add_documents(self._sample_docs())
@@ -208,7 +208,7 @@ class TestBM25IndexPersistence:
         assert index2.get_document_count() == 3
         assert index2.get_source_url("doc1") is None
 
-    def test_ac81_corrupt_metadata_starts_empty(self, persist_dir: str) -> None:
+    def test_corrupt_metadata_starts_empty(self, persist_dir: str) -> None:
         """AC81: 壊れたJSONメタデータ → 空インデックスで起動."""
         # 永続化ディレクトリを手動作成して壊れたメタデータを配置
         persist_path = Path(persist_dir)
@@ -221,7 +221,7 @@ class TestBM25IndexPersistence:
         index = BM25Index(persist_dir=persist_dir)
         assert index.get_document_count() == 0
 
-    def test_ac81_version_mismatch_starts_empty(self, persist_dir: str) -> None:
+    def test_version_mismatch_starts_empty(self, persist_dir: str) -> None:
         """AC81: 不明バージョン → 空インデックスで起動."""
         persist_path = Path(persist_dir)
         persist_path.mkdir(parents=True)
@@ -239,7 +239,7 @@ class TestBM25IndexPersistence:
         index = BM25Index(persist_dir=persist_dir)
         assert index.get_document_count() == 0
 
-    def test_ac79_empty_index_no_error(self, persist_dir: str) -> None:
+    def test_empty_index_no_error(self, persist_dir: str) -> None:
         """AC79: 空インデックスのsave/loadがエラーなし."""
         # 空のインデックスを作成（ドキュメント追加なし）
         index = BM25Index(persist_dir=persist_dir)
@@ -249,7 +249,7 @@ class TestBM25IndexPersistence:
         index2 = BM25Index(persist_dir=persist_dir)
         assert index2.get_document_count() == 0
 
-    def test_ac81_corrupt_bm25s_model_starts_empty(self, persist_dir: str) -> None:
+    def test_corrupt_bm25s_model_starts_empty(self, persist_dir: str) -> None:
         """AC81: 正常なメタデータだがbm25sモデルが壊れている場合."""
         # 一度正常に保存
         index = BM25Index(persist_dir=persist_dir)
@@ -265,7 +265,7 @@ class TestBM25IndexPersistence:
         index2 = BM25Index(persist_dir=persist_dir)
         assert index2.get_document_count() == 0
 
-    def test_ac79_delete_all_removes_persist_dir(self, persist_dir: str) -> None:
+    def test_delete_all_removes_persist_dir(self, persist_dir: str) -> None:
         """AC79: 全ドキュメント削除後に永続化ディレクトリが削除される."""
         index = BM25Index(persist_dir=persist_dir)
         index.add_documents(self._sample_docs())

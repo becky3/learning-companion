@@ -1,6 +1,6 @@
 """コンテンツタイプ検出モジュール
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations

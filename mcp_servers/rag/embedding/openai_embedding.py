@@ -1,5 +1,5 @@
 """OpenAI Embeddings APIプロバイダー
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class OpenAIEmbedding(EmbeddingProvider):
     """OpenAI Embeddings APIを使用するプロバイダー.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     def __init__(

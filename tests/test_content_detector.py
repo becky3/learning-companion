@@ -1,6 +1,6 @@
 """コンテンツタイプ検出のテスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from mcp_servers.rag.content_detector import (
@@ -13,12 +13,12 @@ from mcp_servers.rag.content_detector import (
 class TestDetectContentType:
     """detect_content_type関数のテスト."""
 
-    def test_ac1_empty_text_returns_prose(self) -> None:
+    def test_empty_text_returns_prose(self) -> None:
         """空のテキストはPROSEを返す."""
         assert detect_content_type("") == ContentType.PROSE
         assert detect_content_type("   ") == ContentType.PROSE
 
-    def test_ac2_normal_text_returns_prose(self) -> None:
+    def test_normal_text_returns_prose(self) -> None:
         """通常のテキストはPROSEを返す."""
         text = """
         これは通常のテキストです。
@@ -27,7 +27,7 @@ class TestDetectContentType:
         """
         assert detect_content_type(text) == ContentType.PROSE
 
-    def test_ac3_markdown_heading_returns_heading(self) -> None:
+    def test_markdown_heading_returns_heading(self) -> None:
         """Markdown見出しを含むテキストはHEADINGを返す."""
         text = """
         # 見出し1
@@ -38,7 +38,7 @@ class TestDetectContentType:
         """
         assert detect_content_type(text) == ContentType.HEADING
 
-    def test_ac4_html_heading_returns_heading(self) -> None:
+    def test_html_heading_returns_heading(self) -> None:
         """HTML見出しを含むテキストはHEADINGを返す."""
         text = """
         <h1>見出し1</h1>
@@ -49,7 +49,7 @@ class TestDetectContentType:
         """
         assert detect_content_type(text) == ContentType.HEADING
 
-    def test_ac5_markdown_table_returns_table(self) -> None:
+    def test_markdown_table_returns_table(self) -> None:
         """Markdownテーブルを含むテキストはTABLEを返す."""
         text = """
         | 名前 | 値 |
@@ -59,12 +59,12 @@ class TestDetectContentType:
         """
         assert detect_content_type(text) == ContentType.TABLE
 
-    def test_ac6_tab_separated_table_returns_table(self) -> None:
+    def test_tab_separated_table_returns_table(self) -> None:
         """タブ区切りテーブルはTABLEを返す."""
         text = "名前\t値1\t値2\nA\t100\t200\nB\t150\t250\nC\t180\t280"
         assert detect_content_type(text) == ContentType.TABLE
 
-    def test_ac7_numeric_heavy_text_returns_table(self) -> None:
+    def test_numeric_heavy_text_returns_table(self) -> None:
         """数値が多いテキストはTABLEを返す."""
         text = """
         りゅうおう  200  100  140  75
@@ -73,7 +73,7 @@ class TestDetectContentType:
         """
         assert detect_content_type(text) == ContentType.TABLE
 
-    def test_ac8_table_with_heading_returns_mixed(self) -> None:
+    def test_table_with_heading_returns_mixed(self) -> None:
         """テーブルと見出しを含むテキストはMIXEDを返す."""
         text = """
         # モンスター一覧
@@ -89,12 +89,12 @@ class TestDetectContentType:
 class TestSplitByContentType:
     """split_by_content_type関数のテスト."""
 
-    def test_ac9_empty_text_returns_empty_list(self) -> None:
+    def test_empty_text_returns_empty_list(self) -> None:
         """空のテキストは空リストを返す."""
         assert split_by_content_type("") == []
         assert split_by_content_type("   ") == []
 
-    def test_ac10_text_with_headings_splits_by_heading(self) -> None:
+    def test_text_with_headings_splits_by_heading(self) -> None:
         """見出しでテキストを分割する."""
         text = """# 見出し1
 本文1
@@ -111,7 +111,7 @@ class TestSplitByContentType:
         assert blocks[1].heading_level == 2
         assert "本文2" in blocks[1].text
 
-    def test_ac11_text_without_headings_returns_single_block(self) -> None:
+    def test_text_without_headings_returns_single_block(self) -> None:
         """見出しのないテキストは1つのブロックを返す."""
         text = "これは通常のテキストです。\n改行も含まれています。"
         blocks = split_by_content_type(text)

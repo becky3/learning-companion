@@ -1,6 +1,6 @@
 """RAGナレッジサービスのテスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -74,7 +74,7 @@ def rag_service(
 class TestIngestFromIndex:
     """ingest_from_index() のテスト (AC16)."""
 
-    async def test_ac16_ingest_from_index(
+    async def test_ingest_from_index(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -171,7 +171,7 @@ class TestIngestFromIndex:
 class TestIngestPage:
     """ingest_page() のテスト (AC17)."""
 
-    async def test_ac17_ingest_page(
+    async def test_ingest_page(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -240,7 +240,7 @@ class TestIngestPage:
 class TestRetrieve:
     """retrieve() のテスト (AC18, AC19)."""
 
-    async def test_ac18_retrieve_returns_formatted_text(
+    async def test_retrieve_returns_formatted_text(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -275,7 +275,7 @@ class TestRetrieve:
         assert call_args[0][0] == "test query"
         assert call_args[1]["n_results"] == 5
 
-    async def test_ac19_retrieve_returns_empty_when_no_results(
+    async def test_retrieve_returns_empty_when_no_results(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -341,7 +341,7 @@ class TestGetStats:
 class TestConfiguration:
     """設定のテスト (AC28, AC29) — RAGSettings (mcp_servers/rag/config.py)."""
 
-    def test_ac28_embedding_provider_switch(self) -> None:
+    def test_embedding_provider_switch(self) -> None:
         """AC28: EMBEDDING_PROVIDER で local / online を切り替えられること."""
         import os
         from unittest.mock import patch
@@ -356,7 +356,7 @@ class TestConfiguration:
             settings = RAGSettings(_env_file=None)  # type: ignore[call-arg]
             assert settings.embedding_provider == "online"
 
-    def test_ac29_configurable_parameters(self) -> None:
+    def test_configurable_parameters(self) -> None:
         """AC29: チャンクサイズ・オーバーラップ・検索件数が環境変数で設定可能であること."""
         import os
         from unittest.mock import patch
@@ -448,7 +448,7 @@ class TestRAGDebugLog:
             debug_log_enabled=False,
         )
 
-    async def test_ac1_retrieve_logs_query(
+    async def test_retrieve_logs_query(
         self,
         rag_service_log_enabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -472,7 +472,7 @@ class TestRAGDebugLog:
         # ハイブリッド検索統合後、ログメッセージに "(vector only)" が追加された
         assert "RAG retrieve (vector only): query='しれんのしろ アイテム'" in caplog.text
 
-    async def test_ac2_retrieve_logs_results(
+    async def test_retrieve_logs_results(
         self,
         rag_service_log_enabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -509,7 +509,7 @@ class TestRAGDebugLog:
         # テキストプレビューはINFOレベルには含まれない（DEBUGレベルで出力）
         # assert "A" * 100 + "..." in caplog.text  # -> DEBUGレベルに移動
 
-    async def test_ac3_retrieve_logs_full_text_debug(
+    async def test_retrieve_logs_full_text_debug(
         self,
         rag_service_log_enabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -534,7 +534,7 @@ class TestRAGDebugLog:
         assert "RAG result 1 full text:" in caplog.text
         assert full_text in caplog.text
 
-    async def test_ac4_retrieve_no_log_when_disabled(
+    async def test_retrieve_no_log_when_disabled(
         self,
         rag_service_log_disabled: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -562,7 +562,7 @@ class TestRAGDebugLog:
 class TestRAGRetrievalResultSources:
     """RAG検索結果のソース情報テスト (AC5-6, f9-rag.md)."""
 
-    async def test_ac5_retrieve_returns_sources(
+    async def test_retrieve_returns_sources(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -591,7 +591,7 @@ class TestRAGRetrievalResultSources:
         assert "https://example.com/page1" in result.sources
         assert "https://example.com/page2" in result.sources
 
-    async def test_ac6_sources_are_unique(
+    async def test_sources_are_unique(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -656,7 +656,7 @@ class TestRAGRetrievalResultSources:
 class TestFragmentNormalization:
     """URL フラグメント正規化のテスト (AC36, AC37)."""
 
-    async def test_ac36_ingest_page_normalizes_fragment_url(
+    async def test_ingest_page_normalizes_fragment_url(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -686,7 +686,7 @@ class TestFragmentNormalization:
         # crawl_page にはフラグメント除去済みURLが渡される
         mock_web_crawler.crawl_page.assert_called_once_with("https://example.com/page")
 
-    async def test_ac37_ingest_crawled_page_uses_normalized_url_for_hash(
+    async def test_ingest_crawled_page_uses_normalized_url_for_hash(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -721,7 +721,7 @@ class TestFragmentNormalization:
         stale_call_args = mock_vector_store.delete_stale_chunks.call_args[0]
         assert stale_call_args[0] == "https://example.com/page"
 
-    async def test_ac37_delete_source_normalizes_fragment_url(
+    async def test_delete_source_normalizes_fragment_url(
         self,
         rag_service: RAGKnowledgeService,
         mock_vector_store: MagicMock,
@@ -873,7 +873,7 @@ class TestSafeBrowsingIntegration:
         mock_web_crawler.crawl_page.assert_called_once()
         assert result == 1
 
-    async def test_ac9_ingest_page_unsafe_url_rejected(
+    async def test_ingest_page_unsafe_url_rejected(
         self,
         rag_service_with_safe_browsing: RAGKnowledgeService,
         mock_web_crawler: MagicMock,
@@ -906,7 +906,7 @@ class TestSafeBrowsingIntegration:
         # クロールは実行されない
         mock_web_crawler.crawl_page.assert_not_called()
 
-    async def test_ac10_ingest_from_index_filters_unsafe_urls(
+    async def test_ingest_from_index_filters_unsafe_urls(
         self,
         rag_service_with_safe_browsing: RAGKnowledgeService,
         mock_web_crawler: MagicMock,
@@ -966,7 +966,7 @@ class TestSafeBrowsingIntegration:
         # safe URLs のみがクロールされる（crawl_page が2回呼ばれる）
         assert mock_web_crawler.crawl_page.call_count == 2
 
-    async def test_ac10_ingest_from_index_all_unsafe_skips_crawl(
+    async def test_ingest_from_index_all_unsafe_skips_crawl(
         self,
         rag_service_with_safe_browsing: RAGKnowledgeService,
         mock_web_crawler: MagicMock,

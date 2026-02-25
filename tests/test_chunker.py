@@ -1,6 +1,6 @@
 """テキストチャンキングのテスト (Issue #116).
 
-仕様: docs/specs/f9-rag.md — AC5〜AC7
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -13,13 +13,13 @@ from mcp_servers.rag.chunker import chunk_text
 class TestAC5ChunkTextSplitsBySize:
     """AC5: chunk_text() がテキストを指定サイズのチャンクに分割できること."""
 
-    def test_ac5_short_text_returns_single_chunk(self) -> None:
+    def test_short_text_returns_single_chunk(self) -> None:
         """短いテキストは1つのチャンクとして返される."""
         text = "これは短いテキストです。"
         result = chunk_text(text, chunk_size=500)
         assert result == [text]
 
-    def test_ac5_long_text_is_split_into_multiple_chunks(self) -> None:
+    def test_long_text_is_split_into_multiple_chunks(self) -> None:
         """長いテキストは複数のチャンクに分割される."""
         # 1000文字以上のテキストを作成
         text = "これはテストです。" * 100
@@ -29,14 +29,14 @@ class TestAC5ChunkTextSplitsBySize:
         for chunk in result:
             assert len(chunk) <= 150  # chunk_size + マージン
 
-    def test_ac5_paragraphs_are_used_as_split_points(self) -> None:
+    def test_paragraphs_are_used_as_split_points(self) -> None:
         """段落（空行区切り）が分割ポイントとして使用される."""
         text = "段落1のテキスト。\n\n段落2のテキスト。\n\n段落3のテキスト。"
         result = chunk_text(text, chunk_size=20, chunk_overlap=0)
         # 段落ごとに分割される
         assert len(result) >= 2
 
-    def test_ac5_sentences_are_used_when_paragraphs_too_long(self) -> None:
+    def test_sentences_are_used_when_paragraphs_too_long(self) -> None:
         """段落が長い場合は文単位で分割される."""
         # 1つの長い段落
         text = "これは最初の文です。これは2番目の文です。これは3番目の文です。これは4番目の文です。"
@@ -47,7 +47,7 @@ class TestAC5ChunkTextSplitsBySize:
 class TestAC6ChunkOverlapApplied:
     """AC6: チャンク間にオーバーラップが適用されること."""
 
-    def test_ac6_overlap_is_applied_between_chunks(self) -> None:
+    def test_overlap_is_applied_between_chunks(self) -> None:
         """チャンク間にオーバーラップが適用される."""
         # 明確に分割されるテキストを使用
         text = "A" * 60 + " " + "B" * 60 + " " + "C" * 60
@@ -66,7 +66,7 @@ class TestAC6ChunkOverlapApplied:
                 f"チャンク{i - 1}とチャンク{i}間にオーバーラップが見つからない"
             )
 
-    def test_ac6_overlap_with_different_sizes(self) -> None:
+    def test_overlap_with_different_sizes(self) -> None:
         """異なるオーバーラップサイズでの動作."""
         text = "A" * 100 + " " + "B" * 100 + " " + "C" * 100
         result_small = chunk_text(text, chunk_size=120, chunk_overlap=10)
@@ -83,28 +83,28 @@ class TestAC6ChunkOverlapApplied:
 class TestAC7EmptyAndShortText:
     """AC7: 空文字列や短いテキストに対しても正常に動作すること."""
 
-    def test_ac7_empty_string_returns_empty_list(self) -> None:
+    def test_empty_string_returns_empty_list(self) -> None:
         """空文字列は空のリストを返す."""
         result = chunk_text("")
         assert result == []
 
-    def test_ac7_whitespace_only_returns_empty_list(self) -> None:
+    def test_whitespace_only_returns_empty_list(self) -> None:
         """空白のみの文字列は空のリストを返す."""
         result = chunk_text("   \n\t  ")
         assert result == []
 
-    def test_ac7_single_character_returns_single_chunk(self) -> None:
+    def test_single_character_returns_single_chunk(self) -> None:
         """1文字のテキストは1つのチャンクとして返される."""
         result = chunk_text("A")
         assert result == ["A"]
 
-    def test_ac7_text_exactly_chunk_size_returns_single_chunk(self) -> None:
+    def test_text_exactly_chunk_size_returns_single_chunk(self) -> None:
         """ちょうどchunk_sizeのテキストは1つのチャンクとして返される."""
         text = "A" * 100
         result = chunk_text(text, chunk_size=100)
         assert result == [text]
 
-    def test_ac7_text_slightly_over_chunk_size(self) -> None:
+    def test_text_slightly_over_chunk_size(self) -> None:
         """chunk_sizeを少し超えるテキストは2つ以上のチャンクに分割される."""
         text = "A" * 110
         result = chunk_text(text, chunk_size=100, chunk_overlap=10)

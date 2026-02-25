@@ -1,6 +1,6 @@
 """SafeBrowsingClient テスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 Issue: #159
 """
 
@@ -143,7 +143,7 @@ class TestSafeBrowsingClientAsync:
     """SafeBrowsingClient の非同期テスト."""
 
     @pytest.mark.asyncio
-    async def test_ac1_ac2_check_url_safe(self) -> None:
+    async def test_ac2_check_url_safe(self) -> None:
         """AC1, AC2: API呼び出しと安全なURLのチェック."""
         client = SafeBrowsingClient(api_key="test-key")
         mock_response = MockResponse(200, {})  # 空 = 脅威なし
@@ -159,7 +159,7 @@ class TestSafeBrowsingClientAsync:
         assert len(result.threats) == 0
 
     @pytest.mark.asyncio
-    async def test_ac3_check_url_unsafe(self) -> None:
+    async def test_check_url_unsafe(self) -> None:
         """AC3: 危険なURLのチェックでis_safe=Falseが返ること."""
         client = SafeBrowsingClient(api_key="test-key")
         mock_response = MockResponse(
@@ -240,7 +240,7 @@ class TestSafeBrowsingCache:
     """SafeBrowsingClient のキャッシュテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac8_cache_hit(self) -> None:
+    async def test_cache_hit(self) -> None:
         """AC8: キャッシュヒット時にAPIが呼ばれないこと."""
         client = SafeBrowsingClient(api_key="test-key", cache_ttl=300)
 
@@ -337,7 +337,7 @@ class TestSafeBrowsingErrorHandling:
     """SafeBrowsingClient のエラーハンドリングテスト."""
 
     @pytest.mark.asyncio
-    async def test_ac6_api_error_fail_open(self) -> None:
+    async def test_api_error_fail_open(self) -> None:
         """AC6: API障害時にfail-open（URLを許可）すること."""
         client = SafeBrowsingClient(api_key="test-key")
         mock_response = MockResponse(500, {"error": "Internal Server Error"})
@@ -354,7 +354,7 @@ class TestSafeBrowsingErrorHandling:
         assert "500" in result.error
 
     @pytest.mark.asyncio
-    async def test_ac6_network_error_fail_open(self) -> None:
+    async def test_network_error_fail_open(self) -> None:
         """AC6: ネットワークエラー時にfail-open（URLを許可）すること."""
         client = SafeBrowsingClient(api_key="test-key", fail_open=True)
 
@@ -368,7 +368,7 @@ class TestSafeBrowsingErrorHandling:
         assert result.error is not None
 
     @pytest.mark.asyncio
-    async def test_ac7_api_error_fail_close(self) -> None:
+    async def test_api_error_fail_close(self) -> None:
         """AC7: fail_close設定時にAPI障害で例外が送出されること."""
         client = SafeBrowsingClient(api_key="test-key", fail_open=False)
         mock_response = MockResponse(500, {"error": "Internal Server Error"})
@@ -381,7 +381,7 @@ class TestSafeBrowsingErrorHandling:
                 await client.check_url("https://unknown-site.com")
 
     @pytest.mark.asyncio
-    async def test_ac7_network_error_fail_close(self) -> None:
+    async def test_network_error_fail_close(self) -> None:
         """AC7: fail_close設定時にネットワークエラーで例外が送出されること."""
         client = SafeBrowsingClient(api_key="test-key", fail_open=False)
 
@@ -454,7 +454,7 @@ class TestThreatTypes:
 class TestCreateSafeBrowsingClient:
     """ファクトリ関数のテスト."""
 
-    def test_ac4_create_client_disabled(self) -> None:
+    def test_create_client_disabled(self) -> None:
         """AC4: RAG_URL_SAFETY_CHECK=false の場合、チェックがスキップされること."""
         mock_settings = MagicMock()
         mock_settings.rag_url_safety_check = False
@@ -462,7 +462,7 @@ class TestCreateSafeBrowsingClient:
         client = create_safe_browsing_client(mock_settings)
         assert client is None
 
-    def test_ac5_create_client_no_api_key(self) -> None:
+    def test_create_client_no_api_key(self) -> None:
         """AC5: GOOGLE_SAFE_BROWSING_API_KEY 未設定の場合、スキップ."""
         mock_settings = MagicMock()
         mock_settings.rag_url_safety_check = True

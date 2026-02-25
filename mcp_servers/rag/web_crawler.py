@@ -1,6 +1,6 @@
 """Webページクローラー
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class CrawledPage:
 class RobotsChecker:
     """robots.txt の取得・解析・キャッシュを管理する.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     def __init__(self, cache_ttl: int = 3600) -> None:
@@ -191,7 +191,7 @@ class RobotsChecker:
 class WebCrawler:
     """Webページクローラー.
 
-    仕様: docs/specs/f9-rag.md
+    仕様: docs/specs/infrastructure/rag-knowledge.md
     """
 
     def __init__(

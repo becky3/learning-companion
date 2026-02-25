@@ -1,6 +1,6 @@
 """ハイブリッド検索のテスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -110,7 +110,7 @@ class TestConvexCombination:
 class TestHybridSearchResult:
     """HybridSearchResultクラスのテスト."""
 
-    def test_ac14_result_with_both_scores(self) -> None:
+    def test_result_with_both_scores(self) -> None:
         """AC14: 両方のスコアを持つ結果."""
         result = HybridSearchResult(
             doc_id="doc1",
@@ -125,7 +125,7 @@ class TestHybridSearchResult:
         assert result.bm25_score == 5.0
         assert result.combined_score == 0.75
 
-    def test_ac14_result_with_vector_only(self) -> None:
+    def test_result_with_vector_only(self) -> None:
         """AC14: ベクトル検索のみの結果."""
         result = HybridSearchResult(
             doc_id="doc1",
@@ -139,7 +139,7 @@ class TestHybridSearchResult:
         assert result.vector_distance == 0.3
         assert result.bm25_score is None
 
-    def test_ac14_result_with_bm25_only(self) -> None:
+    def test_result_with_bm25_only(self) -> None:
         """AC14: BM25検索のみの結果."""
         result = HybridSearchResult(
             doc_id="doc1",
@@ -183,7 +183,7 @@ class TestHybridSearchEngine:
         )
 
     @pytest.mark.asyncio
-    async def test_ac8_search_merges_vector_and_bm25_results(
+    async def test_search_merges_vector_and_bm25_results(
         self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
         """ベクトル検索とBM25検索の結果がCCでマージされる."""
@@ -225,7 +225,7 @@ class TestHybridSearchEngine:
             assert result.combined_score > 0
 
     @pytest.mark.asyncio
-    async def test_ac8_search_returns_empty_when_no_results(
+    async def test_search_returns_empty_when_no_results(
         self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
         """AC8: 両方の検索結果が空の場合、空リストを返す."""
@@ -237,7 +237,7 @@ class TestHybridSearchEngine:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_ac14_search_with_vector_only_results(
+    async def test_search_with_vector_only_results(
         self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
         """AC14: ベクトル検索のみ結果がある場合."""
@@ -257,7 +257,7 @@ class TestHybridSearchEngine:
         assert results[0].bm25_score is None
 
     @pytest.mark.asyncio
-    async def test_ac14_search_with_bm25_only_results(
+    async def test_search_with_bm25_only_results(
         self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
         """AC14: BM25検索のみ結果がある場合."""
@@ -273,7 +273,7 @@ class TestHybridSearchEngine:
         assert results[0].bm25_score == 8.5
 
     @pytest.mark.asyncio
-    async def test_ac10_vector_weight_affects_cc_scores(
+    async def test_vector_weight_affects_cc_scores(
         self, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
         """vector_weightパラメータがCCスコアに影響する."""
@@ -307,7 +307,7 @@ class TestHybridSearchEngine:
         assert results_high[0].combined_score > results_low[0].combined_score
 
     @pytest.mark.asyncio
-    async def test_ac8_search_respects_n_results_limit(
+    async def test_search_respects_n_results_limit(
         self, engine: HybridSearchEngine, mock_vector_store: MagicMock, mock_bm25_index: MagicMock
     ) -> None:
         """AC8: n_resultsパラメータで結果数が制限される."""

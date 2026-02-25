@@ -1,6 +1,6 @@
 """RAG MCP サーバー
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 分離制約: src/ 配下のモジュールは一切importしない。
 
 FastMCP を使用して 5 つの RAG ツールを公開する:

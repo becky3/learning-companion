@@ -1,6 +1,6 @@
 """見出しチャンキングのテスト
 
-仕様: docs/specs/f9-rag.md
+仕様: docs/specs/infrastructure/rag-knowledge.md
 """
 
 from mcp_servers.rag.heading_chunker import chunk_by_headings
@@ -9,12 +9,12 @@ from mcp_servers.rag.heading_chunker import chunk_by_headings
 class TestChunkByHeadings:
     """chunk_by_headings関数のテスト."""
 
-    def test_ac3_empty_text_returns_empty_list(self) -> None:
+    def test_empty_text_returns_empty_list(self) -> None:
         """空のテキストは空リストを返す."""
         assert chunk_by_headings("") == []
         assert chunk_by_headings("   ") == []
 
-    def test_ac3_markdown_headings_detected(self) -> None:
+    def test_markdown_headings_detected(self) -> None:
         """Markdown見出しを検出してチャンキングする."""
         text = """# 見出し1
 本文1
@@ -33,7 +33,7 @@ class TestChunkByHeadings:
         assert chunks[1].heading_level == 2
         assert "本文2" in chunks[1].content
 
-    def test_ac3_html_headings_converted_to_markdown(self) -> None:
+    def test_html_headings_converted_to_markdown(self) -> None:
         """HTML見出しをMarkdown形式に変換してチャンキングする."""
         text = """<h1>見出し1</h1>
 本文1
@@ -47,7 +47,7 @@ class TestChunkByHeadings:
         assert chunks[0].heading == "見出し1"
         assert chunks[1].heading == "見出し2"
 
-    def test_ac4_parent_headings_tracked(self) -> None:
+    def test_parent_headings_tracked(self) -> None:
         """親見出しの階層が追跡される."""
         text = """# 第1章
 ## 1.1 セクション
@@ -78,7 +78,7 @@ class TestChunkByHeadings:
         assert chunks[2].heading == "2.1 セクション"
         assert chunks[2].parent_headings == ["第2章"]
 
-    def test_ac4_deep_hierarchy_tracked(self) -> None:
+    def test_deep_hierarchy_tracked(self) -> None:
         """深い階層も正しく追跡される."""
         text = """# レベル1
 ## レベル2
@@ -92,7 +92,7 @@ class TestChunkByHeadings:
         level4_chunk = [c for c in chunks if c.heading == "レベル4"][0]
         assert level4_chunk.parent_headings == ["レベル1", "レベル2", "レベル3"]
 
-    def test_ac5_text_without_headings_returns_single_chunk(self) -> None:
+    def test_text_without_headings_returns_single_chunk(self) -> None:
         """見出しのないテキストは1つのチャンクを返す."""
         text = "これは見出しのない通常のテキストです。\n改行も含まれています。"
 
@@ -103,7 +103,7 @@ class TestChunkByHeadings:
         assert chunks[0].heading_level == 0
         assert "通常のテキスト" in chunks[0].content
 
-    def test_ac15_large_content_split_by_max_chunk_size(self) -> None:
+    def test_large_content_split_by_max_chunk_size(self) -> None:
         """AC15: 大きなコンテンツはmax_chunk_sizeで分割される."""
         # 500文字を超える本文を生成
         long_paragraph = "これは長い段落です。" * 50  # 約500文字
@@ -120,7 +120,7 @@ class TestChunkByHeadings:
         for chunk in chunks:
             assert "見出し" in chunk.heading
 
-    def test_ac4_formatted_text_includes_breadcrumb(self) -> None:
+    def test_formatted_text_includes_breadcrumb(self) -> None:
         """AC4: フォーマット済みテキストにパンくずリストが含まれる."""
         text = """# 親見出し
 ## 子見出し
@@ -133,7 +133,7 @@ class TestChunkByHeadings:
         assert "[親見出し]" in child_chunk.formatted_text
         assert "# 子見出し" in child_chunk.formatted_text
 
-    def test_ac5_small_chunks_merged(self) -> None:
+    def test_small_chunks_merged(self) -> None:
         """AC5: 小さすぎるチャンクは前のチャンクと結合される."""
         text = """# 見出し1
 これは十分な長さの本文です。最低限のサイズを超えています。
