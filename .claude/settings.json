@@ -18,24 +18,48 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "cat README.md" },
-          { "type": "command", "command": "cat docs/specs/overview.md" },
-          { "type": "command", "command": "cat docs/specs/style-guide.md" }
+          {
+            "type": "command",
+            "command": "cat README.md"
+          },
+          {
+            "type": "command",
+            "command": "cat docs/specs/overview.md"
+          },
+          {
+            "type": "command",
+            "command": "cat docs/specs/style-guide.md"
+          }
         ]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "hooks": [{ "type": "command", "command": "./.claude/scripts/destructive-command-guard.sh" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/scripts/destructive-command-guard.sh"
+          }
+        ]
       },
       {
         "matcher": "Edit",
-        "hooks": [{ "type": "command", "command": "./.claude/scripts/leader-guard.sh" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/scripts/leader-guard.sh"
+          }
+        ]
       },
       {
         "matcher": "Write",
-        "hooks": [{ "type": "command", "command": "./.claude/scripts/leader-guard.sh" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./.claude/scripts/leader-guard.sh"
+          }
+        ]
       }
     ],
     "PreCompact": [

@@ -1,7 +1,8 @@
 #!/bin/bash
 # Leader Guard - チーム運用中のリーダーによる Edit/Write 使用をブロックするフック
 # PreToolUse フックとして実行される
-# stdin から JSON を読み取り、permission_mode でリーダー/メンバーを判別する
+# stdin から JSON を読み取り、permission_mode でリーダー(default)/メンバー(acceptEdits)を判別する
+# チームの config.json から pattern を読み取り、fixed-theme の場合のみブロックする
 # エラー時は fail-open（ブロックしない）: 運用支援ツールであり、ユーザーの作業を止めない
 # 仕様: docs/specs/agentic/teams/common.md（delegate モードセクション）
 #
@@ -28,6 +29,8 @@ else
         echo "leader-guard: grep による permission_mode の抽出に失敗しました（fail-open）" >&2
         exit 0
     fi
+    # sed capture group extraction cannot be replaced with ${var//search/replace}
+    # shellcheck disable=SC2001
     PERMISSION_MODE=$(echo "$GREP_RESULT" | sed 's/.*"permission_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 fi
 
@@ -38,8 +41,10 @@ if [ -z "$PERMISSION_MODE" ]; then
     exit 0
 fi
 
-# メンバー（bypassPermissions）なら何もしない
-if [ "$PERMISSION_MODE" = "bypassPermissions" ]; then
+# メンバー（bypassPermissions / acceptEdits）なら何もしない
+# mode: "bypassPermissions" でスポーンしたメンバーの permission_mode は
+# "acceptEdits" として hook に渡される
+if [ "$PERMISSION_MODE" = "bypassPermissions" ] || [ "$PERMISSION_MODE" = "acceptEdits" ]; then
     exit 0
 fi
 
@@ -62,22 +67,53 @@ if [ ! -r "$TEAMS_DIR" ]; then
     exit 0
 fi
 
-# サブディレクトリが1つでもあるか確認
+# サブディレクトリが1つでもあるか確認し、最初に見つかったチームの pattern を取得する
+# 仕様: 1セッション1チームのため、最初のエントリのみ処理する
+# 複数ディレクトリが残存する場合は glob 順で最初のものを使用（fail-open 設計で許容）
 shopt -s nullglob
+TEAM_PATTERN=""
 has_teams=false
 for entry in "$TEAMS_DIR"/*/; do
     if [ -d "$entry" ]; then
         has_teams=true
+        CONFIG_FILE="${entry}config.json"
+        if [ -f "$CONFIG_FILE" ] && [ -r "$CONFIG_FILE" ]; then
+            # config.json から pattern を抽出
+            if command -v jq > /dev/null 2>&1; then
+                TEAM_PATTERN=$(jq -r '.pattern // empty' "$CONFIG_FILE" 2>/dev/null)
+            else
+                PATTERN_GREP=$(grep -o '"pattern"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null) || true
+                if [ -n "$PATTERN_GREP" ]; then
+                    # sed capture group extraction cannot be replaced with ${var//search/replace}
+                    # shellcheck disable=SC2001
+                    TEAM_PATTERN=$(echo "$PATTERN_GREP" | sed 's/.*"pattern"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+                fi
+            fi
+        fi
         break
     fi
 done
 shopt -u nullglob
 
+# チームが存在しない場合は何もしない
 if [ "$has_teams" = false ]; then
     exit 0
 fi
 
-# リーダー + チーム稼働中 → ブロック
+# チームは存在するが pattern 不明 → fail-open（ブロックしない）
+# TeamCreate 直後は pattern 未書き込みのため、ここでブロックすると
+# pattern 書き込み自体が不可能になる（鶏と卵の問題）
+if [ -z "$TEAM_PATTERN" ]; then
+    echo "leader-guard: pattern が取得できませんでした（fail-open）" >&2
+    exit 0
+fi
+
+# fixed-theme パターン以外（mixed-genius 等）ではリーダーも作業するため、ブロックしない
+if [ "$TEAM_PATTERN" != "fixed-theme" ]; then
+    exit 0
+fi
+
+# fixed-theme パターン: リーダー + チーム稼働中 → ブロック
 echo '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "⚠️ チーム運用中: リーダー管理専任ルールにより、Edit/Write の使用は原則禁止です。メンバーに委譲してください。"}}'
 
 exit 0

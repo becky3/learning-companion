@@ -107,13 +107,23 @@
 
 `leader-guard.sh`（PreToolUse フック）は delegate モード未使用時のフォールバックとして残す。ただし `permissions.allow` に Edit/Write が含まれている場合、フックの deny が上書きされ機能しない。
 
-> **TODO:#668** `leader-guard.sh` はパターンを区別しない。mixed-genius パターンではリーダーも作業を行うが、フックがブロックする。
+`leader-guard.sh` はチームの config.json から `pattern` フィールドを読み取り、パターンに応じてブロック判定する:
+
+| パターン | リーダーの Edit/Write | 理由 |
+|---------|----------------------|------|
+| fixed-theme | ブロック | リーダー管理専任ルール |
+| mixed-genius | 許可 | リーダーも作業を行う |
+| 不明（pattern 未設定） | 許可（fail-open） | TeamCreate 直後は pattern 未書き込みのため、ブロックすると書き込み自体が不可能になる |
 
 ## 構築手順
 
 ### 有効化
 
 `.claude/settings.json` で環境変数 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を有効化し、Claude Code を再起動する。
+
+### パターン情報の記録
+
+TeamCreate 完了後、チームの config.json（`~/.claude/teams/{team-name}/config.json`）に `pattern` フィールドを追記する。leader-guard.sh がパターンに応じたブロック判定を行うために必要。
 
 ### 履歴管理
 
@@ -129,7 +139,9 @@
 
 ### スポーン手順
 
-メンバーのスポーン手順はパターンごとに異なる。各パターン仕様を参照:
+メンバーのスポーン時には `mode: "bypassPermissions"` を指定すること。これにより hook に渡される `permission_mode` が `"acceptEdits"` となり、leader-guard.sh がメンバーを識別して許可する（リーダーは `"default"`）。
+
+スポーン手順の詳細はパターンごとに異なる。各パターン仕様を参照:
 
 - [fixed-theme パターン](fixed-theme.md)
 - [mixed-genius パターン](mixed-genius.md)
