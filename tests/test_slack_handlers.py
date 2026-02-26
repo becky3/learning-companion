@@ -8,21 +8,21 @@ from src.messaging.port import IncomingMessage
 from src.slack.handlers import strip_mention
 
 
-def test_ac4_strip_mention_removes_bot_id() -> None:
-    """AC4: メンション部分を除去してからLLMに送信する."""
+def test_strip_mention_removes_bot_id() -> None:
+    """メンション部分を除去してからLLMに送信する."""
     assert strip_mention("<@U1234ABC> hello") == "hello"
     assert strip_mention("<@U999> foo bar") == "foo bar"
     assert strip_mention("no mention") == "no mention"
     assert strip_mention("<@U1234ABC>") == ""
 
 
-def test_ac4_strip_mention_multiple() -> None:
-    """AC4: 複数メンションがあっても全て除去する."""
+def test_strip_mention_multiple() -> None:
+    """複数メンションがあっても全て除去する."""
     assert strip_mention("<@U111> <@U222> test") == "test"
 
 
-async def test_ac1_handle_mention_replies_in_thread() -> None:
-    """AC1: @bot メンションに対してスレッド内で応答する."""
+async def test_handle_mention_replies_in_thread() -> None:
+    """メンションに対してスレッド内で応答する."""
     from src.slack.handlers import register_handlers
 
     router = AsyncMock()
@@ -53,8 +53,8 @@ async def test_ac1_handle_mention_replies_in_thread() -> None:
     assert msg.message_id == "123.456"
 
 
-async def test_ac1b_handle_mention_in_thread() -> None:
-    """AC1b: スレッド内メンションでは is_in_thread=True が設定される."""
+async def test_handle_mention_in_thread() -> None:
+    """スレッド内メンションでは is_in_thread=True が設定される."""
     from src.slack.handlers import register_handlers
 
     router = AsyncMock()
@@ -129,8 +129,8 @@ def _setup_handlers_with_auto_reply(
     return handlers
 
 
-async def test_f6_ac1_auto_reply_in_configured_channel() -> None:
-    """F6-AC1: 設定されたチャンネルの全メッセージに自動返信する."""
+async def test_auto_reply_in_configured_channel() -> None:
+    """設定されたチャンネルの全メッセージに自動返信する."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, ["C_AUTO"])
 
@@ -145,8 +145,8 @@ async def test_f6_ac1_auto_reply_in_configured_channel() -> None:
     assert msg.channel == "C_AUTO"
 
 
-async def test_f6_ac2_ignores_bot_messages() -> None:
-    """F6-AC2: Bot自身の投稿には反応しない."""
+async def test_auto_reply_ignores_bot_messages() -> None:
+    """Bot自身の投稿には反応しない."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, ["C_AUTO"])
 
@@ -157,8 +157,8 @@ async def test_f6_ac2_ignores_bot_messages() -> None:
     router.process_message.assert_not_called()
 
 
-async def test_f6_ac3_ignores_subtype_messages() -> None:
-    """F6-AC3: サブタイプ付きメッセージには反応しない."""
+async def test_auto_reply_ignores_subtype_messages() -> None:
+    """サブタイプ付きメッセージには反応しない."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, ["C_AUTO"])
 
@@ -169,8 +169,8 @@ async def test_f6_ac3_ignores_subtype_messages() -> None:
     router.process_message.assert_not_called()
 
 
-async def test_f6_ac6_ignores_when_no_auto_reply_channels() -> None:
-    """F6-AC6: auto_reply_channels が未設定の場合は無効."""
+async def test_auto_reply_ignores_when_no_channels_configured() -> None:
+    """auto_reply_channels が未設定の場合は無効."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, [])
 
@@ -181,8 +181,8 @@ async def test_f6_ac6_ignores_when_no_auto_reply_channels() -> None:
     router.process_message.assert_not_called()
 
 
-async def test_f6_ac7_ignores_mention_messages() -> None:
-    """F6-AC7: メンション付きメッセージは app_mention で処理されるためスキップ."""
+async def test_auto_reply_ignores_mention_messages() -> None:
+    """メンション付きメッセージは app_mention で処理されるためスキップ."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, ["C_AUTO"])
 
@@ -193,8 +193,8 @@ async def test_f6_ac7_ignores_mention_messages() -> None:
     router.process_message.assert_not_called()
 
 
-async def test_f6_ignores_non_auto_reply_channel() -> None:
-    """F6: 対象外チャンネルへの投稿には反応しない."""
+async def test_auto_reply_ignores_non_configured_channel() -> None:
+    """対象外チャンネルへの投稿には反応しない."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, ["C_AUTO"])
 
@@ -205,8 +205,8 @@ async def test_f6_ignores_non_auto_reply_channel() -> None:
     router.process_message.assert_not_called()
 
 
-async def test_f6_ignores_empty_user_id() -> None:
-    """F6: user_id が空のメッセージは無視する（システムメッセージなど）."""
+async def test_auto_reply_ignores_empty_user_id() -> None:
+    """user_id が空のメッセージは無視する（システムメッセージなど）."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, ["C_AUTO"])
 
@@ -217,8 +217,8 @@ async def test_f6_ignores_empty_user_id() -> None:
     router.process_message.assert_not_called()
 
 
-async def test_f6_ignores_empty_text() -> None:
-    """F6: 空テキストのメッセージは無視する."""
+async def test_auto_reply_ignores_empty_text() -> None:
+    """空テキストのメッセージは無視する."""
     router = AsyncMock()
     handlers = _setup_handlers_with_auto_reply(router, ["C_AUTO"])
 

@@ -23,8 +23,8 @@ async def db_session_factory():  # type: ignore[no-untyped-def]
     await engine.dispose()
 
 
-async def test_ac2_conversation_history_maintained(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC2: 同一スレッド内の会話履歴を保持し文脈を踏まえた応答ができる."""
+async def test_conversation_history_maintained(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """同一スレッド内の会話履歴を保持し文脈を踏まえた応答ができる."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="回答1")
 
@@ -43,8 +43,8 @@ async def test_ac2_conversation_history_maintained(db_session_factory) -> None: 
     assert call_args[-1].content == "質問2"
 
 
-async def test_ac3_system_prompt_reflected(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC3: assistant.yamlの性格設定がシステムプロンプトに反映される."""
+async def test_system_prompt_reflected(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """性格設定がシステムプロンプトに反映される."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
@@ -57,8 +57,8 @@ async def test_ac3_system_prompt_reflected(db_session_factory) -> None:  # type:
     assert messages[0].content == "優しい口調で"
 
 
-async def test_ac5_uses_online_llm(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC5: オンラインLLMで応答を生成する."""
+async def test_llm_response_generated(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """LLMで応答を生成する."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="LLM応答")
 
@@ -69,8 +69,8 @@ async def test_ac5_uses_online_llm(db_session_factory) -> None:  # type: ignore[
     llm.complete.assert_called_once()
 
 
-async def test_ac6_conversation_saved_to_db(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC6: 会話履歴をDBに保存する."""
+async def test_conversation_saved_to_db(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """会話履歴をDBに保存する."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="保存テスト")
 

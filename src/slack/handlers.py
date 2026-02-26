@@ -1,5 +1,5 @@
 """Slack イベントハンドラ
-仕様: docs/specs/f1-chat.md, docs/specs/features/auto-reply.md, docs/specs/features/cli-adapter.md
+仕様: docs/specs/features/chat-response.md, docs/specs/features/auto-reply.md, docs/specs/features/cli-adapter.md
 
 イベント→IncomingMessage変換 + MessageRouter委譲の薄いラッパー。
 ビジネスロジックは MessageRouter (src/messaging/router.py) に集約。
