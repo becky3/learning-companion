@@ -43,6 +43,7 @@ Claude Code の hooks 機能を使用して、セッション開始時のコン�
 - `permission_prompt`: ツール許可ダイアログ表示時
 - `idle_prompt`: アイドル状態で入力待機時
 - `elicitation_dialog`: 選択肢提示時
+- `auth_success`: 認証成功時
 
 ## 処理内容
 
@@ -63,10 +64,12 @@ Claude Code の hooks 機能を使用して、セッション開始時のコン�
 
 エージェントチーム運用時に、リーダーの Edit / Write ツール使用をブロックする。
 
+**入力**: stdin から JSON を受け取り、`permission_mode` フィールドでリーダー／メンバーを判別する。
+
 **判定ロジック**:
 
 1. `permission_mode` が `"bypassPermissions"` または `"acceptEdits"` → メンバー → 通過
-2. チームディレクトリ配下にサブディレクトリなし → チーム非稼働 → 通過
+2. `~/.claude/teams/` 配下にサブディレクトリなし → チーム非稼働 → 通過
 3. チームの config.json から `pattern` を読み取る
    - `pattern` 未設定 → fail-open（通過）
    - `pattern` が `"fixed-theme"` 以外（`"mixed-genius"` 等）→ 通過
@@ -110,3 +113,7 @@ Claude Code の hooks 機能を使用して、セッション開始時のコン�
 ## 関連ドキュメント
 
 - [エージェントチーム共通仕様](../teams/common.md): リーダー管理専任ルール
+- `.claude/scripts/notify.sh`: 通知スクリプト
+- `.claude/scripts/leader-guard.sh`: リーダーガードスクリプト
+- `.claude/scripts/destructive-command-guard.sh`: 破壊コマンドガードスクリプト
+- `.claude/scripts/precompact_rule.sh`: コンテキスト圧縮前ルール注入スクリプト
