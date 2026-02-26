@@ -17,7 +17,11 @@
     "SessionStart": [
       {
         "matcher": "*",
-        "hooks": [{ "type": "command", "command": "cat README.md" }]
+        "hooks": [
+          { "type": "command", "command": "cat README.md" },
+          { "type": "command", "command": "cat docs/specs/overview.md" },
+          { "type": "command", "command": "cat docs/specs/style-guide.md" }
+        ]
       }
     ],
     "PreToolUse": [
