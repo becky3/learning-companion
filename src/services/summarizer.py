@@ -1,5 +1,5 @@
 """ローカルLLMによる記事要約サービス
-仕様: docs/specs/f2-feed-collection.md
+仕様: docs/specs/features/feed-management.md
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ SUMMARIZE_PROMPT = (
 class Summarizer:
     """記事要約サービス.
 
-    仕様: docs/specs/f2-feed-collection.md
+    仕様: docs/specs/features/feed-management.md
     """
 
     def __init__(self, llm: LLMProvider) -> None:
