@@ -43,7 +43,6 @@ docs/specs/
 ### 基本ルール
 
 - **ケバブケース**（ハイフン区切り）を使用: `chat-response.md`
-- f番号は使用しない（廃止）
 - サフィックス（`-agent`, `-skill`）はディレクトリで種別がわかる場合も維持する
   - 理由: ファイル単体で見ても種別が判別できる
 
@@ -52,22 +51,6 @@ docs/specs/
 - ファイル名だけで機能の概要がわかること
 - 略語のみ（`rag`, `mcp`）は避け、補足を付ける（`rag-knowledge`, `mcp-integration`）
 - 実装手段ではなく機能の目的を表す名前にする
-
-### f番号からの移行対応表
-
-| 旧名 | 新名 | 変更理由 |
-|------|------|---------|
-| f1-chat | chat-response | 「応答」機能であることを明示 |
-| f2-feed-collection | feed-management | 収集・配信・管理を包含する名前に |
-| f3-user-profiling | user-profiling | f番号のみ除去 |
-| f4-topic-recommend | topic-recommend | f番号のみ除去 |
-| f5-mcp-integration | mcp-integration | f番号のみ除去 |
-| f6-auto-reply | auto-reply | f番号のみ除去 |
-| f7-bot-status | bot-status | f番号のみ除去 |
-| f8-thread-support | thread-support | f番号のみ除去 |
-| f9-rag | rag-knowledge | 「ナレッジ」を補足。蓄積+検索を包含 |
-| f10-slack-mrkdwn | slack-formatting | Slack 固有用語 "mrkdwn" を一般的な表現に |
-| f11-cli-adapter | cli-adapter | f番号のみ除去 |
 
 ## 3. コミットメッセージ規約
 
@@ -118,7 +101,7 @@ agentic/agents/code-review-agent
 
 ## 5. ブランチ命名規約
 
-f番号を使用せず、機能名ベースで命名する:
+機能名ベースで命名する:
 
 ```
 feature/{機能名}-#{Issue番号}
