@@ -14,10 +14,10 @@ argument-hint: "[diff|full] [file-path]"
 
 `$ARGUMENTS` の形式:
 
-- `diff [file-path]`: 変更箇所のみをレビュー（差分レビュー）
+- `diff [file-path]`: 変更箇所のみをレビュー（差分レビュー・デフォルト）
 - `full [file-path]`: ファイル全体をレビュー（フルレビュー）
-- `[file-path]`: フルレビュー（デフォルト）
-- 未指定: 変更のある全ドキュメントをフルレビュー
+- `[file-path]`: 差分レビュー（デフォルト）
+- 未指定: 変更のある全ドキュメントを差分レビュー
 
 ## 仕様書の参照
 
@@ -38,8 +38,8 @@ argument-hint: "[diff|full] [file-path]"
 
 ### 2. レビューモードの判定
 
-- `$ARGUMENTS` に `diff` が含まれる → 差分レビューモード
-- `$ARGUMENTS` に `full` が含まれる、またはモード未指定 → フルレビューモード
+- `$ARGUMENTS` に `full` が含まれる → フルレビューモード
+- `$ARGUMENTS` に `diff` が含まれる、またはモード未指定 → 差分レビューモード
 
 ### 3. 対象ファイルの特定
 

@@ -3,7 +3,7 @@ name: code-review
 description: コミット前のセルフコードレビュー。テスト名と実装の整合性、エラーハンドリング、バリデーション、競合状態、リソース管理などの問題を検出する。
 user-invocable: true
 allowed-tools: Read, Grep, Glob, Bash
-argument-hint: "[file-path|diff]"
+argument-hint: "[diff|full] [file-path]"
 ---
 
 ## タスク
@@ -14,9 +14,10 @@ argument-hint: "[file-path|diff]"
 
 `$ARGUMENTS` の形式:
 
-- ファイルパス指定: 該当ファイルをレビュー（例: `src/services/chat.py`）
-- `diff`: `git diff` の変更差分をレビュー
-- 未指定: `git diff --cached` のステージ済み変更をレビュー（なければ `git diff` の未ステージ変更）
+- `diff [file-path]`: 変更差分をレビュー（デフォルト）
+- `full [file-path]`: ファイル全体をレビュー
+- `[file-path]`: 差分レビュー（デフォルト）
+- 未指定: `git diff --cached` → `git diff` の変更差分をレビュー
 
 ## 仕様書の参照
 
@@ -34,20 +35,24 @@ argument-hint: "[file-path|diff]"
 
 `docs/specs/agentic/agents/code-review-agent.md` を Read で読み込み、レビュー観点と判定基準を確認する。
 
-### 2. レビュー対象の特定
+### 2. レビューモードの判定
+
+- `$ARGUMENTS` に `full` が含まれる → full モード（ファイル全体をレビュー）
+- `$ARGUMENTS` に `diff` が含まれる、または未指定 → diff モード（変更差分をレビュー）
+
+### 3. レビュー対象の特定
 
 - ファイルパスが指定された場合: 該当ファイルをレビュー
-- 変更差分のレビューが依頼された場合: `git diff` の変更差分をレビュー
 - 未指定の場合: `git diff --cached` のステージ済み変更をレビュー（なければ `git diff` の未ステージ変更）
 
 テストファイルをレビューする場合は、対応する実装ファイルも読み込んで整合性を確認する。
 実装ファイルをレビューする場合は、対応するテストファイルも確認する。
 
-### 3. 仕様書との照合
+### 4. 仕様書との照合
 
 対象ファイルに対応する仕様書があれば `docs/specs/` から読み込み、実装と仕様の整合性を確認する。
 
-### 4. レビュー実施
+### 5. レビュー実施
 
 仕様書に記載された10のレビュー観点（詳細は `docs/specs/agentic/agents/code-review-agent.md` 参照）に基づいて検査を実施する。
 
@@ -64,7 +69,7 @@ argument-hint: "[file-path|diff]"
 9. フォールバック/暗黙のデフォルト値パターンの検出
 10. README.md 更新漏れの検出
 
-### 5. レポート生成
+### 6. レポート生成
 
 下記の出力フォーマットに従ってレポートを生成する。
 

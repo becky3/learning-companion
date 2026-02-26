@@ -9,7 +9,7 @@ permissionMode: bypassPermissions
 
 1. `.claude/skills/doc-review/SKILL.md` を Read ツールで読み込む
 2. スキルの指示に従ってドキュメントレビューを実行する
-3. ユーザーからの指示（diff/full モード、対象ファイル等）をスキルの `$ARGUMENTS` として解釈する
+3. ユーザーからの指示（diff/full モード、対象ファイル等）をスキルの `$ARGUMENTS` として解釈する（未指定時は `diff` モード）
 
 ## 結果返却ルール
 
