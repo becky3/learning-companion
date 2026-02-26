@@ -105,5 +105,5 @@ uv run python scripts/parameter_sweep.py \
 
 ## 関連ドキュメント
 
-- [RAGナレッジ機能仕様](../specs/f9-rag.md)
+- [RAGナレッジ機能仕様](../specs/infrastructure/rag-knowledge.md)
 - [RAGシステム概要](rag-overview.md)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Wait for Copilot -- Copilot レビュー完了を sleep ポーリングで検知
 #
-# 設計書: docs/specs/copilot-auto-fix.md (Section 2: Copilot レビュー検知)
+# 設計書: docs/specs/workflows/github/copilot-auto-fix.md (Section 2: Copilot レビュー検知)
 #
 # 入力（環境変数）:
 #   PR_NUMBER               -- 対象PR番号（必須）

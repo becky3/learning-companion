@@ -9,7 +9,7 @@ README.md の内容は SessionStart フックによりセッション開始時�
   - `CHAT_LLM_PROVIDER` / `PROFILER_LLM_PROVIDER` / `TOPIC_LLM_PROVIDER` / `SUMMARIZER_LLM_PROVIDER`
   - 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
 - `MCP_ENABLED` — MCP機能の有効/無効（デフォルト: `false`）。MCPサーバー（`mcp_servers/` 配下）は `src/` のモジュールを import しないこと
-- `RAG_ENABLED` — RAG機能の有効/無効（デフォルト: `false`）。詳細は `docs/specs/f9-rag.md` 参照
+- `RAG_ENABLED` — RAG機能の有効/無効（デフォルト: `false`）。詳細は `docs/specs/infrastructure/rag-knowledge.md` 参照
 
 ## 開発ルール
 
@@ -102,7 +102,7 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 
 ### Hooks
 
-- **仕様**: `docs/specs/claude-code-hooks.md`
+- **仕様**: `docs/specs/agentic/hooks/claude-code-hooks.md`
 - **破壊コマンドガード**: `gh issue delete` / `gh repo delete` 等をフックでブロック。実行が必要な場合はターミナルから直接実行する
 - シェルスクリプト（`.sh`）は **LF 改行コード** で保存すること（CRLF だとエラー）
 - **出力の破棄には必ず `/dev/null` を使うこと。`> nul` は禁止**（Git Bash では `nul` ファイルが生成される）
@@ -139,4 +139,4 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 
 ### エージェントチーム
 
-チーム機能の仕様は `docs/specs/agent-teams/` 配下を参照。
+チーム機能の仕様は `docs/specs/agentic/teams/` 配下を参照。

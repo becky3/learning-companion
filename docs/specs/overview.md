@@ -7,19 +7,19 @@ AI Assistantは、Slack上で動作するAIアシスタントである。
 
 ## 2. 機能一覧
 
-| ID | 機能名 | 概要 | 仕様書 |
-|----|--------|------|--------|
-| F1 | チャット応答 | @メンションによる質問応答 | [f1-chat.md](f1-chat.md) |
-| F2 | 情報収集・配信 | RSS収集→要約→毎朝自動配信 | [f2-feed-collection.md](f2-feed-collection.md) |
-| F3 | ユーザー情報抽出 | 会話から興味・スキル・目標を抽出 | [f3-user-profiling.md](f3-user-profiling.md) |
-| F4 | トピック提案 | 収集情報+プロファイルから学習提案 | [f4-topic-recommend.md](f4-topic-recommend.md) |
-| F5 | MCP統合 | LLMが外部ツールを動的に呼び出すプロトコル統合 | [f5-mcp-integration.md](f5-mcp-integration.md) |
-| F6 | 特定チャンネル自動返信 | 指定チャンネルでメンションなしでも自動応答 | [f6-auto-reply.md](f6-auto-reply.md) |
-| F7 | ボットステータスコマンド | 稼働環境・ホスト名・稼働時間の表示 | [f7-bot-status.md](f7-bot-status.md) |
-| F8 | ボットのスレッド対応 | Slackスレッド履歴取得によるコンテキスト補完 | [f8-thread-support.md](f8-thread-support.md) |
-| F9 | RAGナレッジ | 外部Webページの知識をベクトルDBに蓄積しチャット応答に活用 | [f9-rag.md](f9-rag.md) |
-| F10 | Slack mrkdwn形式対応 | LLM返信をSlack mrkdwn形式で出力 | [f10-slack-mrkdwn.md](f10-slack-mrkdwn.md) |
-| F11 | CLIアダプター | Slack非依存でCLIからボット動作を確認するPort/Adapterパターン | [f11-cli-adapter.md](f11-cli-adapter.md) |
+| # | 機能名 | 概要 | 仕様書 |
+|---|--------|------|--------|
+| 1 | チャット応答 | @メンションによる質問応答 | [chat-response.md](features/chat-response.md) |
+| 2 | 情報収集・配信 | RSS収集→要約→毎朝自動配信 | [feed-management.md](features/feed-management.md) |
+| 3 | ユーザー情報抽出 | 会話から興味・スキル・目標を抽出 | [user-profiling.md](features/user-profiling.md) |
+| 4 | トピック提案 | 収集情報+プロファイルから学習提案 | [topic-recommend.md](features/topic-recommend.md) |
+| 5 | MCP統合 | LLMが外部ツールを動的に呼び出すプロトコル統合 | [mcp-integration.md](infrastructure/mcp-integration.md) |
+| 6 | 特定チャンネル自動返信 | 指定チャンネルでメンションなしでも自動応答 | [auto-reply.md](features/auto-reply.md) |
+| 7 | ボットステータスコマンド | 稼働環境・ホスト名・稼働時間の表示 | [bot-status.md](features/bot-status.md) |
+| 8 | ボットのスレッド対応 | Slackスレッド履歴取得によるコンテキスト補完 | [thread-support.md](features/thread-support.md) |
+| 9 | RAGナレッジ | 外部Webページの知識をベクトルDBに蓄積しチャット応答に活用 | [rag-knowledge.md](infrastructure/rag-knowledge.md) |
+| 10 | Slack mrkdwn形式対応 | LLM返信をSlack mrkdwn形式で出力 | [slack-formatting.md](features/slack-formatting.md) |
+| 11 | CLIアダプター | Slack非依存でCLIからボット動作を確認するPort/Adapterパターン | [cli-adapter.md](features/cli-adapter.md) |
 
 ## 3. 技術スタック
 
@@ -108,17 +108,18 @@ ONLINE_LLM_PROVIDER=openai
 
 ### 仕様書テンプレート
 
-```
-# F{N}: 機能名
-## 概要
-## 背景（必要に応じて）
-## ユーザーストーリー
-## 入出力仕様（具体例付き）
-## 受け入れ条件（チェックリスト形式）
-## 使用LLMプロバイダー（該当する場合）
-## 関連ファイル（実装対象）
-## テスト方針
-```
+カテゴリごとにテンプレートを用意している。詳細は [docs/specs/templates/](templates/) を参照。
+
+| カテゴリ | テンプレート | 配置先 |
+|---------|------------|--------|
+| 機能仕様 | [features.md](templates/features.md) | `features/` |
+| 基盤仕様 | [infrastructure.md](templates/infrastructure.md) | `infrastructure/` |
+| ワークフロー | [workflows.md](templates/workflows.md) | `workflows/` |
+| GitHub ワークフロー | [workflows-github.md](templates/workflows-github.md) | `workflows/github/` |
+| エージェント | [agentic-agents.md](templates/agentic-agents.md) | `agentic/agents/` |
+| スキル | [agentic-skills.md](templates/agentic-skills.md) | `agentic/skills/` |
+| チーム | [agentic-teams.md](templates/agentic-teams.md) | `agentic/teams/` |
+| Hooks | [agentic-hooks.md](templates/agentic-hooks.md) | `agentic/hooks/` |
 
 ### Git運用（git-flow）
 

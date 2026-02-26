@@ -1,6 +1,6 @@
 # キャラクター演出ガイドライン
 
-キャラクターの「演じ方」に関するガイドライン。ルールは `docs/specs/agent-teams/common.md` を参照。
+キャラクターの「演じ方」に関するガイドライン。ルールは `docs/specs/agentic/teams/common.md` を参照。
 
 ## パターン別の演出方針
 
