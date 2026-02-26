@@ -116,9 +116,15 @@ HISTORY_FILE="$HOME/.claude/team-theme-history.json"
 
 TeamCreate ツールでチームを作成する。
 
+### ステップ6.5: パターン情報の書き込み
+
+TeamCreate 完了後、チームの config.json（`~/.claude/teams/{team-name}/config.json`）に `pattern` フィールドを追加する。
+
+Read ツールで config.json を読み込み、Edit ツールで `pattern` フィールドを追記する（既存の `members` 等のフィールドは維持する）。
+
 ### ステップ7: メンバーの生成
 
-Task ツールで各メンバーをスポーンする。
+Task ツールで各メンバーをスポーンする。**`mode: "bypassPermissions"` を必ず指定すること**（未指定だと leader-guard.sh にブロックされる）。
 
 各メンバーのプロンプトに以下を含める:
 

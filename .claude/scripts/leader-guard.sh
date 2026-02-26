@@ -28,6 +28,8 @@ else
         echo "leader-guard: grep による permission_mode の抽出に失敗しました（fail-open）" >&2
         exit 0
     fi
+    # sed capture group extraction cannot be replaced with ${var//search/replace}
+    # shellcheck disable=SC2001
     PERMISSION_MODE=$(echo "$GREP_RESULT" | sed 's/.*"permission_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 fi
 
@@ -62,22 +64,50 @@ if [ ! -r "$TEAMS_DIR" ]; then
     exit 0
 fi
 
-# サブディレクトリが1つでもあるか確認
+# サブディレクトリが1つでもあるか確認し、最初に見つかったチームの pattern を取得する
+# 仕様: 1セッション1チームのため、最初のエントリのみ処理する
 shopt -s nullglob
+TEAM_PATTERN=""
 has_teams=false
 for entry in "$TEAMS_DIR"/*/; do
     if [ -d "$entry" ]; then
         has_teams=true
+        CONFIG_FILE="${entry}config.json"
+        if [ -f "$CONFIG_FILE" ] && [ -r "$CONFIG_FILE" ]; then
+            # config.json から pattern を抽出
+            if command -v jq > /dev/null 2>&1; then
+                TEAM_PATTERN=$(jq -r '.pattern // empty' "$CONFIG_FILE" 2>/dev/null)
+            else
+                PATTERN_GREP=$(grep -o '"pattern"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null) || true
+                if [ -n "$PATTERN_GREP" ]; then
+                    # sed capture group extraction cannot be replaced with ${var//search/replace}
+                    # shellcheck disable=SC2001
+                    TEAM_PATTERN=$(echo "$PATTERN_GREP" | sed 's/.*"pattern"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+                fi
+            fi
+        fi
         break
     fi
 done
 shopt -u nullglob
 
+# チームが存在しない場合は何もしない
 if [ "$has_teams" = false ]; then
     exit 0
 fi
 
-# リーダー + チーム稼働中 → ブロック
+# チームは存在するが pattern 不明 → fixed-theme として扱う（安全側に倒す）
+if [ -z "$TEAM_PATTERN" ]; then
+    echo "leader-guard: pattern が取得できませんでした。fixed-theme として扱います" >&2
+    TEAM_PATTERN="fixed-theme"
+fi
+
+# mixed-genius パターンではリーダーも作業するため、ブロックしない
+if [ "$TEAM_PATTERN" = "mixed-genius" ]; then
+    exit 0
+fi
+
+# fixed-theme パターン: リーダー + チーム稼働中 → ブロック
 echo '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "⚠️ チーム運用中: リーダー管理専任ルールにより、Edit/Write の使用は原則禁止です。メンバーに委譲してください。"}}'
 
 exit 0
