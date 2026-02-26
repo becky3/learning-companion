@@ -2,7 +2,7 @@
 
 > このファイルは GitHub Actions 環境（claude-code-action）専用のルール。
 > ローカル対話セッションでは参照不要。
-> 仕様: `docs/specs/auto-progress.md`
+> 仕様: `docs/specs/workflows/github/auto-progress.md`
 
 ## 起動時の判断フロー
 

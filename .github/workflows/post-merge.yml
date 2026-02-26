@@ -2,7 +2,7 @@
 #
 # コンセプト: 「YAMLはオーケストレーションのみ、ロジックはスクリプトに」
 # スクリプト: .github/scripts/post-merge/
-# 設計書: docs/specs/auto-progress.md
+# 設計書: docs/specs/workflows/github/auto-progress.md
 #
 # 処理内容:
 #   1. 全自動マージPRを auto:review-batch Issue にコメント記録

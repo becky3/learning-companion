@@ -74,5 +74,4 @@ flowchart TD
 
 ## 関連ドキュメント
 
-<!-- auto-progress は未移行。#648 で一括修正予定 -->
 - [auto-progress](auto-progress.md) — 自動進行管理（`auto-implement` ラベルトリガーを含む）
