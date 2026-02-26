@@ -175,6 +175,8 @@ stateDiagram-v2
 
 PR レビューの「Resolve conversation」を GitHub GraphQL API で自動実行する。check-pr スキルの指摘対応後に、判断済みスレッドを resolve する。
 
+パイプライン内の位置: 自動修正の完了後に resolve を実行し、その後マージ判定（第5層: マージ前6条件チェック）に進む。resolve 後も unresolved スレッドが残っている場合はマージ条件未達となる。
+
 - 個別スレッドの resolve 失敗はログして次のスレッドに継続する（1件の失敗で全体を止めない）
 - 全スレッドの resolve が失敗した場合はエラーログを記録する（`auto:failed` は付与しない）
 

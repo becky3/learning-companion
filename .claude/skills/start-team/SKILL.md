@@ -81,10 +81,6 @@ HISTORY_FILE="$HOME/.claude/team-theme-history.json"
 
 選出結果を履歴ファイルに追加する。**メンバー生成前に必ず実行すること**。
 
-```bash
-DATETIME=$(date -Iseconds)
-```
-
 新しいエントリを配列の**先頭**に追加する。
 
 #### fixed-theme の履歴エントリ
@@ -93,7 +89,6 @@ DATETIME=$(date -Iseconds)
 {
   "pattern": "fixed-theme",
   "theme": "作品名",
-  "datetime": "ISO 8601",
   "characters": ["キャラ1", "キャラ2", "キャラ3"]
 }
 ```
@@ -106,7 +101,6 @@ DATETIME=$(date -Iseconds)
 {
   "pattern": "mixed-genius",
   "theme": "mixed-genius",
-  "datetime": "ISO 8601",
   "characters": ["キャラ1", "キャラ2"],
   "members": [
     { "name": "キャラ1", "work": "作品A", "role": "議論担当" },
