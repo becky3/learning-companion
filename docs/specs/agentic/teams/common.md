@@ -43,7 +43,7 @@
 | パターン | 概要 | 人数 |
 |---------|------|------|
 | [fixed-theme](fixed-theme.md) | 1作品からキャラを選出するフルチーム | 4〜6人 |
-| [mixed-genius](mixed-genius.md) | デフォルトキャラクター固定 + 知性キャラの軽量チーム | 2〜3人 |
+| [mixed-genius](mixed-genius.md) | セッションキャラクター固定 + 知性キャラの軽量チーム | 2〜3人 |
 
 デフォルトパターンは `.claude/team-themes/config.json` で設定する。未設定時は `fixed-theme` がデフォルト。
 
