@@ -46,7 +46,7 @@ def _make_article(
     return a
 
 
-def test_ac5_format_daily_digest_returns_dict_with_blocks() -> None:
+def test_format_daily_digest_returns_per_feed_block_kit_dict() -> None:
     """AC5/AC14: format_daily_digest がフィード別のBlock Kit blocksを返す."""
     feeds = {
         1: Feed(id=1, url="https://a.com/rss", name="A Feed", category="Python"),
@@ -70,12 +70,12 @@ def test_ac5_format_daily_digest_returns_dict_with_blocks() -> None:
     assert any(b["type"] == "section" for b in article_blocks_list[0])
 
 
-def test_ac5_format_empty_articles() -> None:
+def test_format_daily_digest_returns_empty_dict_when_no_articles() -> None:
     """AC5: 記事がない場合は空辞書を返す."""
     assert format_daily_digest([], {}) == {}
 
 
-def test_ac5_format_empty_summary_shows_fallback() -> None:
+def test_format_daily_digest_shows_fallback_text_for_empty_summary() -> None:
     """AC5: 要約が空の場合は「（要約なし）」と表示する."""
     feeds = {1: Feed(id=1, url="https://a.com/rss", name="A Feed", category="Python")}
     articles = [_make_article(1, "Title", "https://a.com/1", "")]
@@ -90,7 +90,7 @@ def test_ac5_format_empty_summary_shows_fallback() -> None:
     assert any(NO_SUMMARY_TEXT in t for t in section_texts)
 
 
-def test_ac14_1_build_parent_message_shows_feed_name() -> None:
+def test_build_parent_message_includes_feed_name() -> None:
     """AC14.1: 親メッセージにフィード名が表示される."""
     blocks = _build_parent_message("Python公式ブログ")
     assert len(blocks) == 1
@@ -98,7 +98,7 @@ def test_ac14_1_build_parent_message_shows_feed_name() -> None:
     assert "Python公式ブログ" in text
 
 
-def test_ac14_2_format_digest_returns_per_article_blocks() -> None:
+def test_format_daily_digest_returns_separate_blocks_per_article() -> None:
     """AC14.2: 記事ごとに個別のBlock Kitブロックリストが返される."""
     feeds = {1: Feed(id=1, url="https://a.com/rss", name="A Feed", category="Python")}
     articles = [
@@ -113,7 +113,7 @@ def test_ac14_2_format_digest_returns_per_article_blocks() -> None:
     assert len(article_blocks_list) == 3
 
 
-def test_ac14_3_article_blocks_show_datetime() -> None:
+def test_build_article_blocks_displays_published_datetime() -> None:
     """AC14.3: 更新日時がタイトル下に表示される."""
     dt = datetime(2026, 2, 5, 14, 30, 0, tzinfo=timezone.utc)
     article = _make_article(1, "Title", "https://a.com/1", "summary", published_at=dt)
@@ -125,7 +125,7 @@ def test_ac14_3_article_blocks_show_datetime() -> None:
     assert "02-05 23:30" in first_text
 
 
-def test_ac14_4_datetime_fallback_to_collected_at() -> None:
+def test_format_article_datetime_falls_back_to_collected_at() -> None:
     """AC14.4: published_at が無い場合は collected_at にフォールバックする."""
     collected = datetime(2026, 2, 6, 9, 0, 0, tzinfo=timezone.utc)
     article = _make_article(
@@ -137,7 +137,7 @@ def test_ac14_4_datetime_fallback_to_collected_at() -> None:
     assert "02-06 18:00" in dt_str
 
 
-def test_ac14_format_digest_limits_articles_per_feed() -> None:
+def test_format_daily_digest_truncates_articles_beyond_max_per_feed() -> None:
     """max_articles_per_feed を超える記事は切り詰められる."""
     feeds = {1: Feed(id=1, url="https://a.com/rss", name="A Feed", category="Python")}
     articles = [
@@ -171,7 +171,7 @@ async def db_factory():  # type: ignore[no-untyped-def]
     await engine.dispose()
 
 
-async def test_ac4_daily_collect_and_deliver_posts_to_slack(db_factory) -> None:  # type: ignore[no-untyped-def]
+async def test_daily_collect_and_deliver_posts_header_parent_thread_footer(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC4/AC14: daily_collect_and_deliver がフィード別にSlack投稿する（逐次型）."""
     collector = AsyncMock()
 
@@ -227,7 +227,7 @@ async def test_ac4_daily_collect_and_deliver_posts_to_slack(db_factory) -> None:
     assert ":bulb:" in calls[3].kwargs["text"]
 
 
-async def test_ac4_daily_collect_and_deliver_handles_error(db_factory) -> None:  # type: ignore[no-untyped-def]
+async def test_daily_collect_and_deliver_does_not_crash_on_error(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC4: ジョブ内でエラーが発生してもクラッシュしない."""
     collector = AsyncMock()
     collector.get_enabled_feeds.side_effect = RuntimeError("DB error")
@@ -242,7 +242,7 @@ async def test_ac4_daily_collect_and_deliver_handles_error(db_factory) -> None: 
     slack_client.chat_postMessage.assert_not_called()
 
 
-def test_ac10_build_article_blocks_with_image_horizontal() -> None:
+def test_build_article_blocks_horizontal_uses_accessory_for_image() -> None:
     """AC10: image_urlがある記事でhorizontal形式ではaccessoryとして配置される."""
     article_with_img = _make_article(
         1, "With Image", "https://a.com/1", "summary",
@@ -264,7 +264,7 @@ def test_ac10_build_article_blocks_with_image_horizontal() -> None:
     assert "accessory" not in content_sections[0]
 
 
-async def test_ac11_1_article_model_has_delivered_column(db_factory) -> None:  # type: ignore[no-untyped-def]
+async def test_article_model_has_delivered_column_default_false(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.1: Article モデルに delivered カラムが追加されている."""
     async with db_factory() as session:
         result = await session.execute(select(Article))
@@ -274,7 +274,7 @@ async def test_ac11_1_article_model_has_delivered_column(db_factory) -> None:  #
         assert article.delivered is False  # デフォルト値
 
 
-async def test_ac11_2_query_retrieves_only_undelivered_articles(db_factory) -> None:  # type: ignore[no-untyped-def]
+async def test_query_filters_only_undelivered_articles(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.2: 配信対象クエリが delivered == False の記事のみを取得する."""
     async with db_factory() as session:
         feed_result = await session.execute(select(Feed))
@@ -327,7 +327,7 @@ def _make_sequential_collector(db_factory, undelivered: list[Article]) -> AsyncM
     return collector
 
 
-async def test_ac11_3_delivered_flag_updated_after_posting(db_factory) -> None:  # type: ignore[no-untyped-def]
+async def test_delivered_flag_set_true_after_slack_posting(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.3: Slack配信完了後、配信された記事の delivered が True に更新される."""
     async with db_factory() as session:
         feeds = list((await session.execute(select(Feed))).scalars().all())
@@ -357,7 +357,7 @@ async def test_ac11_3_delivered_flag_updated_after_posting(db_factory) -> None: 
         assert all(a.delivered is True for a in articles)
 
 
-async def test_ac11_4_no_redelivery_on_multiple_executions(db_factory) -> None:  # type: ignore[no-untyped-def]
+async def test_already_delivered_articles_not_redelivered(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.4: deliver を複数回実行しても、既に配信済みの記事は再配信されない."""
     async with db_factory() as session:
         feeds = list((await session.execute(select(Feed))).scalars().all())
@@ -398,7 +398,7 @@ async def test_ac11_4_no_redelivery_on_multiple_executions(db_factory) -> None: 
     assert second_call_count == 4  # 増えない（新規投稿なし）
 
 
-async def test_ac11_5_new_articles_are_delivered(db_factory) -> None:  # type: ignore[no-untyped-def]
+async def test_newly_collected_articles_delivered_in_next_run(db_factory) -> None:  # type: ignore[no-untyped-def]
     """AC11.5: 新規収集された記事（delivered == False）は次回配信対象になる."""
     async with db_factory() as session:
         feeds = list((await session.execute(select(Feed))).scalars().all())
@@ -463,7 +463,7 @@ async def test_ac11_5_new_articles_are_delivered(db_factory) -> None:  # type: i
 # --- AC12: 配信カード形式の切り替え ---
 
 
-def test_ac12_1_settings_has_feed_card_layout() -> None:
+def test_settings_feed_card_layout_defaults_to_horizontal() -> None:
     """AC12.1: Settings に feed_card_layout フィールドがあり、デフォルトは 'horizontal'."""
     from src.config.settings import Settings
 
@@ -475,7 +475,7 @@ def test_ac12_1_settings_has_feed_card_layout() -> None:
     assert s.feed_card_layout == "horizontal"
 
 
-def test_ac12_2_vertical_layout_has_independent_image_block() -> None:
+def test_vertical_layout_renders_independent_image_block() -> None:
     """AC12.2: vertical レイアウトでは独立imageブロックが表示される."""
     article = _make_article(
         1, "Title", "https://a.com/1", "summary text",
@@ -492,7 +492,7 @@ def test_ac12_2_vertical_layout_has_independent_image_block() -> None:
     assert len(sections) == 2  # タイトル+日時 + 要約
 
 
-def test_ac12_3_horizontal_layout_has_accessory_image() -> None:
+def test_horizontal_layout_renders_image_as_accessory() -> None:
     """AC12.3: horizontal レイアウトでは画像がaccessoryとして右側に表示される."""
     article = _make_article(
         1, "Title", "https://a.com/1", "summary text",
@@ -518,7 +518,7 @@ def test_ac12_3_horizontal_layout_has_accessory_image() -> None:
     assert "summary text" in text
 
 
-def test_ac12_4_horizontal_layout_no_image() -> None:
+def test_horizontal_layout_no_accessory_when_image_absent() -> None:
     """AC12.4: horizontal レイアウトで画像がない記事ではaccessoryが付かない."""
     article = _make_article(1, "Title", "https://a.com/1", "summary text")
     blocks = _build_article_blocks(article, layout="horizontal")
@@ -529,7 +529,7 @@ def test_ac12_4_horizontal_layout_no_image() -> None:
     assert len(content_sections) == 0
 
 
-def test_ac12_5_vertical_layout_no_image() -> None:
+def test_vertical_layout_shows_title_and_summary_without_image() -> None:
     """AC12.5: vertical レイアウトで画像がない記事でもタイトル+要約が正常に表示される."""
     article = _make_article(1, "Title", "https://a.com/1", "summary text")
     blocks = _build_article_blocks(article, layout="vertical")
@@ -541,7 +541,7 @@ def test_ac12_5_vertical_layout_no_image() -> None:
     assert len(sections) == 2  # タイトル+日時 + 要約
 
 
-def test_ac12_6_format_daily_digest_passes_layout() -> None:
+def test_format_daily_digest_passes_layout_to_article_blocks() -> None:
     """AC12.6: format_daily_digest が layout を _build_article_blocks に渡す."""
     feeds = {1: Feed(id=1, url="https://a.com/rss", name="A Feed", category="Python")}
     articles = [
@@ -561,7 +561,7 @@ def test_ac12_6_format_daily_digest_passes_layout() -> None:
     assert len(image_blocks) == 1
 
 
-async def test_ac12_7_manual_deliver_uses_layout() -> None:
+async def test_manual_deliver_command_passes_layout_from_router() -> None:
     """AC12.7: 手動配信コマンドで MessageRouter の layout が daily_collect_and_deliver に渡される."""
     from unittest.mock import patch
 
@@ -605,7 +605,7 @@ async def test_ac12_7_manual_deliver_uses_layout() -> None:
     )
 
 
-def test_ac12_8_invalid_layout_raises_validation_error() -> None:
+def test_settings_rejects_invalid_feed_card_layout() -> None:
     """AC12.8: 不正な feed_card_layout 値を設定した場合、ValidationErrorが発生する."""
     from pydantic import ValidationError
 
@@ -669,7 +669,7 @@ async def db_factory_with_delivered():  # type: ignore[no-untyped-def]
     await engine.dispose()
 
 
-async def test_ac15_1_feed_test_no_new_collection(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
+async def test_feed_test_deliver_uses_existing_articles_without_collection(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
     """AC15.1: feed test は新規収集を行わない（既存記事のみ出力）."""
     slack_client = AsyncMock()
     slack_client.chat_postMessage.return_value = {"ts": "parent.123"}
@@ -684,7 +684,7 @@ async def test_ac15_1_feed_test_no_new_collection(db_factory_with_delivered) -> 
     assert slack_client.chat_postMessage.call_count > 0
 
 
-async def test_ac15_2_feed_test_includes_delivered_articles(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
+async def test_feed_test_deliver_includes_already_delivered_articles(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
     """AC15.2: feed test は配信済み記事も含めて出力する."""
     slack_client = AsyncMock()
     slack_client.chat_postMessage.return_value = {"ts": "parent.123"}
@@ -699,7 +699,7 @@ async def test_ac15_2_feed_test_includes_delivered_articles(db_factory_with_deli
     assert slack_client.chat_postMessage.call_count == 7
 
 
-async def test_ac15_3_feed_test_limits_to_max_feeds() -> None:
+async def test_feed_test_deliver_limits_output_to_max_feeds() -> None:
     """AC15.3: feed test は上から max_feeds 分のフィードのみ対象とする."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
@@ -742,7 +742,7 @@ async def test_ac15_3_feed_test_limits_to_max_feeds() -> None:
     await engine.dispose()
 
 
-async def test_ac15_4_feed_test_does_not_update_delivered_flag(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
+async def test_feed_test_deliver_preserves_delivered_flag(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
     """AC15.4: feed test は delivered フラグを更新しない."""
     slack_client = AsyncMock()
     slack_client.chat_postMessage.return_value = {"ts": "parent.123"}
@@ -766,7 +766,7 @@ async def test_ac15_4_feed_test_does_not_update_delivered_flag(db_factory_with_d
     assert before == after
 
 
-async def test_ac15_5_feed_test_uses_thread_format(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
+async def test_feed_test_deliver_outputs_parent_and_thread_format(db_factory_with_delivered) -> None:  # type: ignore[no-untyped-def]
     """AC15.5: feed test は親メッセージ+スレッド形式で出力する."""
     slack_client = AsyncMock()
     slack_client.chat_postMessage.return_value = {"ts": "parent.456"}

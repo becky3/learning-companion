@@ -142,11 +142,11 @@ def test_lmstudio_message_role_mapping() -> None:
         assert msg["role"] == role
 
 
-# --- F5: MCP統合 ツール呼び出し対応テスト (AC8-AC11) ---
+# --- MCP統合: ツール呼び出し対応テスト ---
 
 
-def test_ac8_complete_with_tools_passes_tool_definitions() -> None:
-    """AC8: LLMProvider.complete_with_tools() が ToolDefinition リストを受け取れること."""
+def test_complete_with_tools_method_exists_and_tool_definition_is_constructable() -> None:
+    """LLMProvider.complete_with_tools() が存在し、ToolDefinition を構築できること."""
     from src.llm.base import ToolDefinition
 
     assert hasattr(LLMProvider, "complete_with_tools")
@@ -168,8 +168,8 @@ def test_ac8_complete_with_tools_passes_tool_definitions() -> None:
     assert "properties" in td.input_schema
 
 
-def test_ac9_openai_function_calling() -> None:
-    """AC9: OpenAIProvider が Function Calling に対応し、ToolDefinition → OpenAI形式の変換ができること."""
+def test_openai_converts_tool_definition_and_tool_messages_to_openai_format() -> None:
+    """OpenAIProvider が ToolDefinition と tool/assistant メッセージを OpenAI 形式に変換できること."""
     from src.llm.base import Message, ToolCall, ToolDefinition
     from src.llm.openai_provider import _to_openai_message, _tool_def_to_openai
 
@@ -204,8 +204,8 @@ def test_ac9_openai_function_calling() -> None:
     assert "tool_calls" in openai_assistant  # type: ignore[operator]
 
 
-def test_ac10_anthropic_tool_use() -> None:
-    """AC10: AnthropicProvider が Tool Use に対応し、ToolDefinition → Anthropic形式の変換ができること."""
+def test_anthropic_converts_tool_definition_and_tool_result_to_anthropic_format() -> None:
+    """AnthropicProvider が ToolDefinition と tool_result メッセージを Anthropic 形式に変換できること."""
     from src.llm.base import Message, ToolCall, ToolDefinition
     from src.llm.anthropic_provider import _build_anthropic_messages, _tool_def_to_anthropic
 
@@ -239,8 +239,8 @@ def test_ac10_anthropic_tool_use() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac11_lmstudio_complete_with_tools() -> None:
-    """AC11: LMStudioProvider が Function Calling でツール呼び出しに対応すること."""
+async def test_lmstudio_complete_with_tools_returns_tool_call_response() -> None:
+    """LMStudioProvider が Function Calling でツール呼び出し応答を返すこと."""
     import json
     from unittest.mock import AsyncMock, MagicMock
 
@@ -286,8 +286,8 @@ async def test_ac11_lmstudio_complete_with_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac11_lmstudio_complete_with_tools_no_tool_call() -> None:
-    """AC11: LMStudioProvider でツール呼び出しなしの場合、通常のテキスト応答を返すこと."""
+async def test_lmstudio_complete_with_tools_returns_text_when_no_tool_call() -> None:
+    """LMStudioProvider でツール呼び出しなしの場合、通常のテキスト応答を返すこと."""
     from unittest.mock import AsyncMock, MagicMock
 
     from src.llm.base import Message, ToolDefinition
