@@ -89,8 +89,8 @@ async def test_ac6_conversation_saved_to_db(db_session_factory) -> None:  # type
         assert rows[1].content == "保存テスト"
 
 
-async def test_ac4_non_thread_uses_db_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """F8-AC4: スレッド外ではDB履歴を使用する."""
+async def test_non_thread_uses_db_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """スレッド外ではDB履歴を使用する."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="回答")
 
@@ -112,8 +112,8 @@ async def test_ac4_non_thread_uses_db_history(db_session_factory) -> None:  # ty
     thread_history_fetcher.assert_not_called()
 
 
-async def test_ac5_fallback_to_db_on_api_failure(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """F8-AC5: Slack API 失敗時に DB フォールバック."""
+async def test_fallback_to_db_on_api_failure(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """Slack API 失敗時に DB フォールバック."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="fallback回答")
 
@@ -135,8 +135,8 @@ async def test_ac5_fallback_to_db_on_api_failure(db_session_factory) -> None:  #
     thread_history_fetcher.assert_called_once()
 
 
-async def test_ac6_auto_reply_channel_thread_uses_slack_api_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """F8-AC6: 自動返信チャンネルのスレッド内でもスレッド履歴が使用される."""
+async def test_auto_reply_channel_thread_uses_slack_api_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """自動返信チャンネルのスレッド内でもスレッド履歴が使用される."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="thread回答")
 
