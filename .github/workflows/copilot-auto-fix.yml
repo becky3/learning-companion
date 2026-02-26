@@ -2,7 +2,7 @@
 #
 # コンセプト: 「Copilot が1回レビュー → 指摘があれば修正 → マージ。ループしない。」
 # スクリプト: .github/scripts/auto-fix/（既存スクリプト流用）
-# 設計書: docs/specs/copilot-auto-fix.md
+# 設計書: docs/specs/workflows/github/copilot-auto-fix.md
 #
 # トリガー:
 #   - pull_request[opened]: auto/ ブランチの PR 作成時に自動起動
