@@ -111,7 +111,7 @@
 
 ### 有効化
 
-`settings.json` で環境変数 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を有効化し、Claude Code を再起動する。
+`.claude/settings.json` で環境変数 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` を有効化し、Claude Code を再起動する。
 
 ### 履歴管理
 
@@ -122,7 +122,7 @@
 - `pattern`: パターン名
 - `theme`: テーマ名またはパターン名
 - `datetime`: ISO 8601 形式（手動入力ではなく、コマンドで取得すること）
-- `characters`: キャラクター名の配列
+- `characters`: キャラクター名の配列。含めるメンバーの範囲は各パターン仕様に従う
 
 新しいエントリは配列の**先頭**に追加する。パターン固有のフィールドは各パターン仕様を参照。
 
