@@ -1,5 +1,5 @@
 """LLMプロバイダー共通インターフェース
-仕様: docs/specs/f1-chat.md, docs/specs/overview.md, docs/specs/infrastructure/mcp-integration.md
+仕様: docs/specs/features/chat-response.md, docs/specs/overview.md, docs/specs/infrastructure/mcp-integration.md
 """
 
 from __future__ import annotations
