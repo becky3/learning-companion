@@ -103,24 +103,6 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 | `agentic/teams/*.md` | チーム運用パターン |
 | `agentic/hooks/*.md` | `.claude/scripts/` |
 
-## コンポーネント関係図
-
-```mermaid
-graph TD
-    main["main.py"] --> slack["src/slack/"]
-    main --> scheduler["src/scheduler/"]
-    cli["cli.py"] --> messaging["src/messaging/"]
-    slack --> messaging
-    messaging --> services["src/services/"]
-    scheduler --> services
-    services --> llm["src/llm/"]
-    services --> db["src/db/"]
-    services --> mcp_bridge["src/mcp_bridge/"]
-    mcp_bridge --> llm
-    mcp_bridge -.->|MCP protocol| rag["mcp_servers/rag/"]
-    mcp_bridge -.->|MCP protocol| weather["mcp_servers/weather/"]
-```
-
 ## 関連ドキュメント
 
 - [全体仕様概要](docs/specs/overview.md) — 機能一覧・技術スタック・DB 設計
