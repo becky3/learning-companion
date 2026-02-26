@@ -69,6 +69,7 @@ argument-hint: "[diff|full] [file-path]"
 - **仕様書** (`docs/specs/*.md`): AC の具体性、関連ファイルの網羅性、フロー図の有無
 - **README.md**: セットアップ手順の完全性、プロジェクト構造の正確性
 - **CLAUDE.md**: 開発ルールの一貫性、セクション構造
+- **ARCHITECTURE.md**: ディレクトリ存在の正確性、仕様書対応表の整合性、mermaid 図の正確性
 
 ### 7. レビュー実施
 

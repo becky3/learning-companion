@@ -90,54 +90,7 @@ uv run python -m mcp_servers.rag.cli evaluate \
 
 ## プロジェクト構造
 
-> **将来改善予定**: このセクションは ARCHITECTURE.md に切り出し、モジュール間の関係図や仕様書との対応表を追加予定（[#626](https://github.com/becky3/ai-assistant/issues/626)）
-
-```
-src/
-  main.py           # エントリーポイント
-  config/settings.py # pydantic-settings による環境変数管理
-  db/models.py       # SQLAlchemy モデル (feeds, articles, user_profiles, conversations)
-  db/session.py      # DB接続・セッション管理
-  slack/app.py       # Slack Bolt AsyncApp 初期化
-  slack/handlers.py  # イベントハンドラ
-  llm/base.py        # LLMProvider ABC (全プロバイダーの共通インターフェース)
-  llm/openai_provider.py
-  llm/anthropic_provider.py
-  llm/lmstudio_provider.py  # OpenAI SDK で base_url を localhost:1234 に向ける
-  llm/factory.py     # プロバイダー生成ファクトリ
-  bot_manager.py     # Bot管理コマンド (--start/--stop/--restart/--status)
-  process_guard.py   # Bot重複起動防止・PIDファイル管理
-  compat.py          # プラットフォーム互換ユーティリティ
-  mcp_bridge/
-    __init__.py
-    client_manager.py  # MCPサーバー接続管理
-  services/chat.py           # チャット応答 (オンラインLLM)
-  services/feed_collector.py # RSS収集
-  services/summarizer.py     # 記事要約 (ローカルLLM)
-  services/user_profiler.py  # 会話からユーザー情報抽出 (ローカルLLM)
-  services/topic_recommender.py # 学習トピック提案 (オンラインLLM)
-  services/ogp_extractor.py   # OGPメタデータ抽出
-  services/thread_history.py  # Slackスレッド履歴取得
-  scheduler/jobs.py  # 配信ジョブ・フォーマット
-mcp_servers/                 # MCPサーバー群（将来リポジトリ分離対象）
-  weather/
-    server.py          # 天気予報MCPサーバー（気象庁API）
-  rag/
-    server.py          # RAGナレッジMCPサーバー
-    rag_knowledge.py   # RAGナレッジサービス
-    web_crawler.py     # Webクローラー（RAG用）
-    safe_browsing.py   # Google Safe Browsing API
-    embedding/         # Embeddingプロバイダー（LM Studio / OpenAI）
-config/
-  assistant.yaml     # アシスタントの名前・性格・口調 (システムプロンプトに反映)
-  mcp_servers.json   # MCPサーバー接続設定
-docs/
-  specs/             # 機能仕様書 (実装の根拠)
-.claude/
-  settings.json      # Claude Code 設定（hooks、サブエージェント定義など）
-  agents/            # サブエージェント定義ファイル
-  scripts/           # hooks用スクリプト
-```
+プロジェクトのディレクトリ構成・モジュール責務・仕様書との対応は [ARCHITECTURE.md](ARCHITECTURE.md) を参照。
 
 ## 開発ガイドライン
 
