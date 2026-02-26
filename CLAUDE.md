@@ -50,7 +50,7 @@
 
 ### Git運用（git-flow）
 
-詳細は `docs/specs/git-flow.md` を参照。
+詳細は `docs/specs/workflows/git-flow.md` を参照。
 
 - **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
 - **作業ブランチ**: `feature/{機能名}-#{Issue番号}` / `bugfix/{修正内容}-#{Issue番号}` / `release/v{X.Y.Z}` / `hotfix/{修正内容}-#{Issue番号}`
