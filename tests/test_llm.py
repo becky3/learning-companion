@@ -10,8 +10,8 @@ from src.llm.factory import create_local_provider, create_online_provider, get_p
 from src.llm.lmstudio_provider import LMStudioProvider
 
 
-def test_ac1_llm_provider_abc_has_complete() -> None:
-    """AC1: LLMProvider ABCに async complete(messages) -> LLMResponse を定義."""
+def test_llm_provider_abc_has_complete() -> None:
+    """LLMProvider ABCに async complete(messages) -> LLMResponse を定義."""
     assert hasattr(LLMProvider, "complete")
     assert hasattr(LLMProvider, "is_available")
 
@@ -20,8 +20,8 @@ def test_ac1_llm_provider_abc_has_complete() -> None:
         LLMProvider()  # type: ignore[abstract]
 
 
-def test_ac2_three_providers_exist() -> None:
-    """AC2: OpenAI/Anthropic/LM Studio の3プロバイダーが存在する."""
+def test_three_providers_exist() -> None:
+    """OpenAI/Anthropic/LM Studio の3プロバイダーが存在する."""
     from src.llm.anthropic_provider import AnthropicProvider
     from src.llm.openai_provider import OpenAIProvider
 
@@ -30,8 +30,8 @@ def test_ac2_three_providers_exist() -> None:
     assert issubclass(LMStudioProvider, LLMProvider)
 
 
-def test_ac3_lmstudio_uses_openai_sdk() -> None:
-    """AC3: LM StudioはOpenAI SDKでbase_url変更で対応."""
+def test_lmstudio_uses_openai_sdk() -> None:
+    """LM StudioはOpenAI SDKでbase_url変更で対応."""
     provider = LMStudioProvider(base_url=DEFAULT_LMSTUDIO_BASE_URL)
     assert provider._client.base_url.host == "localhost"
     # base_url にホストのみ指定しても /v1 がコード側で付加される
@@ -44,8 +44,8 @@ def test_lmstudio_base_url_with_v1_suffix_no_duplication() -> None:
     assert provider._client.base_url.path == "/v1/"
 
 
-def test_ac4_factory_creates_openai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC4: ファクトリで設定値からOpenAIプロバイダーを生成できる."""
+def test_factory_creates_openai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ファクトリで設定値からOpenAIプロバイダーを生成できる."""
     monkeypatch.setenv("ONLINE_LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     settings = Settings()
@@ -54,8 +54,8 @@ def test_ac4_factory_creates_openai_provider(monkeypatch: pytest.MonkeyPatch) ->
     assert isinstance(provider, OpenAIProvider)
 
 
-def test_ac4_factory_creates_anthropic_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC4: ファクトリで設定値からAnthropicプロバイダーを生成できる."""
+def test_factory_creates_anthropic_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ファクトリで設定値からAnthropicプロバイダーを生成できる."""
     monkeypatch.setenv("ONLINE_LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     settings = Settings()
@@ -64,8 +64,8 @@ def test_ac4_factory_creates_anthropic_provider(monkeypatch: pytest.MonkeyPatch)
     assert isinstance(provider, AnthropicProvider)
 
 
-def test_ac4_factory_creates_local_provider() -> None:
-    """AC4: ファクトリでローカルプロバイダーを生成できる."""
+def test_factory_creates_local_provider() -> None:
+    """ファクトリでローカルプロバイダーを生成できる."""
     settings = Settings()
     provider = create_local_provider(settings)
     assert isinstance(provider, LMStudioProvider)

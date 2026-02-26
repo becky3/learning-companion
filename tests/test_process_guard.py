@@ -29,12 +29,12 @@ from src.process_guard import (
 
 
 class TestPidFile:
-    """AC1, AC2: PIDファイルの読み書き・削除."""
+    """PIDファイルの読み書き・削除."""
 
-    def test_ac1_write_pid_file_creates_file(
+    def test_write_pid_file_creates_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC1: Bot起動時にPIDファイルが作成される."""
+        """Bot起動時にPIDファイルが作成される."""
         pid_file = tmp_path / "bot.pid"
         monkeypatch.setattr("src.process_guard.PID_FILE", pid_file)
 
@@ -43,10 +43,10 @@ class TestPidFile:
         assert pid_file.exists()
         assert pid_file.read_text(encoding="utf-8") == str(os.getpid())
 
-    def test_ac2_remove_pid_file_deletes_file(
+    def test_remove_pid_file_deletes_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC2: Bot終了時にPIDファイルが削除される."""
+        """Bot終了時にPIDファイルが削除される."""
         pid_file = tmp_path / "bot.pid"
         pid_file.write_text("12345", encoding="utf-8")
         monkeypatch.setattr("src.process_guard.PID_FILE", pid_file)
@@ -148,22 +148,22 @@ class TestPidFile:
 
 
 class TestIsProcessAliveUnix:
-    """AC6: Unix系OSでのプロセス生存確認."""
+    """Unix系OSでのプロセス生存確認."""
 
-    def test_ac6_alive_process_returns_true(self) -> None:
+    def test_alive_process_returns_true(self) -> None:
         """os.kill(pid, 0) が成功した場合はTrue."""
         with patch("src.process_guard.os.kill") as mock_kill:
             mock_kill.return_value = None
             assert _is_process_alive_unix(12345) is True
             mock_kill.assert_called_once_with(12345, 0)
 
-    def test_ac6_dead_process_returns_false(self) -> None:
+    def test_dead_process_returns_false(self) -> None:
         """ProcessLookupError が発生した場合はFalse."""
         with patch("src.process_guard.os.kill") as mock_kill:
             mock_kill.side_effect = ProcessLookupError()
             assert _is_process_alive_unix(12345) is False
 
-    def test_ac6_permission_error_returns_true(self) -> None:
+    def test_permission_error_returns_true(self) -> None:
         """PermissionError が発生した場合はTrue（プロセスは存在する）."""
         with patch("src.process_guard.os.kill") as mock_kill:
             mock_kill.side_effect = PermissionError()
@@ -176,23 +176,23 @@ class TestIsProcessAliveUnix:
 
 
 class TestIsProcessAliveWindows:
-    """AC5: Windowsでのプロセス生存確認."""
+    """Windowsでのプロセス生存確認."""
 
-    def test_ac5_alive_process_returns_true(self) -> None:
+    def test_alive_process_returns_true(self) -> None:
         """tasklist出力にPIDが含まれている場合はTrue."""
         mock_result = MagicMock()
         mock_result.stdout = "python.exe                   12345 Console  1    50,000 K\n"
         with patch("src.process_guard.subprocess.run", return_value=mock_result):
             assert _is_process_alive_windows(12345) is True
 
-    def test_ac5_dead_process_returns_false(self) -> None:
+    def test_dead_process_returns_false(self) -> None:
         """tasklist が "INFO: No tasks" を返す場合はFalse."""
         mock_result = MagicMock()
         mock_result.stdout = "INFO: No tasks are running which match the specified criteria.\n"
         with patch("src.process_guard.subprocess.run", return_value=mock_result):
             assert _is_process_alive_windows(12345) is False
 
-    def test_ac5_tasklist_not_found_returns_false(self) -> None:
+    def test_tasklist_not_found_returns_false(self) -> None:
         """tasklistコマンドが見つからない場合はFalse."""
         with patch(
             "src.process_guard.subprocess.run",
@@ -200,7 +200,7 @@ class TestIsProcessAliveWindows:
         ):
             assert _is_process_alive_windows(12345) is False
 
-    def test_ac5_tasklist_timeout_returns_false(self) -> None:
+    def test_tasklist_timeout_returns_false(self) -> None:
         """tasklistがタイムアウトした場合はFalse."""
         with patch(
             "src.process_guard.subprocess.run",
@@ -208,14 +208,14 @@ class TestIsProcessAliveWindows:
         ):
             assert _is_process_alive_windows(12345) is False
 
-    def test_ac5_pid_not_in_output_returns_false(self) -> None:
+    def test_pid_not_in_output_returns_false(self) -> None:
         """tasklist出力にPIDが含まれていない場合はFalse."""
         mock_result = MagicMock()
         mock_result.stdout = "python.exe                   99999 Console  1    50,000 K\n"
         with patch("src.process_guard.subprocess.run", return_value=mock_result):
             assert _is_process_alive_windows(12345) is False
 
-    def test_ac5_partial_pid_match_returns_false(self) -> None:
+    def test_partial_pid_match_returns_false(self) -> None:
         """PIDが別PIDの部分文字列として含まれる場合はFalse（誤判定防止）."""
         mock_result = MagicMock()
         # PID=123 を検索するが、出力には 12345 しかない
@@ -230,12 +230,12 @@ class TestIsProcessAliveWindows:
 
 
 class TestCheckAlreadyRunning:
-    """AC3, AC4: 重複起動チェック."""
+    """重複起動チェック."""
 
-    def test_ac3_exits_when_process_alive(
+    def test_exits_when_process_alive(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC3: 既にBotが起動中の場合、sys.exit(1) で終了する."""
+        """既にBotが起動中の場合、sys.exit(1) で終了する."""
         pid_file = tmp_path / "bot.pid"
         pid_file.write_text("12345", encoding="utf-8")
         monkeypatch.setattr("src.process_guard.PID_FILE", pid_file)
@@ -246,10 +246,10 @@ class TestCheckAlreadyRunning:
         ):
             check_already_running()
 
-    def test_ac4_continues_with_stale_pid(
+    def test_continues_with_stale_pid(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC4: stale PIDの場合、PIDファイルを削除して正常通過."""
+        """stale PIDの場合、PIDファイルを削除して正常通過."""
         pid_file = tmp_path / "bot.pid"
         pid_file.write_text("12345", encoding="utf-8")
         monkeypatch.setattr("src.process_guard.PID_FILE", pid_file)
@@ -275,12 +275,12 @@ class TestCheckAlreadyRunning:
 
 
 class TestCleanupChildren:
-    """AC7, AC8: 子プロセスクリーンアップ."""
+    """子プロセスクリーンアップ."""
 
-    def test_ac7_unix_cleanup_sends_sigterm(
+    def test_unix_cleanup_sends_sigterm(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC7 (Unix): 子プロセスにSIGTERMを送信する."""
+        """Unix: 子プロセスにSIGTERMを送信する."""
         import signal as sig
 
         mock_result = MagicMock()
@@ -296,10 +296,10 @@ class TestCleanupChildren:
             mock_kill.assert_any_call(111, sig.SIGTERM)
             mock_kill.assert_any_call(222, sig.SIGTERM)
 
-    def test_ac7_windows_cleanup_uses_taskkill(
+    def test_windows_cleanup_uses_taskkill(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC7 (Windows): wmic + taskkill で子プロセスを停止する."""
+        """Windows: wmic + taskkill で子プロセスを停止する."""
         wmic_result = MagicMock()
         wmic_result.stdout = "ProcessId\n111\n222\n\n"
         taskkill_result = MagicMock()
@@ -312,10 +312,10 @@ class TestCleanupChildren:
             # wmic 1回 + taskkill 2回 = 3回
             assert mock_run.call_count == 3
 
-    def test_ac8_cleanup_failure_does_not_raise(
+    def test_cleanup_failure_does_not_raise(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """AC8: クリーンアップ失敗時に例外を送出しない."""
+        """クリーンアップ失敗時に例外を送出しない."""
         monkeypatch.setattr("sys.platform", "linux")
 
         with patch(

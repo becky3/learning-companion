@@ -23,8 +23,8 @@ async def session() -> AsyncGenerator[AsyncSession, None]:
     await engine.dispose()
 
 
-async def test_ac1_feed_crud(session: AsyncSession) -> None:
-    """AC1: feeds テーブルの CRUD."""
+async def test_feed_crud(session: AsyncSession) -> None:
+    """feeds テーブルの CRUD."""
     feed = Feed(url="https://example.com/rss", name="Example", category="tech")
     session.add(feed)
     await session.commit()
@@ -35,8 +35,8 @@ async def test_ac1_feed_crud(session: AsyncSession) -> None:
     assert rows[0].url == "https://example.com/rss"
 
 
-async def test_ac2_article_belongs_to_feed(session: AsyncSession) -> None:
-    """AC2: articles は feed_id で feeds に紐付く."""
+async def test_article_belongs_to_feed(session: AsyncSession) -> None:
+    """articles は feed_id で feeds に紐付く."""
     feed = Feed(url="https://example.com/rss", name="Example")
     session.add(feed)
     await session.flush()
@@ -50,8 +50,8 @@ async def test_ac2_article_belongs_to_feed(session: AsyncSession) -> None:
     assert a.feed_id == feed.id
 
 
-async def test_ac3_user_profile(session: AsyncSession) -> None:
-    """AC3: user_profiles テーブル."""
+async def test_user_profile(session: AsyncSession) -> None:
+    """user_profiles テーブル."""
     profile = UserProfile(slack_user_id="U123", interests="Python", skills="web", goals="ML")
     session.add(profile)
     await session.commit()
@@ -61,8 +61,8 @@ async def test_ac3_user_profile(session: AsyncSession) -> None:
     assert p.interests == "Python"
 
 
-async def test_ac4_conversation(session: AsyncSession) -> None:
-    """AC4: conversations テーブル."""
+async def test_conversation(session: AsyncSession) -> None:
+    """conversations テーブル."""
     conv = Conversation(slack_user_id="U123", thread_ts="123.456", role="user", content="hello")
     session.add(conv)
     await session.commit()
@@ -72,8 +72,8 @@ async def test_ac4_conversation(session: AsyncSession) -> None:
     assert c.role == "user"
 
 
-async def test_ac5_init_db_and_get_session(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC5: init_db/get_session 経由でテーブル作成とセッション取得ができる."""
+async def test_init_db_and_get_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """init_db/get_session 経由でテーブル作成とセッション取得ができる."""
     monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
     # グローバル状態をリセット

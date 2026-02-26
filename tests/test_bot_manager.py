@@ -1,4 +1,4 @@
-"""Bot管理コマンドのテスト (AC10-AC18, Issue #580).
+"""Bot管理コマンドのテスト (Issue #580).
 
 仕様: docs/specs/bot-process-guard.md
 """
@@ -34,7 +34,7 @@ from src.bot_manager import (
 class TestGetChildPids:
     """子プロセスPID取得のテスト."""
 
-    def test_ac17_get_child_pids_windows_returns_pids(self) -> None:
+    def test_get_child_pids_windows_returns_pids(self) -> None:
         """Windows: wmic出力から子プロセスPIDを取得する."""
         mock_result = MagicMock()
         mock_result.stdout = "ProcessId\n111\n222\n\n"
@@ -42,7 +42,7 @@ class TestGetChildPids:
             pids = _get_child_pids_windows(9999)
         assert pids == [111, 222]
 
-    def test_ac17_get_child_pids_windows_empty(self) -> None:
+    def test_get_child_pids_windows_empty(self) -> None:
         """Windows: 子プロセスがない場合は空リストを返す."""
         mock_result = MagicMock()
         mock_result.stdout = "ProcessId\n\n"
@@ -50,13 +50,13 @@ class TestGetChildPids:
             pids = _get_child_pids_windows(9999)
         assert pids == []
 
-    def test_ac17_get_child_pids_windows_wmic_not_found(self) -> None:
+    def test_get_child_pids_windows_wmic_not_found(self) -> None:
         """Windows: wmicが見つからない場合は空リストを返す."""
         with patch("src.bot_manager.subprocess.run", side_effect=FileNotFoundError()):
             pids = _get_child_pids_windows(9999)
         assert pids == []
 
-    def test_ac17_get_child_pids_unix_returns_pids(self) -> None:
+    def test_get_child_pids_unix_returns_pids(self) -> None:
         """Unix: pgrep出力から子プロセスPIDを取得する."""
         mock_result = MagicMock()
         mock_result.stdout = "111\n222\n"
@@ -64,13 +64,13 @@ class TestGetChildPids:
             pids = _get_child_pids_unix(9999)
         assert pids == [111, 222]
 
-    def test_ac17_get_child_pids_unix_pgrep_not_found(self) -> None:
+    def test_get_child_pids_unix_pgrep_not_found(self) -> None:
         """Unix: pgrepが見つからない場合は空リストを返す."""
         with patch("src.bot_manager.subprocess.run", side_effect=FileNotFoundError()):
             pids = _get_child_pids_unix(9999)
         assert pids == []
 
-    def test_ac17_get_child_pids_windows_wmic_timeout(self) -> None:
+    def test_get_child_pids_windows_wmic_timeout(self) -> None:
         """Windows: wmicがタイムアウトした場合は空リストを返す."""
         with patch(
             "src.bot_manager.subprocess.run",
@@ -79,7 +79,7 @@ class TestGetChildPids:
             pids = _get_child_pids_windows(9999)
         assert pids == []
 
-    def test_ac17_get_child_pids_unix_pgrep_timeout(self) -> None:
+    def test_get_child_pids_unix_pgrep_timeout(self) -> None:
         """Unix: pgrepがタイムアウトした場合は空リストを返す."""
         with patch(
             "src.bot_manager.subprocess.run",
@@ -95,12 +95,12 @@ class TestGetChildPids:
 
 
 class TestKillProcessTree:
-    """AC17: プロセスツリー停止のテスト."""
+    """プロセスツリー停止のテスト."""
 
-    def test_ac17_windows_kills_children_then_parent(
+    def test_windows_kills_children_then_parent(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC17: Windows で子プロセスが先に停止され、その後に本体が停止される."""
+        """Windows で子プロセスが先に停止され、その後に本体が停止される."""
         monkeypatch.setattr("sys.platform", "win32")
         kill_order: list[int] = []
 
@@ -123,10 +123,10 @@ class TestKillProcessTree:
         # 子プロセス(111, 222)が先、本体(9999)が最後
         assert kill_order == [111, 222, 9999]
 
-    def test_ac17_unix_kills_children_then_parent(
+    def test_unix_kills_children_then_parent(
         self, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC17: Unix で子プロセスが先に停止され、その後に本体が停止される."""
+        """Unix で子プロセスが先に停止され、その後に本体が停止される."""
         monkeypatch.setattr("sys.platform", "linux")
         kill_order: list[int] = []
 
@@ -153,10 +153,10 @@ class TestKillProcessTree:
 class TestStopBot:
     """停止処理のテスト."""
 
-    def test_ac12_stop_running_bot(
+    def test_stop_running_bot(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC12: 起動中のBotを停止し、PIDファイルを削除する."""
+        """起動中のBotを停止し、PIDファイルを削除する."""
         pid_file = tmp_path / "bot.pid"
         pid_file.write_text("12345", encoding="utf-8")
         monkeypatch.setattr("src.process_guard.PID_FILE", pid_file)
@@ -172,10 +172,10 @@ class TestStopBot:
         assert result is True
         mock_kill.assert_called_once_with(12345)
 
-    def test_ac13_stop_not_running(
+    def test_stop_not_running(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC13: Botが起動していない場合はFalseを返す."""
+        """Botが起動していない場合はFalseを返す."""
         with patch("src.bot_manager.read_pid_file", return_value=None):
             result = _stop_bot()
 
@@ -190,8 +190,8 @@ class TestStopBot:
 class TestCmdStart:
     """--start コマンドのテスト."""
 
-    def test_ac10_start_success(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC10: 正常起動時に Running (PID=xxxx) を表示する."""
+    def test_start_success(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """正常起動時に Running (PID=xxxx) を表示する."""
         with (
             patch("src.bot_manager.read_pid_file", return_value=None),
             patch("src.bot_manager._start_bot", return_value=12345),
@@ -201,8 +201,8 @@ class TestCmdStart:
         captured = capsys.readouterr()
         assert "Running (PID=12345)" in captured.out
 
-    def test_ac11_start_already_running(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC11: 既にBotが起動中の場合、Already running を表示して exit(1)."""
+    def test_start_already_running(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """既にBotが起動中の場合、Already running を表示して exit(1)."""
         with (
             patch("src.bot_manager.read_pid_file", return_value=12345),
             patch("src.bot_manager.is_process_alive", return_value=True),
@@ -213,8 +213,8 @@ class TestCmdStart:
         captured = capsys.readouterr()
         assert "Already running (PID=12345)" in captured.out
 
-    def test_ac10_start_with_stale_pid(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC10: stale PIDファイルがある場合は削除して起動する."""
+    def test_start_with_stale_pid(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """stale PIDファイルがある場合は削除して起動する."""
         with (
             patch("src.bot_manager.read_pid_file", return_value=99999),
             patch("src.bot_manager.is_process_alive", return_value=False),
@@ -236,16 +236,16 @@ class TestCmdStart:
 class TestCmdStop:
     """--stop コマンドのテスト."""
 
-    def test_ac12_stop_success(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC12: 正常停止時に Stopped を表示する."""
+    def test_stop_success(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """正常停止時に Stopped を表示する."""
         with patch("src.bot_manager._stop_bot", return_value=True):
             cmd_stop()
 
         captured = capsys.readouterr()
         assert "Stopped" in captured.out
 
-    def test_ac13_stop_not_running(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC13: 未起動時に Not running を表示する."""
+    def test_stop_not_running(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """未起動時に Not running を表示する."""
         with patch("src.bot_manager._stop_bot", return_value=False):
             cmd_stop()
 
@@ -261,8 +261,8 @@ class TestCmdStop:
 class TestCmdRestart:
     """--restart コマンドのテスト."""
 
-    def test_ac14_restart_with_existing(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC14: 既存プロセスあり→停止→起動."""
+    def test_restart_with_existing(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """既存プロセスあり→停止→起動."""
         with (
             patch("src.bot_manager._stop_bot", return_value=True),
             patch("src.bot_manager._start_bot", return_value=12345),
@@ -273,8 +273,8 @@ class TestCmdRestart:
         assert "Stopped" in captured.out
         assert "Running (PID=12345)" in captured.out
 
-    def test_ac14_restart_without_existing(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC14: 既存プロセスなし→起動のみ."""
+    def test_restart_without_existing(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """既存プロセスなし→起動のみ."""
         with (
             patch("src.bot_manager._stop_bot", return_value=False),
             patch("src.bot_manager._start_bot", return_value=12345),
@@ -294,8 +294,8 @@ class TestCmdRestart:
 class TestCmdStatus:
     """--status コマンドのテスト."""
 
-    def test_ac15_status_running(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC15: 起動中は Running (PID=xxxx) を表示し exit(0)."""
+    def test_status_running(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """起動中は Running (PID=xxxx) を表示し exit(0)."""
         with (
             patch("src.bot_manager.read_pid_file", return_value=12345),
             patch("src.bot_manager.is_process_alive", return_value=True),
@@ -307,8 +307,8 @@ class TestCmdStatus:
         captured = capsys.readouterr()
         assert "Running (PID=12345)" in captured.out
 
-    def test_ac15_status_not_running(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """AC15: 未起動時は Not running を表示し exit(1)."""
+    def test_status_not_running(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """未起動時は Not running を表示し exit(1)."""
         with (
             patch("src.bot_manager.read_pid_file", return_value=None),
             pytest.raises(SystemExit) as exc_info,
@@ -328,10 +328,10 @@ class TestCmdStatus:
 class TestStartBot:
     """起動処理のテスト."""
 
-    def test_ac18_log_file_created(
+    def test_log_file_created(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC18: .tmp/bot.log にログが出力される（ディレクトリ自動作成、stderr にファイル渡し）."""
+        """.tmp/bot.log にログが出力される（ディレクトリ自動作成、stderr にファイル渡し）."""
         log_dir = tmp_path / ".tmp"
         log_file = log_dir / "bot.log"
         monkeypatch.setattr("src.bot_manager.LOG_DIR", log_dir)
@@ -356,10 +356,10 @@ class TestStartBot:
         assert call_kwargs is not None
         assert call_kwargs.kwargs.get("stderr") is not None
 
-    def test_ac18_log_file_append_mode(
+    def test_log_file_append_mode(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC18: 既存ログファイルがある場合は追記モードで書き込まれる."""
+        """既存ログファイルがある場合は追記モードで書き込まれる."""
         log_dir = tmp_path / ".tmp"
         log_dir.mkdir()
         log_file = log_dir / "bot.log"
@@ -386,10 +386,10 @@ class TestStartBot:
         content = log_file.read_text(encoding="utf-8")
         assert "existing log" in content
 
-    def test_ac10_pid_file_fallback_to_proc_pid(
+    def test_pid_file_fallback_to_proc_pid(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC10: PIDファイルが読めない場合は proc.pid にフォールバックする."""
+        """PIDファイルが読めない場合は proc.pid にフォールバックする."""
         log_dir = tmp_path / ".tmp"
         log_file = log_dir / "bot.log"
         monkeypatch.setattr("src.bot_manager.LOG_DIR", log_dir)
@@ -407,10 +407,10 @@ class TestStartBot:
 
         assert pid == 99999
 
-    def test_ac16_start_timeout(
+    def test_start_timeout(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC16: タイムアウト時にエラー終了する."""
+        """タイムアウト時にエラー終了する."""
         log_dir = tmp_path / ".tmp"
         log_file = log_dir / "bot.log"
         monkeypatch.setattr("src.bot_manager.LOG_DIR", log_dir)
@@ -431,10 +431,10 @@ class TestStartBot:
         ):
             _start_bot()
 
-    def test_ac10_start_crash_cleanup(
+    def test_start_crash_cleanup(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """AC10: 子プロセス異常終了時にクリーンアップされる."""
+        """子プロセス異常終了時にクリーンアップされる."""
         log_dir = tmp_path / ".tmp"
         log_file = log_dir / "bot.log"
         monkeypatch.setattr("src.bot_manager.LOG_DIR", log_dir)
@@ -467,8 +467,8 @@ class TestStartBot:
 class TestWaitForReadyWindows:
     """Windows向け BOT_READY 待ちのテスト."""
 
-    def test_ac16_receives_bot_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """AC16: BOT_READY を受信したら正常終了する."""
+    def test_receives_bot_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """BOT_READY を受信したら正常終了する."""
         monkeypatch.setattr("sys.platform", "win32")
 
         mock_proc = MagicMock()
@@ -477,8 +477,8 @@ class TestWaitForReadyWindows:
         from src.bot_manager import _wait_for_ready_windows
         _wait_for_ready_windows(mock_proc, timeout=5)
 
-    def test_ac16_pipe_closed_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """AC16: パイプが閉じた場合は exit(1)."""
+    def test_pipe_closed_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """パイプが閉じた場合は exit(1)."""
         monkeypatch.setattr("sys.platform", "win32")
 
         mock_proc = MagicMock()
@@ -489,8 +489,8 @@ class TestWaitForReadyWindows:
         with pytest.raises(SystemExit, match="1"):
             _wait_for_ready_windows(mock_proc, timeout=5)
 
-    def test_ac16_timeout_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """AC16: タイムアウト時に exit(1)."""
+    def test_timeout_exits(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """タイムアウト時に exit(1)."""
         monkeypatch.setattr("sys.platform", "win32")
 
         mock_proc = MagicMock()
@@ -516,8 +516,8 @@ class TestWaitForReadyWindows:
 class TestWaitForReadyUnix:
     """Unix向け BOT_READY 待ちのテスト."""
 
-    def test_ac16_receives_bot_ready(self) -> None:
-        """AC16: BOT_READY を受信したら正常終了する."""
+    def test_receives_bot_ready(self) -> None:
+        """BOT_READY を受信したら正常終了する."""
         mock_proc = MagicMock()
         mock_proc.stdout.fileno.return_value = 3
         mock_proc.stdout.readline.return_value = b"BOT_READY\n"
@@ -526,8 +526,8 @@ class TestWaitForReadyUnix:
         with patch("select.select", return_value=([3], [], [])):
             _wait_for_ready_unix(mock_proc, timeout=5)
 
-    def test_ac16_pipe_closed_exits(self) -> None:
-        """AC16: パイプが閉じた場合は exit(1)."""
+    def test_pipe_closed_exits(self) -> None:
+        """パイプが閉じた場合は exit(1)."""
         mock_proc = MagicMock()
         mock_proc.stdout.fileno.return_value = 3
         mock_proc.stdout.readline.return_value = b""
@@ -540,8 +540,8 @@ class TestWaitForReadyUnix:
         ):
             _wait_for_ready_unix(mock_proc, timeout=5)
 
-    def test_ac16_timeout_exits(self) -> None:
-        """AC16: select タイムアウト時に exit(1)."""
+    def test_timeout_exits(self) -> None:
+        """select タイムアウト時に exit(1)."""
         mock_proc = MagicMock()
         mock_proc.stdout.fileno.return_value = 3
 
@@ -552,8 +552,8 @@ class TestWaitForReadyUnix:
         ):
             _wait_for_ready_unix(mock_proc, timeout=5)
 
-    def test_ac16_remaining_negative_exits(self) -> None:
-        """AC16: remaining が負になった場合もタイムアウトで exit(1)."""
+    def test_remaining_negative_exits(self) -> None:
+        """remaining が負になった場合もタイムアウトで exit(1)."""
         mock_proc = MagicMock()
         mock_proc.stdout.fileno.return_value = 3
         # 1行目はログ出力（BOT_READY でない）
