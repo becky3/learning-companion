@@ -107,64 +107,18 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 
 ```mermaid
 graph TD
-    subgraph Entry["Entry Points"]
-        main["main.py"]
-        cli["cli.py"]
-    end
-
-    subgraph Platform["Platform Layer"]
-        slack["src/slack/"]
-        messaging["src/messaging/"]
-    end
-
-    subgraph Business["Business Logic"]
-        chat["src/services/ chat"]
-        feed["src/services/ feed_collector"]
-        summarizer["src/services/ summarizer"]
-        profiler["src/services/ user_profiler"]
-        topic["src/services/ topic_recommender"]
-        ogp["src/services/ ogp_extractor"]
-        thread["src/services/ thread_history"]
-    end
-
-    subgraph Infra["Infrastructure"]
-        llm["src/llm/"]
-        db["src/db/"]
-        config["src/config/"]
-        scheduler["src/scheduler/"]
-        mcp_bridge["src/mcp_bridge/"]
-    end
-
-    subgraph External["External Processes"]
-        rag_server["mcp_servers/rag/"]
-        weather_server["mcp_servers/weather/"]
-    end
-
-    main --> slack
-    main --> scheduler
-    cli --> messaging
+    main["main.py"] --> slack["src/slack/"]
+    main --> scheduler["src/scheduler/"]
+    cli["cli.py"] --> messaging["src/messaging/"]
     slack --> messaging
-    messaging --> chat
-    messaging --> thread
-
-    chat --> llm
-    chat --> db
-    chat --> mcp_bridge
-    feed --> db
-    feed --> summarizer
-    feed --> ogp
-    summarizer --> llm
-    profiler --> llm
-    profiler --> db
-    topic --> llm
-    topic --> db
-    thread --> llm
-
-    scheduler --> feed
-
+    messaging --> services["src/services/"]
+    scheduler --> services
+    services --> llm["src/llm/"]
+    services --> db["src/db/"]
+    services --> mcp_bridge["src/mcp_bridge/"]
     mcp_bridge --> llm
-    mcp_bridge -.->|MCP protocol| rag_server
-    mcp_bridge -.->|MCP protocol| weather_server
+    mcp_bridge -.->|MCP protocol| rag["mcp_servers/rag/"]
+    mcp_bridge -.->|MCP protocol| weather["mcp_servers/weather/"]
 ```
 
 ## 関連ドキュメント
