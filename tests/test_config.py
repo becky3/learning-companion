@@ -9,8 +9,8 @@ import pytest
 from src.config.settings import Settings, load_assistant_config
 
 
-def test_ac1_settings_loads_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC1: pydantic-settingsで.envから全設定値を読み込める."""
+def test_settings_loads_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """pydantic-settingsで.envから全設定値を読み込める."""
     monkeypatch.setenv("SLACK_BOT_TOKEN", "xoxb-test")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
@@ -25,8 +25,8 @@ def test_ac1_settings_loads_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert s.online_llm_provider == "anthropic"
 
 
-def test_ac2_all_config_sections_present() -> None:
-    """AC2: Slack/OpenAI/Anthropic/LM Studio/DB/スケジューラの設定項目を網羅."""
+def test_all_config_sections_present() -> None:
+    """Slack/OpenAI/Anthropic/LM Studio/DB/スケジューラの設定項目を網羅."""
     fields = set(Settings.model_fields.keys())
     # Slack
     assert {"slack_bot_token", "slack_signing_secret", "slack_app_token"} <= fields
@@ -42,8 +42,8 @@ def test_ac2_all_config_sections_present() -> None:
     assert "timezone" in fields
 
 
-def test_ac3_assistant_yaml_loaded() -> None:
-    """AC3: assistant.yamlの読み込みユーティリティを含む.
+def test_assistant_yaml_loaded() -> None:
+    """assistant.yamlの読み込みユーティリティを含む.
 
     assistant.yamlはユーザーが自由にカスタマイズするファイルのため、
     具体的な値ではなく構造（必須キーの存在・型）のみ検証する。
