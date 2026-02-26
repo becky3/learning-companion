@@ -18,24 +18,24 @@ gitGraph
     branch develop
     checkout develop
     commit id: "dev-start"
-    branch feature/chat-response-#1
+    branch feature/chat-response-N1
     commit id: "feat-1"
     checkout develop
-    merge feature/chat-response-#1
-    branch feature/feed-management-#2
+    merge feature/chat-response-N1
+    branch feature/feed-management-N2
     commit id: "feat-2"
     checkout develop
-    merge feature/feed-management-#2
+    merge feature/feed-management-N2
     branch release/v1.0.0
     commit id: "release-prep"
     checkout main
     merge release/v1.0.0 id: "v1.0.0"
     checkout develop
     merge main id: "sync(main→develop)"
-    branch bugfix/fix-typo-#10
+    branch bugfix/fix-typo-N10
     commit id: "fix-1"
     checkout develop
-    merge bugfix/fix-typo-#10
+    merge bugfix/fix-typo-N10
 ```
 
 ### 常設ブランチ

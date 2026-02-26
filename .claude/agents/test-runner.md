@@ -1,6 +1,6 @@
 ---
 name: test-runner
-description: pytest による自動テスト実行・分析・修正提案を行う専門家。テスト失敗の原因特定と解決策提示、再実行までを一貫してサポート。
+description: pytest・ruff・mypy・markdownlint・shellcheck・mermaid-lint による品質チェックの実行・分析・修正提案を行う専門家。
 tools: Bash, Read, Grep, Glob, Edit
 permissionMode: default
 ---

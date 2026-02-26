@@ -1,6 +1,6 @@
 ---
 name: test-run
-description: pytest・ruff・mypy・markdownlint・shellcheck によるコード品質チェックの実行・分析・修正提案
+description: pytest・ruff・mypy・markdownlint・shellcheck・mermaid-lint によるコード品質チェックの実行・分析・修正提案
 user-invocable: true
 allowed-tools: Bash, Read, Grep, Glob, Edit
 argument-hint: "[diff|full]"
@@ -8,7 +8,7 @@ argument-hint: "[diff|full]"
 
 ## タスク
 
-pytest による自動テスト実行、ruff によるリント、mypy による型チェック、markdownlint による Markdown チェック、shellcheck によるシェルスクリプトチェックを実行し、結果を分析して修正提案を行う。
+pytest による自動テスト実行、ruff によるリント、mypy による型チェック、markdownlint による Markdown チェック、shellcheck によるシェルスクリプトチェック、mermaid-lint による Mermaid 構文・GitHub 互換チェックを実行し、結果を分析して修正提案を行う。
 
 ## 引数
 
@@ -24,6 +24,7 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 - `src/` および `tests/` のリントチェック（ruff）
 - `src/` の型チェック（mypy）
 - `docs/**/*.md`, `*.md`, `.claude/**/*.md` の Markdown チェック（markdownlint）
+- `docs/**/*.md`, `*.md`, `.claude/**/*.md` の Mermaid 構文チェック（md-mermaid-lint）および GitHub 互換チェック（check_mermaid_compat.py）
 - `.github/scripts/**/*.sh` のシェルスクリプトチェック（shellcheck）
 - プロジェクトは `uv` によるパッケージ管理を使用
 
@@ -34,6 +35,8 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 - 型チェック: `uv run mypy src/`
 - Markdown チェック: `npx markdownlint-cli2@0.20.0`
 - Markdown 自動修正: `npx markdownlint-cli2@0.20.0 --fix`
+- Mermaid 構文チェック: `npx md-mermaid-lint@1.0.1 "docs/**/*.md"`
+- Mermaid GitHub 互換チェック: `uv run python scripts/check_mermaid_compat.py "docs/**/*.md" "*.md" ".claude/**/*.md"`
 - シェルスクリプトチェック: `uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh`
 
 ## 処理手順
@@ -60,8 +63,8 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 **特殊ケース**:
 
 - 変更ファイル 0 件で指定もなし → `full` モードにフォールバック
-- Markdown ファイル（`*.md`）のみの変更 → pytest・ruff・mypy・shellcheck はスキップ、markdownlint のみ実行
-- シェルスクリプト（`*.sh`）のみの変更 → pytest・ruff・mypy・markdownlint はスキップ、shellcheck のみ実行
+- Markdown ファイル（`*.md`）のみの変更 → pytest・ruff・mypy・shellcheck はスキップ、markdownlint・mermaid-lint のみ実行
+- シェルスクリプト（`*.sh`）のみの変更 → pytest・ruff・mypy・markdownlint・mermaid-lint はスキップ、shellcheck のみ実行
 - `pyproject.toml`, `conftest.py` の変更 → `full` モードにフォールバック
 
 #### full モードの場合
@@ -103,7 +106,23 @@ npx markdownlint-cli2@0.20.0
 
 diff モードでは変更された Markdown ファイルのみを対象にする。
 
-### 7. シェルスクリプトチェック (shellcheck) 実行
+### 7. Mermaid チェック実行
+
+#### md-mermaid-lint（構文チェック）
+
+```bash
+npx md-mermaid-lint@1.0.1 "docs/**/*.md"
+```
+
+#### GitHub 互換チェック
+
+```bash
+uv run python scripts/check_mermaid_compat.py "docs/**/*.md" "*.md" ".claude/**/*.md"
+```
+
+diff モードでは変更された Markdown ファイルのみを対象にする。
+
+### 8. シェルスクリプトチェック (shellcheck) 実行
 
 **CRLF 自動修正（Windows 環境）**: shellcheck 実行前に、対象 `.sh` ファイルの CRLF 改行を LF に変換する。Windows の Write ツールが CRLF で書き出す問題への対策。変換があった場合はログ出力する。
 
@@ -123,35 +142,36 @@ uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh
 diff モードでは変更された `*.sh` ファイルのみを対象にする。
 シェルスクリプト（`*.sh`）が存在しない場合や変更がない場合はスキップする。
 
-**重要**: pytest・ruff・mypy・markdownlint・shellcheck のいずれかが失敗してもプロセスを中断せず、すべてのチェックを実行して統合レポートを生成する。
+**重要**: pytest・ruff・mypy・markdownlint・mermaid-lint・shellcheck のいずれかが失敗してもプロセスを中断せず、すべてのチェックを実行して統合レポートを生成する。
 
-### 8. 結果の解析
+### 9. 結果の解析
 
 - **pytest 成功時**: 実行件数、実行時間、カバレッジ率（要求された場合）
 - **pytest 失敗時**: 成功/失敗件数、各失敗テストのエラーメッセージ、スタックトレース
 - **ruff 違反あり時**: 違反ファイル、ルールコード、行番号、違反内容
 - **mypy エラーあり時**: エラーファイル、エラー種別、行番号、エラー内容
 - **markdownlint 違反あり時**: 違反ファイル、ルールコード、行番号、違反内容、自動修正可能かどうか
+- **mermaid-lint 違反あり時**: 違反ファイル、行番号、違反内容（構文エラーまたは GitHub 互換性違反）
 - **shellcheck 違反あり時**: 違反ファイル、エラーコード（SC????）、行番号、違反内容、重大度（error/warning/info）
 
-### 9. 失敗時の詳細調査
+### 10. 失敗時の詳細調査
 
 - 失敗したテストファイルを Read で読み込み
 - テスト対象のソースコードを Read で読み込み
 - エラーの種類を特定（AssertionError, TypeError, AttributeError 等）
 - 根本原因を分析（テストコードの問題、ソースコードの問題、依存関係の問題）
-- リント違反・型エラー・Markdown 違反・shellcheck 違反時も該当箇所のコードを Read で確認
+- リント違反・型エラー・Markdown 違反・mermaid-lint 違反・shellcheck 違反時も該当箇所のコードを Read で確認
 
-### 10. 修正案の生成
+### 11. 修正案の生成
 
-各失敗テスト・リント違反・型エラー・Markdown 違反・shellcheck 違反に対して:
+各失敗テスト・リント違反・型エラー・Markdown 違反・mermaid-lint 違反・shellcheck 違反に対して:
 
 - エラー内容の要約
 - 原因の説明
 - 具体的な修正案（ファイルパス、行番号、修正コード）
 - 修正の優先度（Critical/Warning/Suggestion）
 
-### 11. 検出した問題への対処（必須）
+### 12. 検出した問題への対処（必須）
 
 検出した問題を「対応範囲外」「既存問題」としてスキップしてはならない。以下のルールに従って必ず対処すること:
 
@@ -159,11 +179,11 @@ diff モードでは変更された `*.sh` ファイルのみを対象にする�
 - **大きな問題**（設計変更が必要、影響範囲が広い等）: Issue を作成して記録する
 - **判断に迷う場合**: ユーザーに相談する（自己判断でスキップしない）
 
-### 12. 修正適用と再実行
+### 13. 修正適用と再実行
 
 - 修正が必要な場合、Edit ツールで修正を適用
 - markdownlint の場合は `--fix` オプションで自動修正を適用
-- 修正後に再度テスト・リント・型チェック・Markdown チェック・shellcheck を実行して確認
+- 修正後に再度テスト・リント・型チェック・Markdown チェック・mermaid-lint・shellcheck を実行して確認
 
 ## 出力フォーマット
 
@@ -183,6 +203,9 @@ diff モードでは変更された `*.sh` ファイルのみを対象にする�
 - **型エラー**: なし
 
 #### markdownlint
+- **違反**: なし
+
+#### mermaid-lint
 - **違反**: なし
 
 #### shellcheck
@@ -223,6 +246,9 @@ diff モードでは変更された `*.sh` ファイルのみを対象にする�
 - **型エラー**: {N}件（または「なし」）
 
 #### markdownlint
+- **違反**: {N}件（または「なし」）
+
+#### mermaid-lint
 - **違反**: {N}件（または「なし」）
 
 #### shellcheck
