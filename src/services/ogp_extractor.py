@@ -1,6 +1,6 @@
 """OGP画像URL抽出サービス
 
-仕様: docs/specs/f2-feed-collection.md (AC10)
+仕様: docs/specs/features/feed-management.md
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ OG_IMAGE_PATTERN_REV = re.compile(
 class OgpExtractor:
     """記事のOGP画像URLを抽出するサービス.
 
-    仕様: docs/specs/f2-feed-collection.md (AC10)
+    仕様: docs/specs/features/feed-management.md
     """
 
     def __init__(self, timeout: float = 5.0) -> None:

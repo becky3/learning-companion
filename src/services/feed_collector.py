@@ -1,5 +1,5 @@
 """RSS情報収集サービス
-仕様: docs/specs/f2-feed-collection.md
+仕様: docs/specs/features/feed-management.md
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ def strip_html(text: str) -> str:
 class FeedCollector:
     """RSSフィードからの情報収集サービス.
 
-    仕様: docs/specs/f2-feed-collection.md
+    仕様: docs/specs/features/feed-management.md
     """
 
     def __init__(

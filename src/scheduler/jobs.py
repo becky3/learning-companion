@@ -1,5 +1,5 @@
 """配信ジョブ・フォーマット
-仕様: docs/specs/f2-feed-collection.md
+仕様: docs/specs/features/feed-management.md
 """
 
 from __future__ import annotations
@@ -409,7 +409,7 @@ async def feed_test_deliver(
     """feed test 用配信（要約スキップ・配信済み含む・上限3フィード・各5記事）.
 
     本番と同じ _deliver_feed_to_slack を使用し、収集ステップのみスキップする。
-    仕様: docs/specs/f2-feed-collection.md (AC15)
+    仕様: docs/specs/features/feed-management.md
     """
     async with session_factory() as session:
         feed_result = await session.execute(
