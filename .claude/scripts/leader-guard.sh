@@ -96,14 +96,16 @@ if [ "$has_teams" = false ]; then
     exit 0
 fi
 
-# チームは存在するが pattern 不明 → fixed-theme として扱う（安全側に倒す）
+# チームは存在するが pattern 不明 → fail-open（ブロックしない）
+# TeamCreate 直後は pattern 未書き込みのため、ここでブロックすると
+# pattern 書き込み自体が不可能になる（鶏と卵の問題）
 if [ -z "$TEAM_PATTERN" ]; then
-    echo "leader-guard: pattern が取得できませんでした。fixed-theme として扱います" >&2
-    TEAM_PATTERN="fixed-theme"
+    echo "leader-guard: pattern が取得できませんでした（fail-open）" >&2
+    exit 0
 fi
 
-# mixed-genius パターンではリーダーも作業するため、ブロックしない
-if [ "$TEAM_PATTERN" = "mixed-genius" ]; then
+# fixed-theme パターン以外（mixed-genius 等）ではリーダーも作業するため、ブロックしない
+if [ "$TEAM_PATTERN" != "fixed-theme" ]; then
     exit 0
 fi
 

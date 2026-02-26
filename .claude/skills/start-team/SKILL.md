@@ -120,7 +120,7 @@ TeamCreate ツールでチームを作成する。
 
 TeamCreate 完了後、チームの config.json（`~/.claude/teams/{team-name}/config.json`）に `pattern` フィールドを追加する。
 
-Read ツールで config.json を読み込み、Edit ツールで `pattern` フィールドを追記する（既存の `members` 等のフィールドは維持する）。
+**Bash ツールで書き込むこと**（Edit ツールは leader-guard.sh フックにブロックされる）。jq が利用可能な場合は jq を、なければ `uv run python` で JSON を読み込み・加工・書き戻す。
 
 ### ステップ7: メンバーの生成
 
