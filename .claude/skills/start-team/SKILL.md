@@ -114,11 +114,11 @@ HISTORY_FILE="$HOME/.claude/team-theme-history.json"
 
 ### ステップ6: チーム作成
 
-TeamCreate ツールでチームを作成する。
+TeamCreate ツールでチームを作成する。TeamCreate の戻り値に含まれるチーム名（`team_name`）を以降のステップで使用する。
 
 ### ステップ6.5: パターン情報の書き込み
 
-TeamCreate 完了後、チームの config.json（`~/.claude/teams/{team-name}/config.json`）に `pattern` フィールドを追加する。
+TeamCreate 完了後、作成したチームの config.json（`~/.claude/teams/{team-name}/config.json`）に `pattern` フィールドを追加する。`{team-name}` は必ず TeamCreate の戻り値から取得し、ディレクトリを推測で選ばないこと。
 
 **Bash ツールで書き込むこと**（Edit ツールは leader-guard.sh フックにブロックされる）。jq が利用可能な場合は jq を、なければ `uv run python` で JSON を読み込み・加工・書き戻す。
 

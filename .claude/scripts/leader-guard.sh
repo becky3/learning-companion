@@ -69,6 +69,7 @@ fi
 
 # サブディレクトリが1つでもあるか確認し、最初に見つかったチームの pattern を取得する
 # 仕様: 1セッション1チームのため、最初のエントリのみ処理する
+# 複数ディレクトリが残存する場合は glob 順で最初のものを使用（fail-open 設計で許容）
 shopt -s nullglob
 TEAM_PATTERN=""
 has_teams=false

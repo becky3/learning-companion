@@ -65,11 +65,14 @@ Claude Code の hooks 機能を使用して、セッション開始時のコン�
 
 **判定ロジック**:
 
-1. `permission_mode` が `"bypassPermissions"` → メンバー → 通過
+1. `permission_mode` が `"bypassPermissions"` または `"acceptEdits"` → メンバー → 通過
 2. チームディレクトリ配下にサブディレクトリなし → チーム非稼働 → 通過
-3. リーダー + チーム稼働中 → deny 応答でブロック
+3. チームの config.json から `pattern` を読み取る
+   - `pattern` 未設定 → fail-open（通過）
+   - `pattern` が `"fixed-theme"` 以外（`"mixed-genius"` 等）→ 通過
+4. fixed-theme パターン + リーダー + チーム稼働中 → deny 応答でブロック
 
-**fail-open 設計**: 入力読み取り失敗、環境変数未定義等のエラー時はブロックせず通過する。
+**fail-open 設計**: 入力読み取り失敗、環境変数未定義、pattern 未設定等のエラー時はブロックせず通過する。
 
 ### 破壊コマンドガード
 
