@@ -187,7 +187,7 @@ flowchart TB
     end
 
     subgraph Data
-        DB[(feeds / articles)]
+        DB[(フィード・記事データ)]
     end
 
     subgraph External

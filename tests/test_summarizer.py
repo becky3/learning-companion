@@ -96,7 +96,7 @@ async def test_summarize_fallback_to_title_on_exception(mock_llm: AsyncMock) -> 
     assert result == "エラーテスト"
 
 
-async def test_ac8_exception_log_contains_url_and_lang(
+async def test_exception_log_contains_url_and_lang(
     mock_llm: AsyncMock, caplog: pytest.LogCaptureFixture
 ) -> None:
     """例外時のログにURLとlang情報が含まれる."""
@@ -111,7 +111,7 @@ async def test_ac8_exception_log_contains_url_and_lang(
     assert "lang=ja" in caplog.text
 
 
-async def test_ac8_empty_response_log_contains_url_and_lang(
+async def test_empty_response_log_contains_url_and_lang(
     mock_llm: AsyncMock, caplog: pytest.LogCaptureFixture
 ) -> None:
     """空応答時のログにURLとlang情報が含まれる."""
