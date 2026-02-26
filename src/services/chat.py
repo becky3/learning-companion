@@ -1,5 +1,5 @@
 """チャットオーケストレーション・会話履歴管理
-仕様: docs/specs/f1-chat.md, docs/specs/f5-mcp-integration.md, docs/specs/features/thread-support.md
+仕様: docs/specs/f1-chat.md, docs/specs/infrastructure/mcp-integration.md, docs/specs/features/thread-support.md
 """
 
 from __future__ import annotations
@@ -99,7 +99,7 @@ def _parse_rag_sources_from_text(
 class ChatService:
     """チャット応答サービス.
 
-    仕様: docs/specs/f1-chat.md, docs/specs/f5-mcp-integration.md, docs/specs/features/thread-support.md
+    仕様: docs/specs/f1-chat.md, docs/specs/infrastructure/mcp-integration.md, docs/specs/features/thread-support.md
     """
 
     def __init__(

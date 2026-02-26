@@ -1,5 +1,5 @@
 """MCPクライアント管理
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 
 複数のMCPサーバーを管理し、ツール一覧を統合するクライアントマネージャー。
 """
@@ -45,7 +45,7 @@ class MCPServerConfig:
 class MCPClientManager:
     """MCPサーバーへの接続を管理し、ツール一覧を統合する.
 
-    仕様: docs/specs/f5-mcp-integration.md
+    仕様: docs/specs/infrastructure/mcp-integration.md
     """
 
     def __init__(self) -> None:

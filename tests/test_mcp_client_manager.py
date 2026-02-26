@@ -1,6 +1,6 @@
-"""MCPクライアントマネージャーのテスト (Issue #83, AC4-AC7).
+"""MCPクライアントマネージャーのテスト.
 
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 """
 
 from __future__ import annotations
@@ -49,8 +49,8 @@ def _make_mock_session(tools: list[MagicMock] | None = None) -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_ac4_client_manager_connects_and_lists_tools() -> None:
-    """AC4: MCPClientManager がMCPサーバーに接続し、ToolDefinition リストとしてツール一覧を取得できること."""
+async def test_client_manager_connects_and_lists_tools() -> None:
+    """MCPClientManager がMCPサーバーに接続し、ToolDefinition リストとしてツール一覧を取得できること."""
     manager = MCPClientManager()
 
     mock_session = _make_mock_session()
@@ -87,8 +87,8 @@ async def test_ac4_client_manager_connects_and_lists_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac5_client_manager_calls_tool() -> None:
-    """AC5: MCPClientManager.call_tool() でツールを実行し、結果を取得できること."""
+async def test_client_manager_calls_tool() -> None:
+    """MCPClientManager.call_tool() でツールを実行し、結果を取得できること."""
     manager = MCPClientManager()
 
     mock_session = _make_mock_session()
@@ -123,8 +123,8 @@ async def test_ac5_client_manager_calls_tool() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac5_call_tool_not_found() -> None:
-    """AC5: 存在しないツールを呼び出すと MCPToolNotFoundError が発生すること."""
+async def test_call_tool_not_found() -> None:
+    """存在しないツールを呼び出すと MCPToolNotFoundError が発生すること."""
     manager = MCPClientManager()
 
     with pytest.raises(MCPToolNotFoundError, match="not_exist"):
@@ -132,8 +132,8 @@ async def test_ac5_call_tool_not_found() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac6_client_manager_handles_multiple_servers() -> None:
-    """AC6: 複数のMCPサーバーを同時に管理できること."""
+async def test_client_manager_handles_multiple_servers() -> None:
+    """複数のMCPサーバーを同時に管理できること."""
     manager = MCPClientManager()
 
     # 2つの異なるサーバーのモックセッション
@@ -181,8 +181,8 @@ async def test_ac6_client_manager_handles_multiple_servers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac7_graceful_degradation_on_connection_failure() -> None:
-    """AC7: サーバー接続失敗時にエラーログを出力し、ツールなしで続行すること."""
+async def test_graceful_degradation_on_connection_failure() -> None:
+    """サーバー接続失敗時にエラーログを出力し、ツールなしで続行すること."""
     manager = MCPClientManager()
 
     with (
@@ -213,8 +213,8 @@ async def test_ac7_graceful_degradation_on_connection_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac7_http_transport_skipped() -> None:
-    """AC7: HTTP トランスポートが指定された場合、warningログを出してスキップすること."""
+async def test_http_transport_skipped() -> None:
+    """HTTP トランスポートが指定された場合、warningログを出してスキップすること."""
     manager = MCPClientManager()
 
     with patch("src.mcp_bridge.client_manager.logger") as mock_logger:

@@ -1,6 +1,6 @@
-"""チャット統合テスト: ツール呼び出し対応 (Issue #83, AC12-AC18).
+"""チャット統合テスト: ツール呼び出し対応.
 
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 """
 
 from __future__ import annotations
@@ -101,10 +101,10 @@ def _make_mock_mcp_manager(
 
 
 @pytest.mark.asyncio
-async def test_ac12_chat_responds_with_weather_data(
+async def test_chat_responds_with_weather_data(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC12: ユーザーが天気について質問すると、LLMがツールを呼び出して実データで回答すること."""
+    """ユーザーが天気について質問すると、LLMがツールを呼び出して実データで回答すること."""
     tool_calls = [
         ToolCall(id="call_1", name="get_weather", arguments={"location": "東京"}),
     ]
@@ -130,10 +130,10 @@ async def test_ac12_chat_responds_with_weather_data(
 
 
 @pytest.mark.asyncio
-async def test_ac13_chat_backward_compatible(
+async def test_chat_backward_compatible(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC13: ツール呼び出しが不要な通常の質問は、従来通り応答すること（後方互換性）."""
+    """ツール呼び出しが不要な通常の質問は、従来通り応答すること（後方互換性）."""
     mock_llm = _make_mock_llm(text_response="こんにちは！")
 
     # MCPManager なし → 従来通り complete() を使用
@@ -150,10 +150,10 @@ async def test_ac13_chat_backward_compatible(
 
 
 @pytest.mark.asyncio
-async def test_ac14_tool_error_handled_gracefully(
+async def test_tool_error_handled_gracefully(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC14: ツール実行中にエラーが発生した場合、エラー内容をLLMに伝え、適切な応答を生成すること."""
+    """ツール実行中にエラーが発生した場合、エラー内容をLLMに伝え、適切な応答を生成すること."""
     tool_calls = [
         ToolCall(id="call_1", name="get_weather", arguments={"location": "火星"}),
     ]
@@ -178,10 +178,10 @@ async def test_ac14_tool_error_handled_gracefully(
 
 
 @pytest.mark.asyncio
-async def test_ac15_mcp_disabled_mode(
+async def test_mcp_disabled_mode(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC15: MCP無効時（mcp_manager=None）は従来通りの動作をすること."""
+    """MCP無効時（mcp_manager=None）は従来通りの動作をすること."""
     mock_llm = _make_mock_llm(text_response="通常応答です。")
 
     service = ChatService(
@@ -197,8 +197,8 @@ async def test_ac15_mcp_disabled_mode(
 
 
 @pytest.mark.asyncio
-async def test_ac16_mcp_server_config_changes() -> None:
-    """AC16: config/mcp_servers.json でMCPサーバーの追加・変更が可能であること."""
+async def test_mcp_server_config_changes() -> None:
+    """config/mcp_servers.json でMCPサーバーの追加・変更が可能であること."""
     import json
     import tempfile
     from pathlib import Path
@@ -243,16 +243,16 @@ async def test_ac16_mcp_server_config_changes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac16_missing_config_file() -> None:
-    """AC16: 設定ファイルが存在しない場合、空のリストを返すこと."""
+async def test_missing_config_file() -> None:
+    """設定ファイルが存在しない場合、空のリストを返すこと."""
     from src.main import _load_mcp_server_configs
 
     configs = _load_mcp_server_configs("nonexistent_config.json")
     assert configs == []
 
 
-def test_ac17_mcp_enabled_env_control(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC17: MCP_ENABLED 環境変数でMCP機能のON/OFFを制御できること."""
+def test_mcp_enabled_env_control(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MCP_ENABLED 環境変数でMCP機能のON/OFFを制御できること."""
     from src.config.settings import Settings
 
     # デフォルト: 無効 (_env_file=Noneで.envファイルの影響を排除)
@@ -272,10 +272,10 @@ def test_ac17_mcp_enabled_env_control(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac18_tool_loop_max_iterations(
+async def test_tool_loop_max_iterations(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC18: ツール呼び出しが最大反復回数に達した場合、ループを打ち切りテキスト応答を返すこと."""
+    """ツール呼び出しが最大反復回数に達した場合、ループを打ち切りテキスト応答を返すこと."""
     # 常にツール呼び出しを返すLLM（終わらないループ）
     always_tool_response = LLMResponse(
         content="",
