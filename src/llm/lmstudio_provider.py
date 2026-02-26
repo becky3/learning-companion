@@ -1,5 +1,5 @@
 """LM Studio (ローカルLLM) プロバイダー
-仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md
+仕様: docs/specs/overview.md, docs/specs/infrastructure/mcp-integration.md
 OpenAI SDK で base_url を localhost:1234 に向ける。
 Function Calling対応モデル（Qwen3等）ではツール呼び出しも可能。
 """

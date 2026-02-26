@@ -1,5 +1,5 @@
 """天気予報MCPサーバー
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 
 気象庁API（非公式）を使用して日本国内の天気予報データを提供する。
 分離制約: src/ 配下のモジュールは一切importしない。
