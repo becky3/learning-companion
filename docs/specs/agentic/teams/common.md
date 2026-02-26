@@ -139,7 +139,7 @@ TeamCreate 完了後、チームの config.json（`~/.claude/teams/{team-name}/c
 
 ### スポーン手順
 
-メンバーのスポーン時には `mode: "bypassPermissions"` を指定すること。未指定の場合、leader-guard.sh がメンバーをリーダーと区別できずブロックする。
+メンバーのスポーン時には `mode: "bypassPermissions"` を指定すること。これにより hook に渡される `permission_mode` がリーダー（`default`）と異なる値になり、leader-guard.sh がメンバーを識別して許可する。
 
 スポーン手順の詳細はパターンごとに異なる。各パターン仕様を参照:
 

@@ -1,7 +1,8 @@
 #!/bin/bash
 # Leader Guard - チーム運用中のリーダーによる Edit/Write 使用をブロックするフック
 # PreToolUse フックとして実行される
-# stdin から JSON を読み取り、permission_mode でリーダー/メンバーを判別する
+# stdin から JSON を読み取り、permission_mode でリーダー(default)/メンバー(acceptEdits)を判別する
+# チームの config.json から pattern を読み取り、fixed-theme の場合のみブロックする
 # エラー時は fail-open（ブロックしない）: 運用支援ツールであり、ユーザーの作業を止めない
 # 仕様: docs/specs/agentic/teams/common.md（delegate モードセクション）
 #
@@ -40,8 +41,10 @@ if [ -z "$PERMISSION_MODE" ]; then
     exit 0
 fi
 
-# メンバー（bypassPermissions）なら何もしない
-if [ "$PERMISSION_MODE" = "bypassPermissions" ]; then
+# メンバー（bypassPermissions / acceptEdits）なら何もしない
+# mode: "bypassPermissions" でスポーンしたメンバーの permission_mode は
+# "acceptEdits" として hook に渡される
+if [ "$PERMISSION_MODE" = "bypassPermissions" ] || [ "$PERMISSION_MODE" = "acceptEdits" ]; then
     exit 0
 fi
 
