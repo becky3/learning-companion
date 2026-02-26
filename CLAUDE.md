@@ -63,11 +63,11 @@ README.md・overview.md・style-guide.md の内容は SessionStart フックに�
 ### 実装完了時の必須手順
 
 1. **ファイル確認**: 作成したファイルが実際に存在するか `ls -la` で確認
-2. **テスト実行**: test-runner エージェントで全テスト通過を確認
-3. **コードレビュー**: code-reviewer エージェントでセルフレビュー。各指摘は対応すべきかそれぞれ判断
-4. **ドキュメントレビュー**: `docs/specs/` 等に変更がある場合、doc-reviewer エージェントで品質レビュー。実装のみのPRでも対応する仕様書との整合性チェックを実施すること
+2. **テスト実行**: test-runner エージェントでテスト通過を確認（デフォルト: diff モード。全テストは `full` 指定時のみ）
+3. **コードレビュー**: code-reviewer エージェントでセルフレビュー（デフォルト: diff モード）。各指摘は対応すべきかそれぞれ判断
+4. **ドキュメントレビュー**: `docs/specs/` 等に変更がある場合、doc-reviewer エージェントで品質レビュー（デフォルト: diff モード）。実装のみのPRでも対応する仕様書との整合性チェックを実施すること
    - スキップ基準: 誤字脱字のみの修正
-   - 差分レビュー推奨: PRレビュー指摘対応、軽微な補足追加
+   - フルレビュー推奨: 新規作成・大幅改訂時は `full` を指定
 5. **ステージング・コミット・プッシュ・PR作成**
    - PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/workflows/pr-body-template.md`）
    - 設計書の先行更新PRでは Change type で `docs(pre-impl)` を選択
