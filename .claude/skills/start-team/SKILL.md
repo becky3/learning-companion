@@ -10,7 +10,7 @@ argument-hint: "[fixed-theme|mixed-genius]"
 
 エージェントチームを仕様に従って立ち上げる。パターン選択、キャラクター選出、履歴管理、メンバー生成までを一貫して実行する。
 
-仕様: docs/specs/agent-teams/common.md
+仕様: docs/specs/agentic/teams/common.md
 
 ## 引数
 
@@ -40,9 +40,9 @@ argument-hint: "[fixed-theme|mixed-genius]"
 
 パターンに応じた仕様書を読み込み、チーム構築手順を確認する:
 
-- `docs/specs/agent-teams/common.md`（共通仕様）
-- `docs/specs/agent-teams/fixed-theme.md`（fixed-theme の場合）
-- `docs/specs/agent-teams/mixed-genius.md`（mixed-genius の場合）
+- `docs/specs/agentic/teams/common.md`（共通仕様）
+- `docs/specs/agentic/teams/fixed-theme.md`（fixed-theme の場合）
+- `docs/specs/agentic/teams/mixed-genius.md`（mixed-genius の場合）
 
 演出ガイドラインも読み込む:
 
@@ -172,7 +172,7 @@ Task ツールで各メンバーをスポーンする。
 - コミットメッセージ
 - PR / Issue の本文・コメント
 - ソースコード・テスト・設定ファイル
-- 仕様書・ドキュメント（※運用ガイド: CLAUDE.md, docs/specs/agent-teams/, .claude/team-themes/ を除く）
+- 仕様書・ドキュメント（※運用ガイド: CLAUDE.md, docs/specs/agentic/teams/, .claude/team-themes/ を除く）
 
 ### メッセージング規約
 

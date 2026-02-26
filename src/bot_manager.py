@@ -1,5 +1,5 @@
 """Bot 管理コマンド — start / restart / stop / status
-仕様: docs/specs/bot-process-guard.md
+仕様: docs/specs/infrastructure/bot-process-guard.md
 """
 
 from __future__ import annotations

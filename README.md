@@ -82,7 +82,7 @@ uv run python -m mcp_servers.rag.cli evaluate \
   --bm25-k1 1.5 --bm25-b 0.75
 ```
 
-詳細は [RAGナレッジ機能仕様](docs/specs/f9-rag.md) を参照してください。
+詳細は [RAGナレッジ機能仕様](docs/specs/infrastructure/rag-knowledge.md) を参照してください。
 
 ## プロジェクト構造
 
@@ -173,39 +173,45 @@ uv run mypy src
 
 ## ドキュメント
 
-### 機能仕様
+### 全体仕様
 
 - [全体仕様概要](docs/specs/overview.md)
-- [F1: チャット応答](docs/specs/f1-chat.md)
-- [F2: 情報収集・配信](docs/specs/f2-feed-collection.md)
-- [F3: ユーザー情報抽出](docs/specs/f3-user-profiling.md)
-- [F4: トピック提案](docs/specs/f4-topic-recommend.md)
-- [F5: MCP統合](docs/specs/f5-mcp-integration.md)
-- [F6: 特定チャンネル自動返信](docs/specs/f6-auto-reply.md)
-- [F7: ボットステータス](docs/specs/f7-bot-status.md)
-- [F8: スレッドサポート](docs/specs/f8-thread-support.md)
-- [F9: RAGナレッジ](docs/specs/f9-rag.md)
-- [F10: Slack mrkdwn形式対応](docs/specs/f10-slack-mrkdwn.md)
-- [F11: CLIアダプター](docs/specs/f11-cli-adapter.md)
 
-### 開発・運用
+### 機能仕様（features）
+
+- [チャット応答](docs/specs/features/chat-response.md)
+- [情報収集・配信](docs/specs/features/feed-management.md)
+- [ユーザー情報抽出](docs/specs/features/user-profiling.md)
+- [トピック提案](docs/specs/features/topic-recommend.md)
+- [特定チャンネル自動返信](docs/specs/features/auto-reply.md)
+- [ボットステータス](docs/specs/features/bot-status.md)
+- [スレッドサポート](docs/specs/features/thread-support.md)
+- [Slack mrkdwn形式対応](docs/specs/features/slack-formatting.md)
+- [CLIアダプター](docs/specs/features/cli-adapter.md)
+
+### 基盤仕様（infrastructure）
+
+- [MCP統合](docs/specs/infrastructure/mcp-integration.md)
+- [RAGナレッジ](docs/specs/infrastructure/rag-knowledge.md)
+- [Bot プロセスガード](docs/specs/infrastructure/bot-process-guard.md)
+
+### ワークフロー（workflows）
 
 - [git-flow ブランチ運用](docs/specs/workflows/git-flow.md)
 - [PR body テンプレート](docs/specs/workflows/pr-body-template.md)
-- [Bot プロセスガード](docs/specs/bot-process-guard.md)
-- [自動進行管理](docs/specs/auto-progress.md)
-- [Copilot 自動修正ワークフロー](docs/specs/copilot-auto-fix.md)
+- [自動進行管理](docs/specs/workflows/github/auto-progress.md)
+- [Copilot 自動修正ワークフロー](docs/specs/workflows/github/copilot-auto-fix.md)
+- [Claude Code Actions](docs/specs/workflows/github/claude-code-actions.md)
 
-### Claude Code 関連
+### Claude Code 拡張（agentic）
 
-- [Claude Code Hooks](docs/specs/claude-code-hooks.md)
-- [Claude Code Actions](docs/specs/claude-code-actions.md)
-- エージェントチーム: [共通仕様](docs/specs/agent-teams/common.md) / [fixed-theme](docs/specs/agent-teams/fixed-theme.md) / [mixed-genius](docs/specs/agent-teams/mixed-genius.md)
-- [Planner サブエージェント](docs/specs/planner-agent.md)
-- [Doc Reviewer サブエージェント](docs/specs/doc-review-agent.md)
-- [Test Runner サブエージェント](docs/specs/test-runner-agent.md)
-- [Code Reviewer サブエージェント](docs/specs/code-review-agent.md)
-- [Doc Gen スキル](docs/specs/doc-gen-skill.md)
-- [Handoff スキル](docs/specs/handoff-skill.md)
-- [Check Review Batch スキル](docs/specs/check-review-batch-skill.md)
-- [Topic スキル](docs/specs/topic-skill.md)
+- [Claude Code Hooks](docs/specs/agentic/hooks/claude-code-hooks.md)
+- エージェントチーム: [共通仕様](docs/specs/agentic/teams/common.md) / [fixed-theme](docs/specs/agentic/teams/fixed-theme.md) / [mixed-genius](docs/specs/agentic/teams/mixed-genius.md)
+- [Planner サブエージェント](docs/specs/agentic/agents/planner-agent.md)
+- [Doc Reviewer サブエージェント](docs/specs/agentic/agents/doc-review-agent.md)
+- [Test Runner サブエージェント](docs/specs/agentic/agents/test-runner-agent.md)
+- [Code Reviewer サブエージェント](docs/specs/agentic/agents/code-review-agent.md)
+- [Doc Gen スキル](docs/specs/agentic/skills/doc-gen-skill.md)
+- [Handoff スキル](docs/specs/agentic/skills/handoff-skill.md)
+- [Check Review Batch スキル](docs/specs/agentic/skills/check-review-batch-skill.md)
+- [Topic スキル](docs/specs/agentic/skills/topic-skill.md)
