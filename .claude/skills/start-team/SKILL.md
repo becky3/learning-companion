@@ -51,11 +51,11 @@ argument-hint: "[fixed-theme|mixed-genius]"
 ### ステップ3: 履歴ファイルの確認
 
 ```bash
-HISTORY_FILE="$HOME/.claude/team-theme-history.json"
+HISTORY_FILE="$MEMORY_DIR/team-theme-history.jsonl"
 ```
 
-- ファイルが存在しない場合は空配列 `[]` として扱う
-- 存在する場合は JSON 配列として読み込む
+- ファイルが存在しない場合は空（0件）として扱う
+- 存在する場合は JSONL（1行1エントリ）として読み込む
 
 ### ステップ4: テーマ・キャラクター選出
 
@@ -81,32 +81,20 @@ HISTORY_FILE="$HOME/.claude/team-theme-history.json"
 
 選出結果を履歴ファイルに追加する。**メンバー生成前に必ず実行すること**。
 
-新しいエントリを配列の**先頭**に追加する。
+新しいエントリをファイル**末尾に追記**（`>>`）する。JSONL 形式のため1行1エントリで書き出す。
 
 #### fixed-theme の履歴エントリ
 
-```json
-{
-  "pattern": "fixed-theme",
-  "theme": "作品名",
-  "characters": ["キャラ1", "キャラ2", "キャラ3"]
-}
+```jsonl
+{"pattern": "fixed-theme", "theme": "作品名", "characters": ["キャラ1", "キャラ2", "キャラ3"]}
 ```
 
-保持件数: 40件を超えたら末尾の古いものを削除。
+保持件数: 共通仕様に従う。
 
 #### mixed-genius の履歴エントリ
 
-```json
-{
-  "pattern": "mixed-genius",
-  "theme": "mixed-genius",
-  "characters": ["キャラ1", "キャラ2"],
-  "members": [
-    { "name": "キャラ1", "work": "作品A", "role": "議論担当" },
-    { "name": "キャラ2", "work": "作品B", "role": "実装担当" }
-  ]
-}
+```jsonl
+{"pattern": "mixed-genius", "theme": "mixed-genius", "characters": ["キャラ1", "キャラ2"], "members": [{"name": "キャラ1", "work": "作品A", "role": "議論担当"}, {"name": "キャラ2", "work": "作品B", "role": "実装担当"}]}
 ```
 
 - `theme` フィールドは `"mixed-genius"` で固定
@@ -221,8 +209,8 @@ SendMessage:
   使用可能なパターン: fixed-theme, mixed-genius
   ```
 
-- 履歴ファイルの JSON パースに失敗した場合:
-  - 警告を表示し、空配列として扱って続行
+- 履歴ファイルのパースに失敗した場合:
+  - 警告を表示し、空（0件）として扱って続行
 
 ## 注意事項
 
