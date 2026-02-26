@@ -15,6 +15,8 @@ RSS記事の自動収集・要約配信、チャットでの質問応答、ユ�
 - **外部ツール連携（MCP）** — MCPプロトコルで外部ツールを動的に呼び出し（天気予報サンプル付属）
 - **RAGナレッジ機能** — Webページを知識ベースに取り込み、質問に関連する情報を自動検索して回答に活用
 
+全機能の一覧と仕様書リンクは [全体仕様概要](docs/specs/overview.md) を参照。
+
 ## 動作環境
 
 - **OS**: Windows 11（主要開発・運用環境）
@@ -24,6 +26,8 @@ RSS記事の自動収集・要約配信、チャットでの質問応答、ユ�
 ## 技術スタック
 
 Python 3.11+ / uv / slack-bolt / OpenAI SDK / Anthropic SDK / SQLite + SQLAlchemy / feedparser / MCP SDK / ChromaDB / BeautifulSoup4
+
+詳細は [全体仕様概要](docs/specs/overview.md) を参照。
 
 ## セットアップ
 
