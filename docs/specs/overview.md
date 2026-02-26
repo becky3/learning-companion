@@ -122,16 +122,16 @@ ONLINE_LLM_PROVIDER=openai
 
 ### Git運用（git-flow）
 
-git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](git-flow.md) を参照。
+git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](workflows/git-flow.md) を参照。
 
 - **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
 - **作業ブランチ**:
-  - `feature/f{N}-{機能名}-#{Issue番号}` — 新機能（`develop` → `develop`）
+  - `feature/{機能名}-#{Issue番号}` — 新機能（`develop` → `develop`）
   - `bugfix/{修正内容}-#{Issue番号}` — バグ修正（`develop` → `develop` / `release/*` → `release/*`）
   - `release/v{X.Y.Z}` — リリース準備（`develop` → `main` squash マージ）
   - `hotfix/{修正内容}-#{Issue番号}` — 緊急修正（`main` → `main` + `develop`）
   - `sync/main-to-develop-v{X.Y.Z}` — リリース後の main → develop 同期（`develop` → `develop`）
-- コミット: `feat(f{N}): 説明 (#{Issue番号})`
+- コミット: `type(scope): 説明 (#Issue番号)` ※scope は仕様書ファイル名（拡張子なし）
 - PR作成時に `Closes #{Issue番号}` でIssueを紐付け（feature/bugfix: base `develop`, release/hotfix: base `main`）
 - リリース後は sync ブランチ経由で `main` → `develop` に差分反映（詳細は git-flow.md 参照）
 - マイルストーンでStep単位の進捗管理

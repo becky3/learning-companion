@@ -83,5 +83,4 @@ PR 作成時の body を `.github/pull_request_template.md` で標準化し、�
 - `.github/pull_request_template.md` — テンプレート本体（SSOT）
 - `CLAUDE.md` — PR body ルール・`gh pr create` の例
 - `.claude/skills/auto-finalize/SKILL.md` — auto-finalize スキルの PR 作成手順
-<!-- git-flow.md は #646 で新体系に移行予定。移行後にパス更新 -->
 - `docs/specs/workflows/git-flow.md` — git-flow 運用仕様
