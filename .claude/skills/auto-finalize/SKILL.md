@@ -76,7 +76,7 @@ git push origin "$BRANCH"
 
 ### 6. PR作成
 
-PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/pr-body-template.md`）。
+PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/workflows/pr-body-template.md`）。
 
 Change type は手順4の種別判定結果を使用する。
 

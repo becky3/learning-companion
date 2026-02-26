@@ -18,9 +18,10 @@ docs/specs/
     skills/           → スキル定義
     teams/            → チーム定義
     hooks/            → フック定義
+  templates/          → 仕様書テンプレート
+    issues/           → Issue テンプレート
   style-guide.md      → 本ファイル（スタイルガイド）
   overview.md         → プロジェクト俯瞰
-  pr-body-template.md → PR テンプレート仕様
 ```
 
 ### 分類基準
@@ -231,7 +232,7 @@ How を追加する場合は、AI が誤った実装判断をした実績に基�
 
 テンプレート本体は `docs/specs/templates/` に配置する。各テンプレートは自己完結しており、ヘッダー形式・セクション定義はすべてテンプレート内に記載されている。
 
-ルート直下のメタ文書（style-guide, overview, pr-body-template）はテンプレート対象外とする。個別性が高く、共通テンプレートの適用が困難なため。
+ルート直下のメタ文書（style-guide, overview）はテンプレート対象外とする。個別性が高く、共通テンプレートの適用が困難なため。
 
 仕様書のセクション構成はテンプレートに定義されたものに限定する。テンプレートにないセクションの追加はセクション6の例外ルールに従う。
 
@@ -324,7 +325,7 @@ mcp-integration, rag-knowledge, bot-process-guard
 auto-progress, copilot-auto-fix, claude-code-actions
 
 **workflows/**:
-git-flow
+git-flow, pr-body-template
 
 **agentic/agents/**:
 code-review-agent, doc-review-agent, planner-agent, test-runner-agent
@@ -339,4 +340,4 @@ common, fixed-theme, mixed-genius
 claude-code-hooks
 
 **ルート直下**:
-style-guide, overview, pr-body-template
+style-guide, overview

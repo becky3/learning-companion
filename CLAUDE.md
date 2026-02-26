@@ -69,7 +69,7 @@
    - スキップ基準: 誤字脱字のみの修正
    - 差分レビュー推奨: PRレビュー指摘対応、軽微な補足追加
 5. **ステージング・コミット・プッシュ・PR作成**
-   - PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/pr-body-template.md`）
+   - PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/workflows/pr-body-template.md`）
    - 設計書の先行更新PRでは Change type で `docs(pre-impl)` を選択
 6. **PR確認**: `gh pr view` で確認し、URLをユーザーに提示
 
