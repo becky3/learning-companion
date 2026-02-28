@@ -1,6 +1,10 @@
 # AI Assistant — 開発ガイドライン
 
-README.md・overview.md・style-guide.md の内容は SessionStart フックによりセッション開始時に自動注入される。プロジェクトの概要・技術スタック・起動方法・プロジェクト構造は README.md、機能一覧・LLM 設定・DB 設計・開発方針は overview.md、仕様書の分類・命名規則・記述ルールは style-guide.md を参照。
+## プロジェクト基盤情報
+
+@README.md
+@docs/specs/overview.md
+@docs/specs/style-guide.md
 
 ## LLM使い分けルール
 
