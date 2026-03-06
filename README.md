@@ -163,7 +163,7 @@ uv run mypy src
 
 ### Claude Code 拡張（agentic）
 
-共通のエージェント・スキル・hooks・チームの仕様書は [dotfiles リポジトリ](https://github.com/becky3/dotfiles) の `doc/specs/agentic/` に配置。
+共通のエージェント・スキル・hooks・チームの仕様書は [dotfiles リポジトリ](https://github.com/becky3/dotfiles) の `docs/specs/agentic/` に配置。
 
 **プロジェクト固有スキル:**
 

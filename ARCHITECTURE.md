@@ -96,7 +96,7 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 
 ### agentic/
 
-共通のエージェント・スキル・hooks・チームの仕様書は [dotfiles](https://github.com/becky3/dotfiles) の `doc/specs/agentic/` に移行済み。
+共通のエージェント・スキル・hooks・チームの仕様書は [dotfiles](https://github.com/becky3/dotfiles) の `docs/specs/agentic/` に移行済み。
 プロジェクト固有のスキル仕様のみ残留:
 
 | 仕様書 | 対象 |
