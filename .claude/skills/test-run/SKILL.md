@@ -24,7 +24,7 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 - `src/` および `tests/` のリントチェック（ruff）
 - `src/` の型チェック（mypy）
 - `docs/**/*.md`, `*.md`, `.claude/**/*.md` の Markdown チェック（markdownlint）
-- `docs/**/*.md`, `*.md`, `.claude/**/*.md` の Mermaid 構文チェック（md-mermaid-lint）および GitHub 互換チェック（check_mermaid_compat.py）
+- `docs/**/*.md`, `*.md`, `.claude/**/*.md` の Mermaid 構文チェック（md-mermaid-lint）および GitHub 互換チェック（共有 check_mermaid_compat.py）
 - `.github/scripts/**/*.sh` のシェルスクリプトチェック（shellcheck）
 - プロジェクトは `uv` によるパッケージ管理を使用
 
@@ -36,7 +36,7 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 - Markdown チェック: `npx markdownlint-cli2@0.20.0`
 - Markdown 自動修正: `npx markdownlint-cli2@0.20.0 --fix`
 - Mermaid 構文チェック: `npx md-mermaid-lint@1.0.1 "docs/**/*.md"`
-- Mermaid GitHub 互換チェック: `uv run python scripts/check_mermaid_compat.py "docs/**/*.md" "*.md" ".claude/**/*.md"`
+- Mermaid GitHub 互換チェック: `python "$HOME/.claude/src/tools/check_mermaid_compat.py" "docs/**/*.md" "*.md" ".claude/**/*.md"`
 - シェルスクリプトチェック: `uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh`
 
 ## 処理手順
@@ -117,7 +117,7 @@ npx md-mermaid-lint@1.0.1 "docs/**/*.md"
 #### GitHub 互換チェック
 
 ```bash
-uv run python scripts/check_mermaid_compat.py "docs/**/*.md" "*.md" ".claude/**/*.md"
+python "$HOME/.claude/src/tools/check_mermaid_compat.py" "docs/**/*.md" "*.md" ".claude/**/*.md"
 ```
 
 diff モードでは変更された Markdown ファイルのみを対象にする。
