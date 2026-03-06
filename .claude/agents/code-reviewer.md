@@ -7,7 +7,7 @@ permissionMode: default
 
 ## 実行手順
 
-1. `.claude/skills/code-review/SKILL.md` を Read ツールで読み込む
+1. `/code-review` スキルを検索し、SKILL.md を Read ツールで読み込む
 2. スキルの指示に従ってコードレビューを実行する
 3. ユーザーからの指示（diff/full モード、対象ファイル等）をスキルの `$ARGUMENTS` として解釈する（未指定時は `diff` モード）
 

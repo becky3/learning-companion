@@ -4,7 +4,6 @@
 # stdin から JSON を読み取り、permission_mode でリーダー(default)/メンバー(acceptEdits)を判別する
 # チームの config.json から pattern を読み取り、fixed-theme の場合のみブロックする
 # エラー時は fail-open（ブロックしない）: 運用支援ツールであり、ユーザーの作業を止めない
-# 仕様: docs/specs/agentic/teams/common.md（delegate モードセクション）
 #
 # 注意: このスクリプトはフォールバック（delegate モード未使用時の警告）として残している。
 # 主たるリーダー制約手段は delegate モード（Shift+Tab）を使用すること。

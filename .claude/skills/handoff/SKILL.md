@@ -10,8 +10,6 @@ argument-hint: "[メッセージ]"
 
 セッション終了時の引き継ぎ処理を一括実行する。MEMORY.mdの更新、ジャーナル記録、次セッションへの申し送りを行う。
 
-仕様: docs/specs/agentic/skills/handoff-skill.md
-
 ## 引数
 
 `$ARGUMENTS` の形式:

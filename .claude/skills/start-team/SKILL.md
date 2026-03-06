@@ -10,8 +10,6 @@ argument-hint: "[fixed-theme|mixed-genius]"
 
 エージェントチームを仕様に従って立ち上げる。パターン選択、キャラクター選出、履歴管理、メンバー生成までを一貫して実行する。
 
-仕様: docs/specs/agentic/teams/common.md
-
 ## 引数
 
 `$ARGUMENTS` の形式:
@@ -36,17 +34,15 @@ argument-hint: "[fixed-theme|mixed-genius]"
 2. 未指定の場合、`.claude/team-themes/config.json` の `default_pattern` を読む
 3. config.json が存在しないまたは `default_pattern` が未設定の場合、`fixed-theme` をフォールバックとする
 
-### ステップ2: 仕様書の読み込み
+### ステップ2: 仕様書・ガイドラインの読み込み
 
-パターンに応じた仕様書を読み込み、チーム構築手順を確認する:
+プロジェクトにチーム仕様書がある場合は読み込み、追加のルール・制約を確認する:
 
-- `docs/specs/agentic/teams/common.md`（共通仕様）
-- `docs/specs/agentic/teams/fixed-theme.md`（fixed-theme の場合）
-- `docs/specs/agentic/teams/mixed-genius.md`（mixed-genius の場合）
+1. Glob で `docs/specs/**/teams/common*` を検索し、存在すれば Read（共通仕様）
+2. パターンに応じた仕様書を検索（`fixed-theme*` / `mixed-genius*`）、存在すれば Read
+3. 仕様書が見つからない場合、本スキルに記載された手順のみで構築する
 
-演出ガイドラインも読み込む:
-
-- `.claude/team-themes/GUIDELINES.md`
+演出ガイドラインを読み込む（Glob で `.claude/team-themes/GUIDELINES.md` または `~/.claude/team-themes/GUIDELINES.md` を検索）。
 
 ### ステップ3: 履歴ファイルの確認
 
@@ -166,7 +162,7 @@ Task ツールで各メンバーをスポーンする。**`mode: "bypassPermissi
 - コミットメッセージ
 - PR / Issue の本文・コメント
 - ソースコード・テスト・設定ファイル
-- 仕様書・ドキュメント（※運用ガイド: CLAUDE.md, docs/specs/agentic/teams/, .claude/team-themes/ を除く）
+- 仕様書・ドキュメント（※チーム運用ガイド・演出ガイドラインを除く）
 
 ### メッセージング規約
 

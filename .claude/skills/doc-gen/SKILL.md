@@ -10,8 +10,6 @@ argument-hint: "spec [feature-name]"
 
 プロジェクトドキュメントを自動生成する。Issue/PR/コミット履歴から情報を収集し、CLAUDE.mdのルールに従ったフォーマットで出力する。
 
-仕様: docs/specs/agentic/skills/doc-gen-skill.md
-
 ## 引数
 
 `$ARGUMENTS` の形式:
@@ -52,8 +50,8 @@ argument-hint: "spec [feature-name]"
 **手順**:
 
 1. カテゴリの決定
-   - `docs/specs/style-guide.md`（セクション1: ディレクトリ構成）を参照
-   - `features/`（ユーザー向け機能）、`infrastructure/`（基盤・ツール）、`workflows/`（開発プロセス）、`agentic/`（エージェント・スキル）から選択
+   - プロジェクトにスタイルガイド（Glob で `docs/specs/style-guide*` を検索）があれば Read で読み込み、カテゴリ分類基準を確認する
+   - スタイルガイドがない場合、既存仕様書のディレクトリ構成から分類基準を推測する
    - 既存仕様書のカテゴリ分類に従う
 
 2. Issue情報の収集
@@ -70,9 +68,9 @@ argument-hint: "spec [feature-name]"
    - Globツールで機能に関連するファイルを検索: `src/**/*${FEATURE_NAME}*`
 
 4. 仕様書生成:
-   - カテゴリに対応するテンプレート（`docs/specs/templates/`）を読み込む
-   - テンプレートに定義された必須セクションを全て満たす形で生成する
-   - 既存の同カテゴリ仕様書を1〜2件参照し、記述スタイルを踏襲する
+   - プロジェクトにテンプレートディレクトリ（Glob で `docs/specs/templates/` を検索）があれば、カテゴリに対応するテンプレートを読み込む
+   - テンプレートがない場合、既存の同カテゴリ仕様書を1〜2件参照し、構成とスタイルを踏襲する
+   - テンプレートがある場合は、定義された必須セクションを全て満たす形で生成する
 
 ## エラーハンドリング
 
