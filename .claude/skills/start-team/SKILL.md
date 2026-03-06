@@ -38,8 +38,8 @@ argument-hint: "[fixed-theme|mixed-genius]"
 
 プロジェクトにチーム仕様書がある場合は読み込み、追加のルール・制約を確認する:
 
-1. Glob で `docs/specs/**/teams/common*` を検索し、存在すれば Read（共通仕様）
-2. パターンに応じた仕様書を検索（`fixed-theme*` / `mixed-genius*`）、存在すれば Read
+1. Glob で `docs/specs/**/teams/common*.md` を検索し、存在すれば全件 Read（共通仕様）
+2. パターンに応じた仕様書を検索（Glob で `docs/specs/**/teams/fixed-theme*.md` または `docs/specs/**/teams/mixed-genius*.md`）、存在すれば全件 Read
 3. 仕様書が見つからない場合、本スキルに記載された手順のみで構築する
 
 演出ガイドラインを読み込む（Glob で `.claude/team-themes/GUIDELINES.md` または `~/.claude/team-themes/GUIDELINES.md` を検索）。
