@@ -163,14 +163,7 @@ uv run mypy src
 
 ### Claude Code 拡張（agentic）
 
-- [Claude Code Hooks](docs/specs/agentic/hooks/claude-code-hooks.md)
-- エージェントチーム: [共通仕様](docs/specs/agentic/teams/common.md) / [fixed-theme](docs/specs/agentic/teams/fixed-theme.md) / [mixed-genius](docs/specs/agentic/teams/mixed-genius.md)
-- [Planner サブエージェント](docs/specs/agentic/agents/planner-agent.md)
-- [Doc Reviewer サブエージェント](docs/specs/agentic/agents/doc-review-agent.md)
-- [Test Runner サブエージェント](docs/specs/agentic/agents/test-runner-agent.md)
-- [Code Reviewer サブエージェント](docs/specs/agentic/agents/code-review-agent.md)
-- [Doc Gen スキル](docs/specs/agentic/skills/doc-gen-skill.md)
-- [Doc Edit スキル](docs/specs/agentic/skills/doc-edit-skill.md)
-- [Handoff スキル](docs/specs/agentic/skills/handoff-skill.md)
+**プロジェクト固有スキル:**
+
 - [Check Review Batch スキル](docs/specs/agentic/skills/check-review-batch-skill.md)
 - [Topic スキル](docs/specs/agentic/skills/topic-skill.md)

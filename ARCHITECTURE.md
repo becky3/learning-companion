@@ -12,7 +12,7 @@
 | `docs/` | 仕様書・テンプレート |
 | `tests/` | テストコード・フィクスチャ |
 | `scripts/` | 運用・開発用スクリプト |
-| `.claude/` | Claude Code 拡張（エージェント・スキル・Hooks） |
+| `.claude/` | Claude Code プロジェクト設定 |
 | `.github/` | GitHub Actions ワークフロー・PR テンプレート・Copilot 設定 |
 
 ## src/ モジュール構成
@@ -57,7 +57,7 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 | `docs/specs/` | 機能仕様書・基盤仕様書・ワークフロー定義（実装の根拠） |
 | `tests/` | pytest テストコード・フィクスチャ |
 | `scripts/` | 運用・開発用シェルスクリプト |
-| `.claude/` | Claude Code 設定・エージェント定義・スキル定義・Hooks スクリプト |
+| `.claude/` | Claude Code プロジェクト設定 |
 | `.github/` | GitHub Actions ワークフロー・PR テンプレート・Copilot 設定 |
 
 ## 仕様書 — 実装モジュール対応表
@@ -96,12 +96,12 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 
 ### agentic/
 
+プロジェクト固有のスキル仕様:
+
 | 仕様書 | 対象 |
 |---|---|
-| `agentic/agents/*.md` | `.claude/agents/` |
-| `agentic/skills/*.md` | `.claude/skills/` |
-| `agentic/teams/*.md` | チーム運用パターン |
-| `agentic/hooks/*.md` | `.claude/scripts/` |
+| `agentic/skills/check-review-batch-skill.md` | 自動マージ Issue の PR バッチチェック |
+| `agentic/skills/topic-skill.md` | 学びトピック自動抽出・Zenn 記事生成 |
 
 ## 関連ドキュメント
 
