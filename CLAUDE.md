@@ -104,18 +104,14 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 
 ## Claude Code 拡張機能
 
-### Hooks
+### Hooks・エージェントチーム
 
-- **仕様**: `~/.claude/doc/specs/agentic/hooks/claude-code-hooks.md`
+共通の Hooks・エージェントチーム仕様は [dotfiles リポジトリ](https://github.com/becky3/dotfiles) で管理。
 
 ### 自律呼び出しルール（プロジェクト固有）
 
-共通の自律呼び出しルールは `~/.claude/doc/overview.md` で定義。以下はプロジェクト固有のルール:
+共通の自律呼び出しルールは `~/.claude/` の overview で定義。以下はプロジェクト固有のルール:
 
 | ユーザー表現 | 呼び出し先 | 種別 |
 |-------------|-----------|------|
 | 「自動マージレビューチェックして」 | `/check-review-batch` | スキル |
-
-### エージェントチーム
-
-チーム機能の仕様は `~/.claude/doc/specs/agentic/teams/` 配下を参照。

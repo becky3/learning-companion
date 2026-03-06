@@ -2,7 +2,7 @@
 
 GitHub の Mermaid レンダラー（古いバージョン）が解釈できない構文を検出する。
 
-仕様: ~/.claude/doc/specs/agentic/agents/test-runner-agent.md
+仕様: test-runner-agent (dotfiles)
 
 検出ルール:
   - [GH001] mermaid ブロック内の `#` 文字（CSS カラーコード `#xxx`/`#xxxxxx` は除外）
