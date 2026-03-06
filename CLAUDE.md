@@ -106,7 +106,7 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 
 ### Hooks
 
-- **仕様**: `docs/specs/agentic/hooks/claude-code-hooks.md`
+- **仕様**: `~/.claude/doc/specs/agentic/hooks/claude-code-hooks.md`
 
 ### 自律呼び出しルール（プロジェクト固有）
 
@@ -118,4 +118,4 @@ PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメ
 
 ### エージェントチーム
 
-チーム機能の仕様は `docs/specs/agentic/teams/` 配下を参照。
+チーム機能の仕様は `~/.claude/doc/specs/agentic/teams/` 配下を参照。
