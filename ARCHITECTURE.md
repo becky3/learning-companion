@@ -12,7 +12,7 @@
 | `docs/` | 仕様書・テンプレート |
 | `tests/` | テストコード・フィクスチャ |
 | `scripts/` | 運用・開発用スクリプト |
-| `.claude/` | Claude Code プロジェクト固有設定（共通設定は `~/.claude/` = [dotfiles](https://github.com/becky3/dotfiles)） |
+| `.claude/` | Claude Code プロジェクト設定 |
 | `.github/` | GitHub Actions ワークフロー・PR テンプレート・Copilot 設定 |
 
 ## src/ モジュール構成
@@ -57,7 +57,7 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 | `docs/specs/` | 機能仕様書・基盤仕様書・ワークフロー定義（実装の根拠） |
 | `tests/` | pytest テストコード・フィクスチャ |
 | `scripts/` | 運用・開発用シェルスクリプト |
-| `.claude/` | Claude Code プロジェクト固有設定（共通設定は `~/.claude/` = [dotfiles](https://github.com/becky3/dotfiles)） |
+| `.claude/` | Claude Code プロジェクト設定 |
 | `.github/` | GitHub Actions ワークフロー・PR テンプレート・Copilot 設定 |
 
 ## 仕様書 — 実装モジュール対応表
@@ -96,8 +96,7 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 
 ### agentic/
 
-共通のエージェント・スキル・hooks・チームの仕様書は [dotfiles](https://github.com/becky3/dotfiles) の `docs/specs/agentic/` に移行済み。
-プロジェクト固有のスキル仕様のみ残留:
+プロジェクト固有のスキル仕様:
 
 | 仕様書 | 対象 |
 |---|---|
