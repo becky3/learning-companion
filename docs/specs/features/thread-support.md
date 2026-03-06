@@ -81,6 +81,5 @@ graph TD
 
 ## 関連ドキュメント
 
-<!-- chat-response は未移行。#648 で一括修正予定 -->
 - [チャット応答](chat-response.md) — DB 履歴・応答生成
 - [特定チャンネル自動返信](auto-reply.md) — 自動返信チャンネル仕様

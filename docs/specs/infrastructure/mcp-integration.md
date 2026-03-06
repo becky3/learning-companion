@@ -154,6 +154,5 @@ flowchart TB
 
 ## 関連ドキュメント
 
-<!-- chat-response は未移行パスを含む。#648 で一括修正予定 -->
-- [RAG ナレッジ](../infrastructure/rag-knowledge.md) — MCP サーバーとして動作する RAG 基盤
+- [RAG ナレッジ](rag-knowledge.md) — MCP サーバーとして動作する RAG 基盤
 - [チャット応答](../features/chat-response.md) — ツール呼び出しループを含むチャット応答仕様

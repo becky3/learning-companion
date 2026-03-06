@@ -191,6 +191,5 @@ flowchart LR
 
 ## 関連ドキュメント
 
-<!-- mcp-integration, chat-response は未移行。リンク一括修正時に対応 -->
-- [MCP 統合](../features/mcp-integration.md) --- MCP サーバーの接続管理・ツール呼び出し基盤
+- [MCP 統合](mcp-integration.md) --- MCP サーバーの接続管理・ツール呼び出し基盤
 - [chat-response](../features/chat-response.md) --- チャット応答（ソース URL 付与）

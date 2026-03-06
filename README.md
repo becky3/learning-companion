@@ -102,7 +102,7 @@ CLAUDE.mdには以下の重要な情報が含まれています：
 - コーディング規約
 - Git運用フロー
 - LLM使い分けルール
-- サブエージェントの使用方法
+- Claude Code 拡張機能（Hooks、エージェントチーム）
 
 ### 開発フロー概要（git-flow）
 
@@ -170,6 +170,7 @@ uv run mypy src
 - [Test Runner サブエージェント](docs/specs/agentic/agents/test-runner-agent.md)
 - [Code Reviewer サブエージェント](docs/specs/agentic/agents/code-review-agent.md)
 - [Doc Gen スキル](docs/specs/agentic/skills/doc-gen-skill.md)
+- [Doc Edit スキル](docs/specs/agentic/skills/doc-edit-skill.md)
 - [Handoff スキル](docs/specs/agentic/skills/handoff-skill.md)
 - [Check Review Batch スキル](docs/specs/agentic/skills/check-review-batch-skill.md)
 - [Topic スキル](docs/specs/agentic/skills/topic-skill.md)
