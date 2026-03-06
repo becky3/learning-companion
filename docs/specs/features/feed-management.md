@@ -216,5 +216,4 @@ flowchart TB
 
 ## 関連ドキュメント
 
-<!-- chat-response は未移行パスを含む。#648 で一括修正予定 -->
-- [チャット応答](../features/chat-response.md) — 配信コマンドのルーティング
+- [チャット応答](chat-response.md) — 配信コマンドのルーティング
