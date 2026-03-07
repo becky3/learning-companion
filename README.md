@@ -163,6 +163,10 @@ uv run mypy src
 
 ### Claude Code 拡張（agentic）
 
+**プロジェクト固有エージェント:**
+
+- [Test Runner エージェント](docs/specs/agentic/agents/test-runner-agent.md)
+
 **プロジェクト固有スキル:**
 
 - [Check Review Batch スキル](docs/specs/agentic/skills/check-review-batch-skill.md)
