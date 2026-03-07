@@ -2,7 +2,7 @@
 name: test-runner
 description: pytest・ruff・mypy・markdownlint・shellcheck・mermaid-lint による品質チェックの実行・分析・修正提案を行う専門家。
 tools: Bash, Read, Grep, Glob, Edit
-permissionMode: default
+permissionMode: bypassPermissions
 ---
 
 ## 実行手順
