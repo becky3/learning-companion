@@ -2,20 +2,20 @@
 
 ## 概要
 
-テスト実行およびコード品質チェック（lint・型チェック・Markdown チェック・mermaid-lint）を自動化するサブエージェント。テストの実行、失敗時の分析、修正提案、再実行までを一貫して行う。
+テスト実行およびコード品質チェック（lint・型チェック・Markdown チェック・シェルスクリプトチェック・mermaid-lint）を自動化するサブエージェント。テストの実行、失敗時の分析、修正提案、再実行までを一貫して行う。
 
 ## 背景
 
 - テスト実行コマンドの入力や lint・型チェックの個別実行が煩雑
 - テスト失敗時のエラー分析に時間がかかり、修正後の再実行を忘れがち
-- コード品質チェック（ruff, mypy, markdownlint）を本エージェント経由で実行することが開発ガイドラインで規定されている
+- コード品質チェック（ruff, mypy, markdownlint, shellcheck）を本エージェント経由で実行することが開発ガイドラインで規定されている
 
 ## 役割
 
 ### 責務の範囲
 
 - テスト実行（全テスト / 差分テスト / 特定ファイル・テストケース指定）
-- コード品質チェック（ruff, mypy, markdownlint, mermaid-lint）
+- コード品質チェック（ruff, mypy, markdownlint, shellcheck, mermaid-lint）
 - Mermaid 構文チェック（md-mermaid-lint）および GitHub 互換チェック（`scripts/check_mermaid_compat.py`）
 - 失敗・違反の原因分析と具体的な修正提案（ファイルパス・行番号付き）
 - 全チェック結果の統合レポート生成
@@ -40,10 +40,11 @@
 3. **lint 実行**: ruff で `src/` および `tests/` のコードスタイル・潜在的バグをチェック
 4. **型チェック実行**: mypy で `src/` の静的型解析を実行
 5. **Markdown チェック実行**: markdownlint でリポジトリ内の Markdown ファイルをチェック
-6. **Mermaid チェック実行**: md-mermaid-lint で Mermaid 構文チェック、`scripts/check_mermaid_compat.py` で GitHub 互換チェック
-7. **結果の分析**: 失敗・違反があればソースコードを読み込み、原因を特定して修正案を提示（Mermaid GitHub 互換違反は後述「Mermaid GitHub 互換違反の修正指針」参照）
-8. **修正適用（オプション）**: ユーザー承認後に修正を適用し、再度チェックを実行
-9. **レポート生成**: 全チェック結果の統合サマリー
+6. **shellcheck 実行**: `.github/scripts/` 配下のシェルスクリプトをチェック
+7. **Mermaid チェック実行**: md-mermaid-lint で Mermaid 構文チェック、`scripts/check_mermaid_compat.py` で GitHub 互換チェック
+8. **結果の分析**: 失敗・違反があればソースコードを読み込み、原因を特定して修正案を提示（Mermaid GitHub 互換違反は後述「Mermaid GitHub 互換違反の修正指針」参照）
+9. **修正適用（オプション）**: ユーザー承認後に修正を適用し、再度チェックを実行
+10. **レポート生成**: 全チェック結果の統合サマリー
 
 各チェックツールが失敗してもプロセスを中断せず、すべてのチェックを実行して統合レポートを生成する。
 
@@ -54,10 +55,11 @@
    - `src/**/*.py` → 対応テストを推定し実行、ruff・mypy の対象
    - `tests/*.py` → そのまま実行対象に追加、ruff の対象
    - `*.md` → markdownlint・mermaid チェックの対象（pytest・ruff・mypy はスキップ）
+   - `*.sh` → shellcheck の対象（pytest・ruff・mypy・markdownlint はスキップ）
    - 設定ファイル（`pyproject.toml`, `conftest.py`）→ 全テスト実行にフォールバック
    - その他 → テスト対象外
 3. **テストファイルの推定**: ソースファイルのパスパターンから対応テストファイルをマッピング。対応テストが見つからない場合は全テストにフォールバック
-4. **推定テスト・lint・型チェック・Markdown チェック・Mermaid チェックの実行**（変更ファイルのみ対象）
+4. **推定テスト・lint・型チェック・Markdown チェック・shellcheck・Mermaid チェックの実行**（変更ファイルのみ対象）
 5. **レポート生成**
 
 ## 入出力
@@ -93,6 +95,9 @@ test-runnerサブエージェントでカバレッジを測定してください
 - **型エラー**: なし
 
 #### markdownlint
+- **違反**: なし
+
+#### shellcheck
 - **違反**: なし
 
 #### mermaid-lint
