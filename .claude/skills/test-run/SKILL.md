@@ -98,7 +98,7 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 
 `/doc-lint` スキルに委譲する。実行モード（diff/full）は test-run の現在のモードを引き継ぐ。
 
-`/doc-lint` は markdownlint・md-mermaid-lint・GitHub 互換チェック（check_mermaid_compat.py）を一括実行する。チェック対象やバージョン管理は `/doc-lint` 側の責務であり、test-run では管理しない。
+`/doc-lint` は markdownlint・md-mermaid-lint・GitHub 互換チェックを一括実行する。チェック対象やバージョン管理は `/doc-lint` 側の責務であり、test-run では管理しない。
 
 ### 7. シェルスクリプトチェック (shellcheck) 実行
 
@@ -323,6 +323,6 @@ def test_duplicate_articles_skipped():
 - `uv` コマンドが利用できない環境では適切にエラーを報告する
 - `shellcheck` コマンドが利用できない環境（`uv run shellcheck --version` が失敗する場合）では shellcheck をスキップし、他のチェックは続行する
 - テスト失敗時は必ず失敗したテストのソースコードを読んでから分析する
-- リント違反・型エラー・Markdown 違反時は該当箇所のコードを読んでから分析する
+- リント違反・型エラー・ドキュメント違反時は該当箇所のコードを読んでから分析する
 - 修正案は具体的で、ファイルパス・行番号を含める
 - 修正を適用する場合は、必ずユーザーの承認を得る
