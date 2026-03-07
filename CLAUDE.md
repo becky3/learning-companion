@@ -30,7 +30,7 @@
 
 - 各サービスクラスのdocstringに仕様書パスを記載: `仕様: docs/specs/features/feed-management.md`
 - テスト名は `test_` プレフィックス + snake_case で、テスト対象の振る舞いがわかる名前をつける（例: `test_rss_feed_is_fetched_and_parsed()`）
-- コード品質チェック（ruff, mypy, markdownlint, shellcheck, mermaid-lint）は test-runner エージェント経由で実行する
+- コード品質チェック（ruff, mypy, shellcheck）は test-runner エージェント経由で実行する。ドキュメント品質チェックは `/doc-lint` スキルで実行する
 - shellcheck の suppress コメントはディレクティブ行と説明行を分ける:
 
     ```bash
