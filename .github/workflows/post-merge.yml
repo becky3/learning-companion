@@ -18,5 +18,8 @@ on:
 
 jobs:
   post-merge:
+    if: >-
+      github.event.pull_request.merged == true
+      && contains(github.event.pull_request.labels.*.name, 'auto:merged')
     uses: becky3/shared-workflows/.github/workflows/post-merge.yml@main
     secrets: inherit
