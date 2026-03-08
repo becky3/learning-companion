@@ -20,6 +20,7 @@ AI Assistantは、Slack上で動作するAIアシスタントである。
 | 9 | RAGナレッジ | 外部Webページの知識をベクトルDBに蓄積しチャット応答に活用 | [rag-knowledge.md](infrastructure/rag-knowledge.md) |
 | 10 | Slack mrkdwn形式対応 | LLM返信をSlack mrkdwn形式で出力 | [slack-formatting.md](features/slack-formatting.md) |
 | 11 | CLIアダプター | Slack非依存でCLIからボット動作を確認するPort/Adapterパターン | [cli-adapter.md](features/cli-adapter.md) |
+| 12 | Botプロセスガード | PIDファイルによるプロセス管理で多重起動防止・管理コマンドを提供 | [bot-process-guard.md](infrastructure/bot-process-guard.md) |
 
 ## 3. 技術スタック
 
