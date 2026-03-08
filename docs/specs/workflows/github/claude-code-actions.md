@@ -72,6 +72,37 @@ flowchart TD
 - セキュリティチェック不合格: 何も出力せずスキップ
 - Claude Code 実行エラー: GitHub Actions のログに記録
 
+## ワークフロー構成
+
+Reusable Workflow として `shared-workflows` リポジトリに集約されている。
+
+| 層 | ファイル | 役割 |
+|---|---|---|
+| Caller | `.github/workflows/claude.yml`（本リポ） | トリガーイベント定義 + パラメータ指定 |
+| Reusable | `shared-workflows/.github/workflows/claude.yml` | Claude Code Action の実行ロジック |
+
+### パラメータ
+
+Caller から Reusable Workflow に渡す入力パラメータ:
+
+| パラメータ | 必須 | 概要 |
+|---|:---:|---|
+| `allowed_user` | Yes | トリガーを許可する GitHub ユーザー名 |
+| `model` | No | Claude モデル名 |
+| `max_turns` | No | 最大ターン数 |
+| `bot_name` | No | Bot 表示名 |
+| `bot_id` | No | Bot ID |
+| `auto_progress_prompt` | No | GA 環境用の追加システムプロンプト（空文字列で省略） |
+
+### シークレット
+
+`secrets: inherit` で呼び出し側から引き継ぐ。Reusable Workflow 側で以下のシークレットが必須:
+
+| シークレット | 概要 |
+|---|---|
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code Action の OAuth トークン |
+| `REPO_OWNER_PAT` | ワークフロー連鎖・PR 作成用の個人アクセストークン |
+
 ## 関連ドキュメント
 
 - [auto-progress](auto-progress.md) — 自動進行管理（`auto-implement` ラベルトリガーを含む）
