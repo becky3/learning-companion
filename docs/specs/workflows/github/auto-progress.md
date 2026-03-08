@@ -158,11 +158,19 @@ stateDiagram-v2
 
 ## ワークフロー構成
 
+3 つのワークフローは全て shared-workflows リポジトリの Reusable Workflow として実装されている。各リポジトリには caller YAML のみを配置し、共通ロジック（スクリプト含む）は shared-workflows で一元管理する。
+
 | ワークフロー | トリガー | 役割 |
 |-------------|---------|------|
 | `claude.yml` | `issues[labeled]` | `auto-implement` ラベルで自動実装開始 |
 | `copilot-auto-fix.yml` | `pull_request[opened]` + `workflow_dispatch` | Copilot レビュー検知 + 自動修正 + マージ |
 | `post-merge.yml` | `pull_request[closed]` | マージ後の全 PR レビュー記録 |
+
+caller が渡すリポジトリ固有の設定:
+
+- **禁止パターン**: 自動マージをブロックするファイルパターン（caller の `forbidden_patterns` 入力）
+- **プロンプトテンプレート**: レビュー指摘対応プロンプト（caller リポの `.github/prompts/` に配置）
+- **GA 環境ルール**: 自動実装時のシステムプロンプト（caller の `auto_progress_prompt` 入力）
 
 ### レビュー方式
 

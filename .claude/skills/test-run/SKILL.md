@@ -23,7 +23,7 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 - `tests/*.py` の pytest テストファイル
 - `src/` および `tests/` のリントチェック（ruff）
 - `src/` の型チェック（mypy）
-- `.github/scripts/**/*.sh` のシェルスクリプトチェック（shellcheck）
+- プロジェクト内の `*.sh` ファイルのシェルスクリプトチェック（shellcheck）
 - ドキュメント品質チェック（markdownlint・mermaid-lint・GitHub 互換チェック）は `/doc-lint` スキルに委譲
 - プロジェクトは `uv` によるパッケージ管理を使用
 
@@ -32,7 +32,6 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 - テスト: `uv run pytest`
 - リント: `uv run ruff check src/ tests/`
 - 型チェック: `uv run mypy src/`
-- シェルスクリプトチェック: `uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh`
 - ドキュメント品質チェック: `/doc-lint` スキルに委譲
 
 ## 処理手順
@@ -102,23 +101,9 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 
 ### 7. シェルスクリプトチェック (shellcheck) 実行
 
-**CRLF 自動修正（Windows 環境）**: shellcheck 実行前に、対象 `.sh` ファイルの CRLF 改行を LF に変換する。Windows の Write ツールが CRLF で書き出す問題への対策。変換があった場合はログ出力する。
+プロジェクト内の `*.sh` ファイルを対象に shellcheck を実行する。
 
-```bash
-# CRLF → LF 自動変換（shellcheck SC1017 防止）
-for f in .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh; do
-  [ -f "$f" ] || continue
-  if grep -q $'\r' "$f" 2>/dev/null; then
-    tmp=$(mktemp) && tr -d '\r' < "$f" > "$tmp" && mv "$tmp" "$f"
-    echo "[fix] CRLF→LF: $f"
-  fi
-done
-
-uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh
-```
-
-diff モードでは変更された `*.sh` ファイルのみを対象にする。
-シェルスクリプト（`*.sh`）が存在しない場合や変更がない場合はスキップする。
+diff モードでは変更された `*.sh` ファイルのみを対象にする。対象ファイルがなければスキップする。
 
 **重要**: pytest・ruff・mypy・`/doc-lint`・shellcheck のいずれかが失敗してもプロセスを中断せず、すべてのチェックを実行して統合レポートを生成する。
 
