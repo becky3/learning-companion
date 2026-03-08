@@ -6,7 +6,7 @@
 # 使い方 (GitHub Actions ワークフロー内):
 #   source "$GITHUB_WORKSPACE/.github/scripts/auto-fix/_common.sh"
 #
-# エラーハンドリング方針（auto-fix.yml 冒頭と対応）:
+# エラーハンドリング方針（copilot-auto-fix.yml 冒頭と対応）:
 #   gh_safe          → 失敗時 ::error:: + exit 1（認証/権限/必須データ取得）
 #   gh_safe_warning  → 失敗時 ::warning::（一時的API障害、非クリティカル）
 #   gh_best_effort   → 失敗時 ::error:: のみ（エラーハンドラ内、ベストエフォート）

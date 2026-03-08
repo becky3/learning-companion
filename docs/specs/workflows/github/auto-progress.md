@@ -64,8 +64,6 @@ flowchart TD
     N -->|条件未達| P[auto:failed ラベル付与]
 
     O --> S[レビューIssueにコメント記録]
-    S --> Q[post-merge.yml: 次Issue選定]
-    Q --> B
 
     O --> T{develop → main<br/>リリース}
     T -->|手動| U[管理者がリリースPR作成]
@@ -164,8 +162,7 @@ stateDiagram-v2
 |-------------|---------|------|
 | `claude.yml` | `issues[labeled]` | `auto-implement` ラベルで自動実装開始 |
 | `copilot-auto-fix.yml` | `pull_request[opened]` + `workflow_dispatch` | Copilot レビュー検知 + 自動修正 + マージ |
-| `post-merge.yml` | `pull_request[closed]` | マージ後の全 PR レビュー記録 + 次 Issue 自動ピックアップ |
-| `auto-fix.yml` | `workflow_dispatch` のみ | 無効化（copilot-auto-fix.yml に移行済み） |
+| `post-merge.yml` | `pull_request[closed]` | マージ後の全 PR レビュー記録 |
 
 ### レビュー方式
 
