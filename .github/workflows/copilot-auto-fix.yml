@@ -345,6 +345,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.pr-info.outputs.number }}
+          FORBIDDEN_PATTERNS: |
+            .env*
+            pyproject.toml
 
       - name: Merge check
         if: |

@@ -13,7 +13,7 @@ source "$(dirname "$0")/_common.sh"
 require_env PR_NUMBER GH_REPO GITHUB_OUTPUT
 
 # auto-fix ループのマーカーコメント数をカウント
-# auto-fix.yml が /check-pr 実行前に投稿する「auto-fix: レビュー指摘への自動対応」コメントを対象
+# copilot-auto-fix.yml が /check-pr 実行前に投稿する「auto-fix: レビュー指摘への自動対応」コメントを対象
 if ! LOOP_COUNT=$(gh api "repos/${GH_REPO}/issues/${PR_NUMBER}/comments" \
   --paginate --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | contains("auto-fix: レビュー指摘への自動対応")))] | length' 2>&1); then
   echo "::warning::Failed to get loop count: $LOOP_COUNT. Defaulting to 0."
