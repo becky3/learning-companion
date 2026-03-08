@@ -1,6 +1,6 @@
 ---
 name: test-run
-description: pytest・ruff・mypy によるコード品質チェックの実行・分析・修正提案
+description: pytest・ruff・mypy・shellcheck によるコード品質チェックの実行・分析・修正提案
 user-invocable: true
 allowed-tools: Bash, Read, Grep, Glob, Edit
 argument-hint: "[diff|full]"
@@ -8,7 +8,7 @@ argument-hint: "[diff|full]"
 
 ## タスク
 
-pytest による自動テスト実行、ruff によるリント、mypy による型チェックを実行し、結果を分析して修正提案を行う。ドキュメント品質チェック（markdownlint・mermaid-lint・GitHub 互換チェック）は `/doc-lint` スキルに委譲する。
+pytest による自動テスト実行、ruff によるリント、mypy による型チェック、shellcheck によるシェルスクリプトチェックを実行し、結果を分析して修正提案を行う。ドキュメント品質チェック（markdownlint・mermaid-lint・GitHub 互換チェック）は `/doc-lint` スキルに委譲する。
 
 ## 引数
 
@@ -23,6 +23,7 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 - `tests/*.py` の pytest テストファイル
 - `src/` および `tests/` のリントチェック（ruff）
 - `src/` の型チェック（mypy）
+- プロジェクト内の `*.sh` ファイルのシェルスクリプトチェック（shellcheck）
 - ドキュメント品質チェック（markdownlint・mermaid-lint・GitHub 互換チェック）は `/doc-lint` スキルに委譲
 - プロジェクトは `uv` によるパッケージ管理を使用
 
@@ -57,7 +58,8 @@ pytest による自動テスト実行、ruff によるリント、mypy による
 **特殊ケース**:
 
 - 変更ファイル 0 件で指定もなし → `full` モードにフォールバック
-- Markdown ファイル（`*.md`）のみの変更 → pytest・ruff・mypy はスキップ、`/doc-lint` のみ実行
+- Markdown ファイル（`*.md`）のみの変更 → pytest・ruff・mypy・shellcheck はスキップ、`/doc-lint` のみ実行
+- シェルスクリプト（`*.sh`）のみの変更 → pytest・ruff・mypy はスキップ、shellcheck のみ実行（`/doc-lint` もスキップ）
 - `pyproject.toml`, `conftest.py` の変更 → `full` モードにフォールバック
 
 #### full モードの場合
@@ -97,7 +99,13 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 
 `/doc-lint` は markdownlint・md-mermaid-lint・GitHub 互換チェックを一括実行する。チェック対象やバージョン管理は `/doc-lint` 側の責務であり、test-run では管理しない。
 
-**重要**: pytest・ruff・mypy・`/doc-lint` のいずれかが失敗してもプロセスを中断せず、すべてのチェックを実行して統合レポートを生成する。
+### 7. シェルスクリプトチェック (shellcheck) 実行
+
+プロジェクト内の `*.sh` ファイルを対象に shellcheck を実行する。
+
+diff モードでは変更された `*.sh` ファイルのみを対象にする。対象ファイルがなければスキップする。
+
+**重要**: pytest・ruff・mypy・`/doc-lint`・shellcheck のいずれかが失敗してもプロセスを中断せず、すべてのチェックを実行して統合レポートを生成する。
 
 ### 8. 結果の解析
 
@@ -106,6 +114,7 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 - **ruff 違反あり時**: 違反ファイル、ルールコード、行番号、違反内容
 - **mypy エラーあり時**: エラーファイル、エラー種別、行番号、エラー内容
 - **/doc-lint 違反あり時**: `/doc-lint` の出力を統合レポートに含める
+- **shellcheck 違反あり時**: 違反ファイル、エラーコード（SC????）、行番号、違反内容、重大度（error/warning/info）
 
 ### 9. 失敗時の詳細調査
 
@@ -113,12 +122,12 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 - テスト対象のソースコードを Read で読み込み
 - エラーの種類を特定（AssertionError, TypeError, AttributeError 等）
 - 根本原因を分析（テストコードの問題、ソースコードの問題、依存関係の問題）
-- リント違反・型エラー時も該当箇所のコードを Read で確認
+- リント違反・型エラー・shellcheck 違反時も該当箇所のコードを Read で確認
 - ドキュメント違反は `/doc-lint` の出力を参照
 
 ### 10. 修正案の生成
 
-各失敗テスト・リント違反・型エラーに対して:
+各失敗テスト・リント違反・型エラー・shellcheck 違反に対して:
 
 - エラー内容の要約
 - 原因の説明
@@ -137,7 +146,7 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 
 - 修正が必要な場合、Edit ツールで修正を適用
 - ドキュメント修正は `/doc-lint` に再実行を委譲
-- 修正後に再度テスト・リント・型チェックを実行して確認
+- 修正後に再度テスト・リント・型チェック・shellcheck を実行して確認
 
 ## 出力フォーマット
 
@@ -157,6 +166,9 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 - **型エラー**: なし
 
 #### /doc-lint
+- **違反**: なし
+
+#### shellcheck
 - **違反**: なし
 
 すべてのチェックが成功しました。
@@ -196,6 +208,9 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 #### /doc-lint
 - **違反**: {N}件（または「なし」）
 
+#### shellcheck
+- **違反**: {N}件（または「なし」）
+
 ---
 
 #### 次のステップ
@@ -217,6 +232,7 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 | ruff | ⚠️ 実行失敗 | {実行したが途中で失敗した場合} |
 | mypy | ✅ 完了 | — |
 | /doc-lint | ❌ 未実行 | {具体的な理由} |
+| shellcheck | ❌ 未実行 | {具体的な理由} |
 
 **再実行が必要です。**
 ```
@@ -315,6 +331,7 @@ def test_duplicate_articles_skipped():
 ## 注意事項
 
 - `uv` コマンドが利用できない環境では適切にエラーを報告する
+- `shellcheck` コマンドが利用できない環境（`uv run shellcheck --version` が失敗する場合）では shellcheck をスキップし、他のチェックは続行する
 - テスト失敗時は必ず失敗したテストのソースコードを読んでから分析する
 - リント違反・型エラー・ドキュメント違反時は該当箇所のコードを読んでから分析する
 - 修正案は具体的で、ファイルパス・行番号を含める
