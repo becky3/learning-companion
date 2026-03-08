@@ -155,6 +155,18 @@ unresolved threads は GraphQL API で PR の `reviewThreads` から `isResolved
 3. `auto:failed` ラベルを除去
 4. Actions タブから `workflow_dispatch` で PR 番号を指定して再実行
 
+## ワークフロー構成
+
+shared-workflows リポジトリの Reusable Workflow として実装されている。各リポジトリには caller YAML のみを配置する。
+
+スクリプト群（Copilot レビュー待機・マージ判定等）も shared-workflows で一元管理する。
+
+caller が渡すリポジトリ固有の設定:
+
+- **禁止パターン**: 自動マージをブロックするファイルパターン
+- **プロンプトテンプレート**: レビュー指摘対応プロンプト（caller リポに配置）
+- **GA 環境ルール**: 自動実装時のシステムプロンプト
+
 ## 関連ドキュメント
 
 - [auto-progress](auto-progress.md): 全体パイプライン仕様
