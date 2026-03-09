@@ -135,5 +135,5 @@ git-flow ベースのブランチ戦略を採用。詳細は `~/.claude/docs/spe
   - `sync/main-to-develop-v{X.Y.Z}` — リリース後の main → develop 同期（`develop` → `develop`）
 - コミット: `type(scope): 説明 (#Issue番号)` ※scope は仕様書ファイル名（拡張子なし）
 - PR作成時に `Closes #{Issue番号}` でIssueを紐付け（feature/bugfix: base `develop`, release/hotfix: base `main`）
-- リリース後は sync ブランチ経由で `main` → `develop` に差分反映（詳細は git-flow.md 参照）
+- リリース後は sync ブランチ経由で `main` → `develop` に差分反映（詳細は `~/.claude/docs/specs/workflows/git-flow.md` 参照）
 - マイルストーンでStep単位の進捗管理
