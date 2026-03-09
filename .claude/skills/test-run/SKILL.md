@@ -101,9 +101,23 @@ diff モードでは変更された `src/**/*.py` ファイルのみを対象に
 
 ### 7. シェルスクリプトチェック (shellcheck) 実行
 
+**CRLF 自動修正（Windows 環境）**: shellcheck 実行前に、対象 `*.sh` ファイルの CRLF 改行を LF に変換する。Windows の Write ツールが CRLF で書き出す問題への対策。変換があった場合はログ出力する。diff モードでは shellcheck 対象ファイル（変更された `*.sh`）のみを変換対象とする。
+
+```bash
+# CRLF → LF 自動変換（shellcheck SC1017 防止）
+# - NUL 区切りでスペース/改行を含むパスを安全に列挙
+# - perl -pi -e で in-place 変換しパーミッションを維持
+find . -name '*.sh' -not -path './.git/*' -print0 | while IFS= read -r -d '' f; do
+  if grep -q $'\r' "$f" 2>/dev/null; then
+    perl -pi -e 's/\r$//' "$f"
+    echo "[fix] CRLF→LF: $f"
+  fi
+done
+```
+
 プロジェクト内の `*.sh` ファイルを対象に shellcheck を実行する。
 
-diff モードでは変更された `*.sh` ファイルのみを対象にする。対象ファイルがなければスキップする。
+diff モードでは変更された `*.sh` ファイルのみを対象にする（CRLF 変換も同じ対象に限定する）。対象ファイルがなければスキップする。
 
 **重要**: pytest・ruff・mypy・`/doc-lint`・shellcheck のいずれかが失敗してもプロセスを中断せず、すべてのチェックを実行して統合レポートを生成する。
 
