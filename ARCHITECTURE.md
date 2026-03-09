@@ -88,8 +88,8 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 
 | 仕様書 | 対象 |
 |---|---|
-| `workflows/git-flow.md` | Git ブランチ運用 |
-| `workflows/pr-body-template.md` | PR テンプレート |
+| `~/.claude/docs/specs/workflows/git-flow.md` | Git ブランチ運用（dotfiles） |
+| `~/.claude/docs/specs/workflows/pr-body-template.md` | PR テンプレート（dotfiles） |
 | `workflows/github/auto-progress.md` | `.github/workflows/` |
 | `workflows/github/copilot-auto-fix.md` | `.github/workflows/` |
 | `workflows/github/claude-code-actions.md` | `.github/workflows/` |

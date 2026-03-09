@@ -117,7 +117,7 @@ ONLINE_LLM_PROVIDER=openai
 
 ### Git運用（git-flow）
 
-git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](workflows/git-flow.md) を参照。
+git-flow ベースのブランチ戦略を採用。詳細は `~/.claude/docs/specs/workflows/git-flow.md` を参照。
 
 - **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
 - **作業ブランチ**:

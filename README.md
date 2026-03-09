@@ -113,7 +113,7 @@ CLAUDE.mdには以下の重要な情報が含まれています：
 
 ### 開発フロー概要（git-flow）
 
-本プロジェクトは git-flow ベースのブランチ戦略を採用。詳細は [git-flow仕様](docs/specs/workflows/git-flow.md) を参照。
+本プロジェクトは git-flow ベースのブランチ戦略を採用。詳細は git-flow 仕様（`~/.claude/docs/specs/workflows/git-flow.md`）を参照。
 
 1. Issue・Milestoneの確認 (`gh milestone list`, `gh issue list`)
 2. 対象Issueの仕様書を読む (`docs/specs/`)
@@ -162,8 +162,8 @@ uv run mypy src
 
 ### ワークフロー（workflows）
 
-- [git-flow ブランチ運用](docs/specs/workflows/git-flow.md)
-- [PR body テンプレート](docs/specs/workflows/pr-body-template.md)
+- git-flow ブランチ運用（`~/.claude/docs/specs/workflows/git-flow.md`）
+- PR body テンプレート（`~/.claude/docs/specs/workflows/pr-body-template.md`）
 - [自動進行管理](docs/specs/workflows/github/auto-progress.md)
 - [Copilot 自動修正ワークフロー](docs/specs/workflows/github/copilot-auto-fix.md)
 - [Claude Code Actions](docs/specs/workflows/github/claude-code-actions.md)
