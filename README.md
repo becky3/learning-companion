@@ -140,7 +140,7 @@ uv run mypy src
 ### 全体仕様
 
 - [全体仕様概要](docs/specs/overview.md)
-- [仕様書スタイルガイド](docs/specs/style-guide.md)
+- 仕様書スタイルガイド（`~/.claude/docs/style-guide.md`）
 
 ### 機能仕様（features）
 

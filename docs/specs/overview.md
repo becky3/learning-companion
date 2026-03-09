@@ -109,7 +109,7 @@ ONLINE_LLM_PROVIDER=openai
 
 ### 仕様書スタイルガイド
 
-仕様書の分類・命名規則・記述ルールは [仕様書スタイルガイド](style-guide.md) を参照。
+仕様書の分類・命名規則・記述ルールは仕様書スタイルガイド（`~/.claude/docs/style-guide.md`）を参照。
 
 ### 仕様書テンプレート
 

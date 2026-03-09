@@ -106,5 +106,5 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 ## 関連ドキュメント
 
 - [全体仕様概要](docs/specs/overview.md) — 機能一覧・技術スタック・DB 設計
-- [仕様書スタイルガイド](docs/specs/style-guide.md) — 仕様書の分類・命名規則・記述ルール
+- 仕様書スタイルガイド（`~/.claude/docs/style-guide.md`）— 仕様書の分類・命名規則・記述ルール
 - [CLAUDE.md](CLAUDE.md) — 開発ガイドライン

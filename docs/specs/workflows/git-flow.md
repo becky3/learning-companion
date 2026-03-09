@@ -196,10 +196,10 @@ sequenceDiagram
 
 ## コミットメッセージ規約
 
-コミットメッセージの形式・scope のルール・type 一覧は `docs/specs/style-guide.md` の「コミットメッセージ規約」セクションを参照。
+コミットメッセージの形式・scope のルール・type 一覧は `~/.claude/docs/style-guide.md` の「コミットメッセージ規約」セクションを参照。
 
 ## 関連ドキュメント
 
-- `docs/specs/style-guide.md` — コミットメッセージ規約・ブランチ命名規約
+- `~/.claude/docs/style-guide.md` — コミットメッセージ規約・ブランチ命名規約
 - `docs/specs/workflows/pr-body-template.md` — PR body テンプレート仕様
 - `docs/specs/workflows/github/auto-progress.md` — 自動進行管理（develop ベースで動作）
