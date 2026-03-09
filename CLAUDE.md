@@ -4,7 +4,6 @@
 
 @README.md
 @docs/specs/overview.md
-@docs/specs/style-guide.md
 
 ## LLM使い分けルール
 
@@ -14,89 +13,6 @@
   - 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
 - `MCP_ENABLED` — MCP機能の有効/無効（デフォルト: `false`）。MCPサーバー（`mcp_servers/` 配下）は `src/` のモジュールを import しないこと
 - `RAG_ENABLED` — RAG機能の有効/無効（デフォルト: `false`）。詳細は `docs/specs/infrastructure/rag-knowledge.md` 参照
-
-## 開発ルール
-
-### 仕様駆動開発
-
-- **実装前に必ず `docs/specs/` の仕様書を読むこと**。仕様書が実装の根拠。仕様書の記述ルールは `docs/specs/style-guide.md` に従う。
-- **実装前に既存コードを必ず読むこと**。仕様書の「関連ファイル」に記載された実装ファイルを確認し、既存の構造・パターン・抽象化を把握してから設計する。
-- **既存コードの拡張を優先する**。新しいメソッドやクラスを作る前に、既存のメソッドにパラメータ追加で対応できないか検討する。
-- 仕様書にない機能追加・リファクタリングは別Issueに切り出す。ただし **軽微な修正**（typo、lint エラー等）はその場で修正、**大きな問題** は Issue に切り出す。
-- 仕様変更が必要な場合は、先に仕様書を更新してから実装する。
-- 外部サービス（GitHub API、CI/CD等）の挙動は仕様書か公式ドキュメントで確認する。
-
-### コーディング規約
-
-- 各サービスクラスのdocstringに仕様書パスを記載: `仕様: docs/specs/features/feed-management.md`
-- テスト名は `test_` プレフィックス + snake_case で、テスト対象の振る舞いがわかる名前をつける（例: `test_rss_feed_is_fetched_and_parsed()`）
-- コード品質チェック（ruff, mypy, shellcheck）は test-runner エージェント経由で実行する。ドキュメント品質チェックは `/doc-lint` スキルで実行する
-- shellcheck の suppress コメントはディレクティブ行と説明行を分ける:
-
-    ```bash
-    # Reason for suppression
-    # shellcheck disable=SC2016
-    ```
-
-- ドキュメント内の図表は mermaid 形式を使用（ASCII図表は不可）
-- **フォールバック/暗黙のデフォルト値の禁止**
-  - 関数の引数が `None` の場合に settings/env から暗黙に取得するパターンは禁止。呼び出し元が値の出所を決定すること
-  - argparse の `default` で具体値を設定するのではなく `required=True` にして明示させること
-  - 適用対象: 評価CLI・テストツール・スクリプトの関数引数・argparse
-  - 適用対象外: 本番コード（`main.py`）の settings 参照、基盤設定（DB接続先等）、スキル/エージェント定義のデフォルト値
-
-### 作業開始時の手順
-
-1. Issue・Milestoneの確認: `gh milestone list` / `gh issue list --state open` / `gh issue view <番号>`
-2. 対象Issueの仕様書を読む（`docs/specs/` の該当ファイル）
-3. 既存実装コードの確認（仕様書の「関連ファイル」セクション）
-4. ブランチ作成 → 実装 → PR の流れで進める
-
-### Git運用（git-flow）
-
-詳細は `docs/specs/workflows/git-flow.md` を参照。
-
-- **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
-- **作業ブランチ**: `feature/{機能名}-#{Issue番号}` / `bugfix/{修正内容}-#{Issue番号}` / `release/v{X.Y.Z}` / `hotfix/{修正内容}-#{Issue番号}`
-- コミット: `type(scope): 説明 (#Issue番号)` ※scope は仕様書ファイル名（拡張子なし）
-- PR作成時に `Closes #{Issue番号}` で紐付け
-- **PRのbaseブランチ**: 通常は `develop`、リリース/hotfix は `main`、リリース中の bugfix は `release/*`
-- **マージ方式**: feature/bugfix → develop は通常マージ、bugfix → release は通常マージ、release → main は squash マージ、sync → develop は通常マージ
-- **サブIssue作成**: `gh` CLI は未サポートのため GraphQL API を使用（`gh api graphql` の `addSubIssue` mutation）。親・子の Node ID は `gh issue view <番号> --json id --jq '.id'` で取得し、直接埋め込む
-
-### 実装完了時の必須手順
-
-1. **ファイル確認**: 作成したファイルが実際に存在するか `ls -la` で確認
-2. **テスト実行**: test-runner エージェントでテスト通過を確認（デフォルト: diff モード。全テストは `full` 指定時のみ）
-3. **コードレビュー**: code-reviewer エージェントでセルフレビュー（デフォルト: diff モード）。各指摘は対応すべきかそれぞれ判断
-4. **ドキュメントレビュー**: `docs/specs/` 等に変更がある場合、doc-reviewer エージェントで品質レビュー（デフォルト: diff モード）。実装のみのPRでも対応する仕様書との整合性チェックを実施すること
-   - スキップ基準: 誤字脱字のみの修正
-   - フルレビュー推奨: 新規作成・大幅改訂時は `full` を指定
-5. **ステージング・コミット・プッシュ・PR作成**
-   - PR body は `.github/pull_request_template.md` の形式に従う（仕様: `docs/specs/workflows/pr-body-template.md`）
-   - 設計書の先行更新PRでは Change type で `docs(pre-impl)` を選択
-6. **PR確認**: `gh pr view` で確認し、URLをユーザーに提示
-
-**テスト・レビューで検出した問題のスキップ禁止**:
-
-上記ステップ 2〜4 で検出した問題を「対応範囲外」「既存問題」としてスキップしてはならない。検出した問題は以下のルールに従って必ず対処すること:
-
-- **軽微な問題**（typo、lint エラー、簡単な型エラー等）: その場で修正する
-- **大きな問題**（設計変更が必要、影響範囲が広い等）: Issue を作成して記録する
-- **判断に迷う場合**: ユーザーに相談する（自己判断でスキップしない）
-
-### レビュー指摘対応
-
-レビュー指摘への対応は `/check-pr` スキルを使用する。
-「指摘をチェックして」「レビューを確認して」等のユーザー依頼時に自律的に呼び出すこと。
-
-### PR・Issue コメントでのメンション回避
-
-PR や Issue にコメントを投稿する際、`@ユーザー名` 形式のメンションを使用しないこと。
-
-- **理由**: `@copilot` のようなメンションは自動化ツールがトリガーとして検知し、意図しないPR作成やActions minutesの浪費を引き起こす
-- **対処法**: `@` プレフィックスを外し、ユーザー名のみを記載する（例: `(copilot)` / `(becky3)`）
-- **適用範囲**: `gh pr comment`、`gh issue comment`、PR body 等、GitHub 上に投稿する全てのテキスト
 
 ## 自動進行ルール（auto-progress）
 

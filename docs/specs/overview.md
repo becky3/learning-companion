@@ -113,18 +113,18 @@ ONLINE_LLM_PROVIDER=openai
 
 ### 仕様書テンプレート
 
-カテゴリごとにテンプレートを用意している。詳細は [docs/specs/templates/](templates/) を参照。
+カテゴリごとにテンプレートを用意している。テンプレートは `.claude/docs/templates/` に配置。
 
 | カテゴリ | テンプレート | 配置先 |
 |---------|------------|--------|
-| 機能仕様 | [features.md](templates/features.md) | `features/` |
-| 基盤仕様 | [infrastructure.md](templates/infrastructure.md) | `infrastructure/` |
-| ワークフロー | [workflows.md](templates/workflows.md) | `workflows/` |
-| GitHub ワークフロー | [workflows-github.md](templates/workflows-github.md) | `workflows/github/` |
-| エージェント | [agentic-agents.md](templates/agentic-agents.md) | `agentic/agents/` |
-| スキル | [agentic-skills.md](templates/agentic-skills.md) | `agentic/skills/` |
-| チーム | [agentic-teams.md](templates/agentic-teams.md) | `agentic/teams/` |
-| Hooks | [agentic-hooks.md](templates/agentic-hooks.md) | `agentic/hooks/` |
+| 機能仕様 | `features.md` | `features/` |
+| 基盤仕様 | `infrastructure.md` | `infrastructure/` |
+| ワークフロー | `workflows.md` | `workflows/` |
+| GitHub ワークフロー | `workflows-github.md` | `workflows/github/` |
+| エージェント | `agentic-agents.md` | `agentic/agents/` |
+| スキル | `agentic-skills.md` | `agentic/skills/` |
+| チーム | `agentic-teams.md` | `agentic/teams/` |
+| Hooks | `agentic-hooks.md` | `agentic/hooks/` |
 
 ### Git運用（git-flow）
 
