@@ -140,6 +140,7 @@ uv run mypy src
 ### 全体仕様
 
 - [全体仕様概要](docs/specs/overview.md)
+
 ### 機能仕様（features）
 
 - [チャット応答](docs/specs/features/chat-response.md)
