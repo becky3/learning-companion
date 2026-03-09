@@ -109,26 +109,22 @@ ONLINE_LLM_PROVIDER=openai
 
 ### 仕様書スタイルガイド
 
-仕様書の分類・命名規則・記述ルールは [仕様書スタイルガイド](style-guide.md) を参照。
+仕様書の分類・命名規則・記述ルールは仕様書スタイルガイド（`~/.claude/docs/specs/style-guide.md`）を参照。
+
+本プロジェクト固有の仕様書カテゴリ:
+
+| カテゴリ | 配置先 | 判断基準 |
+|---------|--------|---------|
+| ユーザー向け機能 | `features/` | ユーザーが直接触る・意識するプロダクト機能 |
+| 基盤・ツール | `infrastructure/` | ユーザーが直接意識しない裏側の仕組み、開発ツール |
 
 ### 仕様書テンプレート
 
-カテゴリごとにテンプレートを用意している。テンプレートは `.claude/docs/templates/` に配置。
-
-| カテゴリ | テンプレート | 配置先 |
-|---------|------------|--------|
-| 機能仕様 | `features.md` | `features/` |
-| 基盤仕様 | `infrastructure.md` | `infrastructure/` |
-| ワークフロー | `workflows.md` | `workflows/` |
-| GitHub ワークフロー | `workflows-github.md` | `workflows/github/` |
-| エージェント | `agentic-agents.md` | `agentic/agents/` |
-| スキル | `agentic-skills.md` | `agentic/skills/` |
-| チーム | `agentic-teams.md` | `agentic/teams/` |
-| Hooks | `agentic-hooks.md` | `agentic/hooks/` |
+共通テンプレートは dotfiles（`~/.claude/docs/templates/`）で管理。一覧は `~/.claude/docs/overview.md` を参照。
 
 ### Git運用（git-flow）
 
-git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](workflows/git-flow.md) を参照。
+git-flow ベースのブランチ戦略を採用。詳細は `~/.claude/docs/specs/workflows/git-flow.md` を参照。
 
 - **常設ブランチ**: `main`（安定版）/ `develop`（開発統合）
 - **作業ブランチ**:
@@ -139,5 +135,5 @@ git-flow ベースのブランチ戦略を採用。詳細は [git-flow.md](workf
   - `sync/main-to-develop-v{X.Y.Z}` — リリース後の main → develop 同期（`develop` → `develop`）
 - コミット: `type(scope): 説明 (#Issue番号)` ※scope は仕様書ファイル名（拡張子なし）
 - PR作成時に `Closes #{Issue番号}` でIssueを紐付け（feature/bugfix: base `develop`, release/hotfix: base `main`）
-- リリース後は sync ブランチ経由で `main` → `develop` に差分反映（詳細は git-flow.md 参照）
+- リリース後は sync ブランチ経由で `main` → `develop` に差分反映（詳細は `~/.claude/docs/specs/workflows/git-flow.md` 参照）
 - マイルストーンでStep単位の進捗管理

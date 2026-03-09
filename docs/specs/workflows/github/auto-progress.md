@@ -307,4 +307,4 @@ flowchart TD
 - [copilot-auto-fix](copilot-auto-fix.md) — Copilot レビュー検知 + 自動修正 + マージの詳細設計
 - [claude-code-actions](claude-code-actions.md) — GitHub Actions 上の Claude Code 統合
 - [check-review-batch スキル](../../agentic/skills/check-review-batch-skill.md) — 自動マージレビューバッチチェック
-- [git-flow](../git-flow.md) — ブランチ戦略・マージ方式の統一ルール
+- `~/.claude/docs/specs/workflows/git-flow.md` — ブランチ戦略・マージ方式の統一ルール
