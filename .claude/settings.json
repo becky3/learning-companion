@@ -2,9 +2,10 @@
   "model": "claude-opus-4-6",
   "permissions": {
     "allow": [
-      "Bash(git *)",
+      "Bash(git:*)",
       "Bash(uv run *)",
       "Bash(gh *)",
+      "Bash(grep:*)",
       "Edit",
       "Write",
       "NotebookEdit"
