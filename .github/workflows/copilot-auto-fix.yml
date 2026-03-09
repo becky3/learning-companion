@@ -2,7 +2,7 @@
 #
 # Copilot レビュー指摘の自動修正 + マージ。
 # Reusable Workflow (shared-workflows) を呼び出す。
-# 設計書: docs/specs/workflows/github/copilot-auto-fix.md
+# 設計書: shared-workflows/docs/specs/copilot-auto-fix.md
 
 name: Copilot Auto Fix
 

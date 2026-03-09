@@ -54,7 +54,7 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 | ディレクトリ | 説明 |
 |---|---|
 | `config/` | `assistant.yaml`（アシスタント性格設定）、`mcp_servers.json`（MCP 接続設定） |
-| `docs/specs/` | 機能仕様書・基盤仕様書・ワークフロー定義（実装の根拠） |
+| `docs/specs/` | 機能仕様書・基盤仕様書・エージェント定義（実装の根拠） |
 | `tests/` | pytest テストコード・フィクスチャ |
 | `scripts/` | 運用・開発用シェルスクリプト |
 | `.claude/` | Claude Code プロジェクト設定 |
@@ -86,11 +86,13 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 
 ### workflows/
 
-| 仕様書 | 対象 |
+ワークフロー仕様書は [shared-workflows リポジトリの docs/specs/](https://github.com/becky3/shared-workflows/tree/main/docs/specs) に移動済み。
+
+| 仕様書（shared-workflows） | 対象 |
 |---|---|
-| `workflows/github/auto-progress.md` | `.github/workflows/` |
-| `workflows/github/copilot-auto-fix.md` | `.github/workflows/` |
-| `workflows/github/claude-code-actions.md` | `.github/workflows/` |
+| `auto-progress.md` | `.github/workflows/` |
+| `copilot-auto-fix.md` | `.github/workflows/` |
+| `claude-code-actions.md` | `.github/workflows/` |
 
 ### agentic/
 
