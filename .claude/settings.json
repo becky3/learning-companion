@@ -4,6 +4,7 @@
       "Bash(git *)",
       "Bash(uv run *)",
       "Bash(gh *)",
+      "Bash(grep *)",
       "Edit",
       "Write",
       "NotebookEdit"
