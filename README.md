@@ -140,8 +140,6 @@ uv run mypy src
 ### 全体仕様
 
 - [全体仕様概要](docs/specs/overview.md)
-- 仕様書スタイルガイド（`~/.claude/docs/style-guide.md`）
-
 ### 機能仕様（features）
 
 - [チャット応答](docs/specs/features/chat-response.md)
@@ -162,8 +160,6 @@ uv run mypy src
 
 ### ワークフロー（workflows）
 
-- git-flow ブランチ運用（`~/.claude/docs/specs/workflows/git-flow.md`）
-- PR body テンプレート（`~/.claude/docs/specs/workflows/pr-body-template.md`）
 - [自動進行管理](docs/specs/workflows/github/auto-progress.md)
 - [Copilot 自動修正ワークフロー](docs/specs/workflows/github/copilot-auto-fix.md)
 - [Claude Code Actions](docs/specs/workflows/github/claude-code-actions.md)
