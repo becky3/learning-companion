@@ -118,6 +118,10 @@ ONLINE_LLM_PROVIDER=openai
 | ユーザー向け機能 | `features/` | ユーザーが直接触る・意識するプロダクト機能 |
 | 基盤・ツール | `infrastructure/` | ユーザーが直接意識しない裏側の仕組み、開発ツール |
 
+### ワークフロー仕様書
+
+GitHub Actions ワークフローの仕様書（auto-progress, copilot-auto-fix, claude-code-actions）は shared-workflows リポジトリの `docs/specs/` で管理する。
+
 ### 仕様書テンプレート
 
 共通テンプレートは dotfiles（`~/.claude/docs/templates/`）で管理。一覧は `~/.claude/docs/overview.md` を参照。

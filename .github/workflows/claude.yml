@@ -1,3 +1,9 @@
+# Claude Code — Caller
+#
+# @claude メンション応答 + auto-implement 自動実装。
+# Reusable Workflow (shared-workflows) を呼び出す。
+# 設計書: shared-workflows/docs/specs/claude-code-actions.md
+
 name: Claude Code
 
 permissions:

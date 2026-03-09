@@ -2,7 +2,7 @@
 #
 # マージ後の自動処理（review-batch Issue 更新）。
 # Reusable Workflow (shared-workflows) を呼び出す。
-# 設計書: docs/specs/workflows/github/auto-progress.md
+# 設計書: shared-workflows/docs/specs/auto-progress.md
 
 name: Post Merge
 
