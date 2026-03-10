@@ -397,6 +397,45 @@ async def test_rag_tool_not_found() -> None:
     assert "利用できません" in adapter.sent_messages[0][0]
 
 
+async def test_rag_delete_command() -> None:
+    """rag delete コマンドで rag_delete ツールが呼ばれる."""
+    mcp_manager = AsyncMock()
+    mcp_manager.call_tool.return_value = "削除しました"
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag delete https://example.com/page"))
+
+    assert len(adapter.sent_messages) == 1
+    assert "削除しました" in adapter.sent_messages[0][0]
+    mcp_manager.call_tool.assert_called_once_with(
+        "rag_delete", {"url": "https://example.com/page"}
+    )
+
+
+async def test_rag_status_generic_error() -> None:
+    """rag status で予期しない例外が発生した場合のエラーメッセージ."""
+    mcp_manager = AsyncMock()
+    mcp_manager.call_tool.side_effect = RuntimeError("connection failed")
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag status"))
+
+    assert len(adapter.sent_messages) == 1
+    assert "エラー" in adapter.sent_messages[0][0]
+
+
+async def test_rag_add_missing_url_shows_error() -> None:
+    """rag add で URL を省略した場合にエラーメッセージが返る."""
+    mcp_manager = AsyncMock()
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag add"))
+
+    assert len(adapter.sent_messages) == 1
+    assert "エラー" in adapter.sent_messages[0][0]
+    mcp_manager.call_tool.assert_not_called()
+
+
 async def test_rag_without_mcp_falls_through_to_chat() -> None:
     """MCP マネージャーが無い場合は rag がチャットにフォールスルーする."""
     chat_service = AsyncMock()

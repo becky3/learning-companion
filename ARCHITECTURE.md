@@ -48,7 +48,7 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 |---|---|
 | `mcp_servers/weather/` | 天気予報サーバー（気象庁 API） |
 
-RAG ナレッジサーバーは rag-knowledge リポジトリに移行済み。`config/mcp_servers.json` で外部リポの RAG サーバーを stdio 起動する。
+RAG ナレッジサーバーは rag-knowledge リポジトリに移行済み。`config/mcp_servers.json` で外部リポの RAG サーバーに HTTP で接続する。
 
 ## 補助ディレクトリ
 
