@@ -46,8 +46,9 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 
 | ディレクトリ | 責務 |
 |---|---|
-| `mcp_servers/rag/` | RAG ナレッジサーバー（Web クロール、チャンキング、ベクトル検索、BM25 検索） |
 | `mcp_servers/weather/` | 天気予報サーバー（気象庁 API） |
+
+RAG ナレッジサーバーは rag-knowledge リポジトリに移行済み。`config/mcp_servers.json` で外部リポの RAG サーバーを stdio 起動する。
 
 ## 補助ディレクトリ
 
@@ -81,7 +82,7 @@ MCP サーバーは独立プロセスとして動作し、MCP プロトコル経
 | 仕様書 | 実装モジュール |
 |---|---|
 | `infrastructure/mcp-integration.md` | `src/mcp_bridge/`, `mcp_servers/` |
-| `infrastructure/rag-knowledge.md` | `mcp_servers/rag/` |
+| `infrastructure/rag-knowledge.md` | 外部リポジトリ（rag-knowledge） |
 | `infrastructure/bot-process-guard.md` | `src/process_guard.py`, `src/bot_manager.py` |
 
 ### workflows/

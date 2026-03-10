@@ -251,36 +251,6 @@ async def test_chat_error_handling() -> None:
     assert "エラー" in adapter.sent_messages[0][0]
 
 
-async def test_rag_unknown_subcommand() -> None:
-    """rag の不明なサブコマンドでヘルプが表示される."""
-    from unittest.mock import MagicMock
-
-    mcp_manager = MagicMock()
-    adapter, router = _make_router(mcp_manager=mcp_manager)
-
-    await router.process_message(_make_msg("rag"))
-
-    assert len(adapter.sent_messages) == 1
-    assert "使用方法" in adapter.sent_messages[0][0]
-
-
-async def test_rag_status_command() -> None:
-    """rag status コマンド."""
-    from unittest.mock import MagicMock
-
-    mcp_manager = MagicMock()
-    mcp_manager.call_tool = AsyncMock(
-        return_value="ナレッジベース統計:\n  総チャンク数: 100\n  ソースURL数: 5"
-    )
-    adapter, router = _make_router(mcp_manager=mcp_manager)
-
-    await router.process_message(_make_msg("rag status"))
-
-    assert len(adapter.sent_messages) == 1
-    assert "100" in adapter.sent_messages[0][0]
-    assert "5" in adapter.sent_messages[0][0]
-
-
 async def test_feed_export_command() -> None:
     """feed export コマンドでファイルアップロードが呼ばれる."""
     collector = AsyncMock()

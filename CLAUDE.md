@@ -12,7 +12,7 @@
   - `CHAT_LLM_PROVIDER` / `PROFILER_LLM_PROVIDER` / `TOPIC_LLM_PROVIDER` / `SUMMARIZER_LLM_PROVIDER`
   - 各設定は `"local"` または `"online"` を指定（デフォルト: `"local"`）
 - `MCP_ENABLED` — MCP機能の有効/無効（デフォルト: `false`）。MCPサーバー（`mcp_servers/` 配下）は `src/` のモジュールを import しないこと
-- `RAG_ENABLED` — RAG機能の有効/無効（デフォルト: `false`）。詳細は `docs/specs/infrastructure/rag-knowledge.md` 参照
+- RAG機能は rag-knowledge リポジトリに移行済み。MCP サーバーとして `config/mcp_servers.json` で接続設定する
 
 ## 自動進行ルール（auto-progress）
 

@@ -19,7 +19,6 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from src.mcp_bridge.client_manager import MCPToolNotFoundError
 from src.messaging.port import IncomingMessage, MessagingPort
 from src.services.chat import ChatService
 from src.services.topic_recommender import TopicRecommender
@@ -38,7 +37,6 @@ _PROFILE_KEYWORDS = ("プロファイル", "プロフィール", "profile")
 _TOPIC_KEYWORDS = ("おすすめ", "トピック", "何を学ぶ", "何学ぶ", "学習提案", "recommend")
 _DELIVER_KEYWORDS = ("deliver",)
 _FEED_KEYWORDS = ("feed",)
-_RAG_KEYWORDS = ("rag",)
 _STATUS_KEYWORDS = ("status", "info")
 
 
@@ -99,31 +97,6 @@ def _build_status_message(
         lines.append(f"起動: {start_str}（稼働 {uptime_str}）")
 
     return "\n".join(lines)
-
-
-def _parse_rag_command(text: str) -> tuple[str, str, str, str]:
-    """ragコマンドを解析する."""
-    tokens = text.split()
-    if len(tokens) < 2:
-        return ("", "", "", "")
-
-    subcommand = tokens[1].lower()
-    url = ""
-    pattern = ""
-    raw_url_token = ""
-
-    if len(tokens) >= 3:
-        url_token = tokens[2].strip("<>")
-        if "|" in url_token:
-            url_token = url_token.split("|")[0]
-        raw_url_token = url_token
-        if url_token.startswith("http://") or url_token.startswith("https://"):
-            url = url_token
-
-    if len(tokens) >= 4:
-        pattern = " ".join(tokens[3:])
-
-    return (subcommand, url, pattern, raw_url_token)
 
 
 # --- Feed ハンドラ群 ---
@@ -552,13 +525,6 @@ class MessageRouter:
             await self._handle_feed_command(msg, cleaned_text, lower_text)
             return
 
-        # ragコマンド (F9)
-        if self._mcp_manager is not None and any(
-            re.match(rf"^{re.escape(kw)}\b", lower_text) for kw in _RAG_KEYWORDS
-        ):
-            await self._handle_rag_command(msg, cleaned_text)
-            return
-
         # 配信テストキーワード (F2)
         if (
             self._collector is not None
@@ -793,110 +759,3 @@ class MessageRouter:
                 "配信中にエラーが発生しました。", thread_id, channel
             )
 
-    async def _handle_rag_command(
-        self, msg: IncomingMessage, cleaned_text: str
-    ) -> None:
-        """ragコマンドのルーティング（MCP経由）."""
-        assert self._mcp_manager is not None
-        thread_id = msg.thread_id
-        channel = msg.channel
-
-        subcommand, url, pattern, raw_url_token = _parse_rag_command(cleaned_text)
-
-        if subcommand == "crawl":
-            await self._handle_rag_crawl_mcp(
-                url, pattern, raw_url_token, thread_id, channel,
-            )
-            return
-        elif subcommand == "add":
-            response_text = await self._call_rag_url_tool(
-                "rag_add", url, raw_url_token,
-                usage_hint="例: `@bot rag add https://example.com/page`",
-            )
-        elif subcommand == "status":
-            try:
-                response_text = await self._mcp_manager.call_tool("rag_stats", {})
-            except MCPToolNotFoundError:
-                response_text = "エラー: RAG統計ツールが利用できません。"
-            except Exception:
-                logger.exception("Failed to call rag_stats tool")
-                response_text = "エラー: 統計情報の取得中にエラーが発生しました。"
-        elif subcommand == "delete":
-            response_text = await self._call_rag_url_tool(
-                "rag_delete", url, raw_url_token,
-                usage_hint="例: `@bot rag delete https://example.com/page`",
-            )
-        else:
-            response_text = (
-                "使用方法:\n"
-                "• `@bot rag crawl <URL> [パターン]` — リンク集ページからクロール＆取り込み\n"
-                "• `@bot rag add <URL>` — 単一ページ取り込み\n"
-                "• `@bot rag status` — ナレッジベース統計表示\n"
-                "• `@bot rag delete <URL>` — ソースURL指定で削除"
-            )
-
-        if response_text:
-            await self._messaging.send_message(response_text, thread_id, channel)
-
-    async def _handle_rag_crawl_mcp(
-        self,
-        url: str,
-        pattern: str,
-        raw_url_token: str,
-        thread_id: str,
-        channel: str,
-    ) -> None:
-        """RAGクロール処理（MCP経由）."""
-        assert self._mcp_manager is not None
-        if not url:
-            if raw_url_token:
-                error = f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
-            else:
-                error = "エラー: URLを指定してください。\n例: `@bot rag crawl https://example.com/docs [パターン]`"
-            await self._messaging.send_message(error, thread_id, channel)
-            return
-
-        # 開始メッセージ送信
-        try:
-            await self._messaging.send_message(
-                "クロールを開始しました... (リンク収集中)",
-                thread_id, channel,
-            )
-        except Exception:
-            logger.debug("Failed to post start message", exc_info=True)
-
-        # MCP ツール呼び出し
-        try:
-            result = await self._mcp_manager.call_tool(
-                "rag_crawl", {"url": url, "pattern": pattern},
-            )
-            response_text = result if result.startswith("エラー:") else f"└─ {result}"
-        except MCPToolNotFoundError:
-            response_text = "エラー: RAGクロールツールが利用できません。"
-        except Exception:
-            logger.exception("Failed to call rag_crawl tool")
-            response_text = "エラー: クロール中にエラーが発生しました。"
-
-        await self._messaging.send_message(response_text, thread_id, channel)
-
-    async def _call_rag_url_tool(
-        self,
-        tool_name: str,
-        url: str,
-        raw_url_token: str,
-        usage_hint: str,
-    ) -> str:
-        """URL必須のRAGツールを呼び出す共通ヘルパー."""
-        assert self._mcp_manager is not None
-        if not url:
-            if raw_url_token:
-                return f"エラー: 無効なURLスキームです: {raw_url_token}\nhttp:// または https:// で始まるURLを指定してください。"
-            return f"エラー: URLを指定してください。\n{usage_hint}"
-
-        try:
-            return await self._mcp_manager.call_tool(tool_name, {"url": url})
-        except MCPToolNotFoundError:
-            return f"エラー: ツール '{tool_name}' が利用できません。"
-        except Exception:
-            logger.exception("Failed to call %s tool", tool_name)
-            return f"エラー: ツール '{tool_name}' の実行中にエラーが発生しました。"

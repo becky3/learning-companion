@@ -80,4 +80,4 @@ graph TD
 - [MCP 統合](../infrastructure/mcp-integration.md) — ツール呼び出しループ・自動コンテキスト注入
 - [特定チャンネル自動返信](auto-reply.md) — 自動返信チャンネルとの統合
 - [Slack mrkdwn 形式対応](slack-formatting.md) — フォーマット指示の構成・適用
-- [RAG ナレッジ](../infrastructure/rag-knowledge.md) — RAG 検索・ソース表示
+- [RAG ナレッジ](../infrastructure/rag-knowledge.md) — RAG 基盤（外部リポジトリに移行済み）
