@@ -23,8 +23,8 @@ async def db_session_factory():  # type: ignore[no-untyped-def]
     await engine.dispose()
 
 
-async def test_ac2_conversation_history_maintained(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC2: 同一スレッド内の会話履歴を保持し文脈を踏まえた応答ができる."""
+async def test_conversation_history_maintained(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """同一スレッド内の会話履歴を保持し文脈を踏まえた応答ができる."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="回答1")
 
@@ -43,8 +43,8 @@ async def test_ac2_conversation_history_maintained(db_session_factory) -> None: 
     assert call_args[-1].content == "質問2"
 
 
-async def test_ac3_system_prompt_reflected(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC3: assistant.yamlの性格設定がシステムプロンプトに反映される."""
+async def test_system_prompt_reflected(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """性格設定がシステムプロンプトに反映される."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
@@ -57,8 +57,8 @@ async def test_ac3_system_prompt_reflected(db_session_factory) -> None:  # type:
     assert messages[0].content == "優しい口調で"
 
 
-async def test_ac5_uses_online_llm(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC5: オンラインLLMで応答を生成する."""
+async def test_llm_response_generated(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """LLMで応答を生成する."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="LLM応答")
 
@@ -69,8 +69,8 @@ async def test_ac5_uses_online_llm(db_session_factory) -> None:  # type: ignore[
     llm.complete.assert_called_once()
 
 
-async def test_ac6_conversation_saved_to_db(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC6: 会話履歴をDBに保存する."""
+async def test_conversation_saved_to_db(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """会話履歴をDBに保存する."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="保存テスト")
 
@@ -89,17 +89,17 @@ async def test_ac6_conversation_saved_to_db(db_session_factory) -> None:  # type
         assert rows[1].content == "保存テスト"
 
 
-async def test_ac4_non_thread_uses_db_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """F8-AC4: スレッド外ではDB履歴を使用する."""
+async def test_non_thread_uses_db_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """スレッド外ではDB履歴を使用する."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="回答")
 
-    thread_history = AsyncMock()
+    thread_history_fetcher = AsyncMock()
 
     service = ChatService(
         llm=llm,
         session_factory=db_session_factory,
-        thread_history_service=thread_history,
+        thread_history_fetcher=thread_history_fetcher,
     )
 
     # is_in_thread=False → DB フォールバック
@@ -108,22 +108,22 @@ async def test_ac4_non_thread_uses_db_history(db_session_factory) -> None:  # ty
         is_in_thread=False, channel="C1", current_ts="1000.0",
     )
 
-    # ThreadHistoryService は呼ばれない
-    thread_history.fetch_thread_messages.assert_not_called()
+    # thread_history_fetcher は呼ばれない
+    thread_history_fetcher.assert_not_called()
 
 
-async def test_ac5_fallback_to_db_on_api_failure(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """F8-AC5: Slack API 失敗時に DB フォールバック."""
+async def test_fallback_to_db_on_api_failure(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """Slack API 失敗時に DB フォールバック."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="fallback回答")
 
-    thread_history = AsyncMock()
-    thread_history.fetch_thread_messages.return_value = None  # API 失敗
+    thread_history_fetcher = AsyncMock()
+    thread_history_fetcher.return_value = None  # API 失敗
 
     service = ChatService(
         llm=llm,
         session_factory=db_session_factory,
-        thread_history_service=thread_history,
+        thread_history_fetcher=thread_history_fetcher,
     )
 
     result = await service.respond(
@@ -132,23 +132,23 @@ async def test_ac5_fallback_to_db_on_api_failure(db_session_factory) -> None:  #
     )
 
     assert result == "fallback回答"
-    thread_history.fetch_thread_messages.assert_called_once()
+    thread_history_fetcher.assert_called_once()
 
 
-async def test_ac6_auto_reply_channel_thread_uses_slack_api_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """F8-AC6: 自動返信チャンネルのスレッド内でもスレッド履歴が使用される."""
+async def test_auto_reply_channel_thread_uses_slack_api_history(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """自動返信チャンネルのスレッド内でもスレッド履歴が使用される."""
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="thread回答")
 
-    thread_history = AsyncMock()
-    thread_history.fetch_thread_messages.return_value = [
+    thread_history_fetcher = AsyncMock()
+    thread_history_fetcher.return_value = [
         Message(role="user", content="<@U1>: previous msg"),
     ]
 
     service = ChatService(
         llm=llm,
         session_factory=db_session_factory,
-        thread_history_service=thread_history,
+        thread_history_fetcher=thread_history_fetcher,
     )
 
     result = await service.respond(
@@ -157,8 +157,8 @@ async def test_ac6_auto_reply_channel_thread_uses_slack_api_history(db_session_f
     )
 
     assert result == "thread回答"
-    thread_history.fetch_thread_messages.assert_called_once_with(
-        channel="C_AUTO", thread_ts="parent_ts", current_ts="1001.0",
+    thread_history_fetcher.assert_called_once_with(
+        "C_AUTO", "parent_ts", "1001.0",
     )
     # LLM に渡されたメッセージにスレッド履歴が含まれる
     call_messages = llm.complete.call_args[0][0]
@@ -170,8 +170,8 @@ async def test_thread_uses_slack_api_history(db_session_factory) -> None:  # typ
     llm = AsyncMock()
     llm.complete.return_value = LLMResponse(content="応答")
 
-    thread_history = AsyncMock()
-    thread_history.fetch_thread_messages.return_value = [
+    thread_history_fetcher = AsyncMock()
+    thread_history_fetcher.return_value = [
         Message(role="user", content="<@U1>: msg1"),
         Message(role="assistant", content="bot reply"),
     ]
@@ -179,7 +179,7 @@ async def test_thread_uses_slack_api_history(db_session_factory) -> None:  # typ
     service = ChatService(
         llm=llm,
         session_factory=db_session_factory,
-        thread_history_service=thread_history,
+        thread_history_fetcher=thread_history_fetcher,
     )
 
     await service.respond(

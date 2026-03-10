@@ -10,7 +10,7 @@ argument-hint: "[issue-number]"
 
 `auto:review-batch` ラベル付きIssue（自動マージレビューIssue）に記録されたPRを一括チェックし、各PRの対応概要・問題点の有無・動作確認が必要な事項をレポートする。
 
-仕様: docs/specs/check-review-batch-skill.md
+仕様: docs/specs/agentic/skills/check-review-batch-skill.md
 
 ## 手順
 

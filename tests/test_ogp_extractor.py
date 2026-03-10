@@ -1,4 +1,4 @@
-"""OGP画像URL抽出のテスト (AC10)."""
+"""OGP画像URL抽出のテスト."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import pytest
 from src.services.ogp_extractor import OgpExtractor
 
 
-async def test_ac10_extract_from_html_og_image() -> None:
-    """AC10: HTMLのog:imageメタタグからURLを取得できる."""
+async def test_extract_image_url_from_og_image_meta_tag() -> None:
+    """HTMLのog:imageメタタグからURLを取得できる."""
     html = """
     <html><head>
     <meta property="og:image" content="https://example.com/img.png">
@@ -36,8 +36,8 @@ async def test_ac10_extract_from_html_og_image() -> None:
     assert result == "https://example.com/img.png"
 
 
-async def test_ac10_extract_from_html_og_image_reversed_attrs() -> None:
-    """AC10: content属性がproperty属性の前にあるケースでも取得できる."""
+async def test_extract_image_url_from_og_image_with_reversed_attributes() -> None:
+    """content属性がproperty属性の前にあるケースでも取得できる."""
     html = '<html><head><meta content="https://img.com/a.jpg" property="og:image"></head></html>'
     extractor = OgpExtractor()
 
@@ -58,8 +58,8 @@ async def test_ac10_extract_from_html_og_image_reversed_attrs() -> None:
     assert result == "https://img.com/a.jpg"
 
 
-async def test_ac10_extract_from_rss_media_content() -> None:
-    """AC10: RSSエントリのmedia_contentから画像URLを取得できる."""
+async def test_extract_image_url_from_rss_media_content() -> None:
+    """RSSエントリのmedia_contentから画像URLを取得できる."""
     extractor = OgpExtractor()
     entry = {
         "media_content": [{"url": "https://example.com/media.jpg", "type": "image/jpeg"}],
@@ -68,8 +68,8 @@ async def test_ac10_extract_from_rss_media_content() -> None:
     assert result == "https://example.com/media.jpg"
 
 
-async def test_ac10_extract_from_rss_enclosure() -> None:
-    """AC10: RSSエントリのenclosureから画像URLを取得できる."""
+async def test_extract_image_url_from_rss_enclosure() -> None:
+    """RSSエントリのenclosureから画像URLを取得できる."""
     extractor = OgpExtractor()
     entry = {
         "enclosures": [{"href": "https://example.com/enc.png", "type": "image/png"}],
@@ -78,8 +78,8 @@ async def test_ac10_extract_from_rss_enclosure() -> None:
     assert result == "https://example.com/enc.png"
 
 
-async def test_ac10_extract_from_media_thumbnail() -> None:
-    """AC10: RSSエントリのmedia_thumbnailから画像URLを取得できる (Reddit等)."""
+async def test_extract_image_url_from_rss_media_thumbnail() -> None:
+    """RSSエントリのmedia_thumbnailから画像URLを取得できる (Reddit等)."""
     extractor = OgpExtractor()
     entry = {
         "media_thumbnail": [{"url": "https://reddit.com/thumb.jpg"}],
@@ -88,8 +88,8 @@ async def test_ac10_extract_from_media_thumbnail() -> None:
     assert result == "https://reddit.com/thumb.jpg"
 
 
-async def test_ac10_extract_from_summary_img_tag() -> None:
-    """AC10: RSSエントリのsummary内のimgタグから画像URLを取得できる (Medium等)."""
+async def test_extract_image_url_from_rss_summary_img_tag() -> None:
+    """RSSエントリのsummary内のimgタグから画像URLを取得できる (Medium等)."""
     extractor = OgpExtractor()
     entry = {
         "summary": '<p>Text</p><img src="https://cdn-images-1.medium.com/max/2600/img.jpg" />',
@@ -98,8 +98,8 @@ async def test_ac10_extract_from_summary_img_tag() -> None:
     assert result == "https://cdn-images-1.medium.com/max/2600/img.jpg"
 
 
-async def test_ac10_returns_none_on_failure() -> None:
-    """AC10: 取得失敗時はNoneを返す."""
+async def test_extract_image_url_returns_none_on_exception() -> None:
+    """取得失敗時はNoneを返す."""
     extractor = OgpExtractor()
 
     with patch("src.services.ogp_extractor.aiohttp.ClientSession", side_effect=Exception("timeout")):
@@ -108,8 +108,8 @@ async def test_ac10_returns_none_on_failure() -> None:
     assert result is None
 
 
-async def test_ac10_returns_none_on_non_200() -> None:
-    """AC10: HTTP 200以外の場合はNoneを返す."""
+async def test_extract_image_url_returns_none_on_non_200_status() -> None:
+    """HTTP 200以外の場合はNoneを返す."""
     extractor = OgpExtractor()
 
     mock_resp = AsyncMock()
@@ -129,10 +129,10 @@ async def test_ac10_returns_none_on_non_200() -> None:
 
 
 @pytest.mark.parametrize("status_code", [301, 302, 303, 307, 308])
-async def test_ac10_returns_none_on_redirect(
+async def test_extract_image_url_returns_none_on_redirect_for_ssrf_protection(
     status_code: int, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """AC10: リダイレクト応答時はSSRF対策としてNoneを返しwarningログを出す."""
+    """リダイレクト応答時はSSRF対策としてNoneを返しwarningログを出す."""
     extractor = OgpExtractor()
 
     mock_resp = AsyncMock()

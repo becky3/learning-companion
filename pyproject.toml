@@ -18,12 +18,6 @@ dependencies = [
     "pyyaml>=6.0,<7",
     "mcp>=1.0,<2",
     "certifi>=2026.1.4",
-    "chromadb>=0.5,<1",
-    "beautifulsoup4>=4.12,<5",
-    "charset-normalizer>=3.0,<4",
-    "bm25s>=0.3,<1",
-    "fugashi>=1.3,<2",
-    "unidic-lite>=1.0,<2",
     "tzdata>=2024.1",
 ]
 
@@ -39,19 +33,12 @@ target-version = "py311"
 line-length = 100
 
 [tool.ruff.lint.per-file-ignores]
-# main.pyはChromaDBテレメトリ抑制のためimport前にログ設定が必要
+# 遅延 import のため
 "src/main.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
-untyped_calls_exclude = ["fugashi", "bm25s"]
-
-[[tool.mypy.overrides]]
-module = ["fugashi", "fugashi.*", "bm25s", "bm25s.*"]
-ignore_missing_imports = true
-follow_imports = "skip"
-
 [[tool.mypy.overrides]]
 module = ["feedparser", "feedparser.*"]
 ignore_missing_imports = true

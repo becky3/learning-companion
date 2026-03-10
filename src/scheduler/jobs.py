@@ -1,5 +1,5 @@
 """配信ジョブ・フォーマット
-仕様: docs/specs/f2-feed-collection.md
+仕様: docs/specs/features/feed-management.md
 """
 
 from __future__ import annotations
@@ -7,8 +7,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from zoneinfo import ZoneInfo
+
+if TYPE_CHECKING:
+    from slack_sdk.web.async_client import AsyncWebClient
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -158,14 +161,14 @@ def format_daily_digest(
 
 
 async def post_article_to_thread(
-    slack_client: object,
+    slack_client: AsyncWebClient,
     channel_id: str,
     thread_ts: str,
     blocks: list[dict[str, Any]],
 ) -> None:
     """1記事分のブロックをスレッドに投稿する（画像エラー時リトライ付き）."""
     try:
-        await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+        await slack_client.chat_postMessage(
             channel=channel_id,
             text="記事",
             blocks=blocks,
@@ -187,7 +190,7 @@ async def post_article_to_thread(
                 "Failed to post article with images, retrying without: %s",
                 error_msg,
             )
-            await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+            await slack_client.chat_postMessage(
                 channel=channel_id,
                 text="記事",
                 blocks=blocks_without_images,
@@ -202,7 +205,7 @@ async def post_article_to_thread(
 async def _deliver_feed_to_slack(
     articles: list[Article],
     feed: Feed,
-    slack_client: object,
+    slack_client: AsyncWebClient,
     channel_id: str,
     max_articles_per_feed: int,
     layout: Literal["vertical", "horizontal"],
@@ -215,7 +218,7 @@ async def _deliver_feed_to_slack(
         layout=layout,
     )
     for feed_id, (parent_blocks, article_blocks_list) in digest.items():
-        parent_result = await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+        parent_result = await slack_client.chat_postMessage(
             channel=channel_id,
             text=f"📰 {feed.name}",
             blocks=parent_blocks,
@@ -232,12 +235,12 @@ async def _deliver_feed_to_slack(
 
 
 async def _post_header(
-    slack_client: object,
+    slack_client: AsyncWebClient,
     channel_id: str,
     header_text: str,
 ) -> None:
     """ヘッダーメッセージを投稿する."""
-    await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+    await slack_client.chat_postMessage(
         channel=channel_id,
         text=header_text,
         blocks=[
@@ -252,9 +255,9 @@ async def _post_header(
     )
 
 
-async def _post_footer(slack_client: object, channel_id: str) -> None:
+async def _post_footer(slack_client: AsyncWebClient, channel_id: str) -> None:
     """フッターメッセージを投稿する."""
-    await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+    await slack_client.chat_postMessage(
         channel=channel_id,
         text=":bulb: 気になる記事があれば、スレッドで聞いてね！",
         blocks=[
@@ -272,7 +275,7 @@ async def _post_footer(slack_client: object, channel_id: str) -> None:
 async def daily_collect_and_deliver(
     collector: FeedCollector,
     session_factory: async_sessionmaker[AsyncSession],
-    slack_client: object,
+    slack_client: AsyncWebClient,
     channel_id: str,
     max_articles_per_feed: int = 10,
     layout: Literal["vertical", "horizontal"] = "horizontal",
@@ -320,7 +323,7 @@ async def daily_collect_and_deliver(
                 # 親メッセージ（フィード初回のみ）
                 if parent_ts is None:
                     parent_blocks = _build_parent_message(feed.name)
-                    parent_result = await slack_client.chat_postMessage(  # type: ignore[attr-defined]
+                    parent_result = await slack_client.chat_postMessage(
                         channel=channel_id,
                         text=f"📰 {feed.name}",
                         blocks=parent_blocks,
@@ -397,7 +400,7 @@ async def daily_collect_and_deliver(
 
 async def feed_test_deliver(
     session_factory: async_sessionmaker[AsyncSession],
-    slack_client: object,
+    slack_client: AsyncWebClient,
     channel_id: str,
     layout: Literal["vertical", "horizontal"] = "horizontal",
     max_feeds: int = 3,
@@ -406,7 +409,7 @@ async def feed_test_deliver(
     """feed test 用配信（要約スキップ・配信済み含む・上限3フィード・各5記事）.
 
     本番と同じ _deliver_feed_to_slack を使用し、収集ステップのみスキップする。
-    仕様: docs/specs/f2-feed-collection.md (AC15)
+    仕様: docs/specs/features/feed-management.md
     """
     async with session_factory() as session:
         feed_result = await session.execute(

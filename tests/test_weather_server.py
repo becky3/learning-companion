@@ -1,6 +1,6 @@
-"""天気予報MCPサーバーのテスト (Issue #83, AC1-AC3).
+"""天気予報MCPサーバーのテスト.
 
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 気象庁API（非公式）を使用。
 """
 
@@ -118,7 +118,7 @@ def _reset_office_map() -> None:
     """テスト間で _office_map をリセットする."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     mod._office_map.clear()
 
 
@@ -129,11 +129,11 @@ def _clear_cache() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac1_weather_server_exposes_tool() -> None:
-    """AC1: 天気予報MCPサーバーが起動し、get_weather ツールを公開すること."""
+async def test_weather_server_exposes_tool() -> None:
+    """天気予報MCPサーバーが起動し、get_weather ツールを公開すること."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     server = mod.mcp
 
     tools = await server.list_tools()
@@ -142,11 +142,11 @@ async def test_ac1_weather_server_exposes_tool() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac2_get_weather_returns_forecast_today() -> None:
-    """AC2: get_weather ツールが今日の天気予報テキストを返すこと."""
+async def test_get_weather_returns_forecast_today() -> None:
+    """get_weather ツールが今日の天気予報テキストを返すこと."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     mock_urlopen = _mock_urlopen_factory()
@@ -161,11 +161,11 @@ async def test_ac2_get_weather_returns_forecast_today() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac2_get_weather_returns_forecast_tomorrow() -> None:
-    """AC2: get_weather ツールが明日の天気予報テキストを返すこと."""
+async def test_get_weather_returns_forecast_tomorrow() -> None:
+    """get_weather ツールが明日の天気予報テキストを返すこと."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     mock_urlopen = _mock_urlopen_factory()
@@ -178,11 +178,11 @@ async def test_ac2_get_weather_returns_forecast_tomorrow() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac2_get_weather_returns_week_forecast() -> None:
-    """AC2: get_weather ツールが週間予報テキストを返すこと."""
+async def test_get_weather_returns_week_forecast() -> None:
+    """get_weather ツールが週間予報テキストを返すこと."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     mock_urlopen = _mock_urlopen_factory()
@@ -197,11 +197,11 @@ async def test_ac2_get_weather_returns_week_forecast() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac3_jma_api_called_correctly() -> None:
-    """AC3: 気象庁APIの正しいエンドポイントが呼ばれること."""
+async def test_jma_api_called_correctly() -> None:
+    """気象庁APIの正しいエンドポイントが呼ばれること."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     mock_urlopen = _mock_urlopen_factory()
@@ -224,11 +224,11 @@ async def test_ac3_jma_api_called_correctly() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac3_location_not_found() -> None:
-    """AC3: 存在しない地域名の場合、エラーメッセージを返すこと."""
+async def test_location_not_found() -> None:
+    """存在しない地域名の場合、エラーメッセージを返すこと."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     mock_urlopen = _mock_urlopen_factory()
@@ -244,7 +244,7 @@ async def test_city_name_fallback() -> None:
     """主要都市名（札幌など）でフォールバック検索が機能すること."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     mock_urlopen = _mock_urlopen_factory()
@@ -262,7 +262,7 @@ async def test_umbrella_recommendation_rain() -> None:
     """天気に「雨」が含まれる場合、傘の推奨メッセージが出ること."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     rainy_forecast = _make_forecast_response(
@@ -282,7 +282,7 @@ async def test_invalid_date_parameter() -> None:
     """無効な日付パラメータの場合、エラーメッセージを返すこと."""
     from importlib import import_module
 
-    mod = import_module("mcp-servers.weather.server")
+    mod = import_module("mcp_servers.weather.server")
     get_weather = mod.get_weather
 
     mock_urlopen = _mock_urlopen_factory()

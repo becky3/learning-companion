@@ -1,5 +1,5 @@
 """Slack Bolt AsyncApp 初期化
-仕様: docs/specs/f1-chat.md
+仕様: docs/specs/features/chat-response.md
 """
 
 from __future__ import annotations

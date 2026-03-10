@@ -10,8 +10,8 @@ from src.llm.factory import create_local_provider, create_online_provider, get_p
 from src.llm.lmstudio_provider import LMStudioProvider
 
 
-def test_ac1_llm_provider_abc_has_complete() -> None:
-    """AC1: LLMProvider ABCに async complete(messages) -> LLMResponse を定義."""
+def test_llm_provider_abc_has_complete() -> None:
+    """LLMProvider ABCに async complete(messages) -> LLMResponse を定義."""
     assert hasattr(LLMProvider, "complete")
     assert hasattr(LLMProvider, "is_available")
 
@@ -20,8 +20,8 @@ def test_ac1_llm_provider_abc_has_complete() -> None:
         LLMProvider()  # type: ignore[abstract]
 
 
-def test_ac2_three_providers_exist() -> None:
-    """AC2: OpenAI/Anthropic/LM Studio の3プロバイダーが存在する."""
+def test_three_providers_exist() -> None:
+    """OpenAI/Anthropic/LM Studio の3プロバイダーが存在する."""
     from src.llm.anthropic_provider import AnthropicProvider
     from src.llm.openai_provider import OpenAIProvider
 
@@ -30,14 +30,22 @@ def test_ac2_three_providers_exist() -> None:
     assert issubclass(LMStudioProvider, LLMProvider)
 
 
-def test_ac3_lmstudio_uses_openai_sdk() -> None:
-    """AC3: LM StudioはOpenAI SDKでbase_url変更で対応."""
+def test_lmstudio_uses_openai_sdk() -> None:
+    """LM StudioはOpenAI SDKでbase_url変更で対応."""
     provider = LMStudioProvider(base_url=DEFAULT_LMSTUDIO_BASE_URL)
     assert provider._client.base_url.host == "localhost"
+    # base_url にホストのみ指定しても /v1 がコード側で付加される
+    assert provider._client.base_url.path == "/v1/"
 
 
-def test_ac4_factory_creates_openai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC4: ファクトリで設定値からOpenAIプロバイダーを生成できる."""
+def test_lmstudio_base_url_with_v1_suffix_no_duplication() -> None:
+    """base_url に /v1 が既に含まれている場合、/v1/v1 にならないこと."""
+    provider = LMStudioProvider(base_url="http://localhost:1234/v1")
+    assert provider._client.base_url.path == "/v1/"
+
+
+def test_factory_creates_openai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ファクトリで設定値からOpenAIプロバイダーを生成できる."""
     monkeypatch.setenv("ONLINE_LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     settings = Settings()
@@ -46,8 +54,8 @@ def test_ac4_factory_creates_openai_provider(monkeypatch: pytest.MonkeyPatch) ->
     assert isinstance(provider, OpenAIProvider)
 
 
-def test_ac4_factory_creates_anthropic_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC4: ファクトリで設定値からAnthropicプロバイダーを生成できる."""
+def test_factory_creates_anthropic_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ファクトリで設定値からAnthropicプロバイダーを生成できる."""
     monkeypatch.setenv("ONLINE_LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
     settings = Settings()
@@ -56,8 +64,8 @@ def test_ac4_factory_creates_anthropic_provider(monkeypatch: pytest.MonkeyPatch)
     assert isinstance(provider, AnthropicProvider)
 
 
-def test_ac4_factory_creates_local_provider() -> None:
-    """AC4: ファクトリでローカルプロバイダーを生成できる."""
+def test_factory_creates_local_provider() -> None:
+    """ファクトリでローカルプロバイダーを生成できる."""
     settings = Settings()
     provider = create_local_provider(settings)
     assert isinstance(provider, LMStudioProvider)
@@ -134,11 +142,11 @@ def test_lmstudio_message_role_mapping() -> None:
         assert msg["role"] == role
 
 
-# --- F5: MCP統合 ツール呼び出し対応テスト (AC8-AC11) ---
+# --- MCP統合: ツール呼び出し対応テスト ---
 
 
-def test_ac8_complete_with_tools_passes_tool_definitions() -> None:
-    """AC8: LLMProvider.complete_with_tools() が ToolDefinition リストを受け取れること."""
+def test_complete_with_tools_method_exists_and_tool_definition_is_constructable() -> None:
+    """LLMProvider.complete_with_tools() が存在し、ToolDefinition を構築できること."""
     from src.llm.base import ToolDefinition
 
     assert hasattr(LLMProvider, "complete_with_tools")
@@ -160,8 +168,8 @@ def test_ac8_complete_with_tools_passes_tool_definitions() -> None:
     assert "properties" in td.input_schema
 
 
-def test_ac9_openai_function_calling() -> None:
-    """AC9: OpenAIProvider が Function Calling に対応し、ToolDefinition → OpenAI形式の変換ができること."""
+def test_openai_converts_tool_definition_and_tool_messages_to_openai_format() -> None:
+    """OpenAIProvider が ToolDefinition と tool/assistant メッセージを OpenAI 形式に変換できること."""
     from src.llm.base import Message, ToolCall, ToolDefinition
     from src.llm.openai_provider import _to_openai_message, _tool_def_to_openai
 
@@ -196,8 +204,8 @@ def test_ac9_openai_function_calling() -> None:
     assert "tool_calls" in openai_assistant  # type: ignore[operator]
 
 
-def test_ac10_anthropic_tool_use() -> None:
-    """AC10: AnthropicProvider が Tool Use に対応し、ToolDefinition → Anthropic形式の変換ができること."""
+def test_anthropic_converts_tool_definition_and_tool_result_to_anthropic_format() -> None:
+    """AnthropicProvider が ToolDefinition と tool_result メッセージを Anthropic 形式に変換できること."""
     from src.llm.base import Message, ToolCall, ToolDefinition
     from src.llm.anthropic_provider import _build_anthropic_messages, _tool_def_to_anthropic
 
@@ -231,8 +239,8 @@ def test_ac10_anthropic_tool_use() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac11_lmstudio_complete_with_tools() -> None:
-    """AC11: LMStudioProvider が Function Calling でツール呼び出しに対応すること."""
+async def test_lmstudio_complete_with_tools_returns_tool_call_response() -> None:
+    """LMStudioProvider が Function Calling でツール呼び出し応答を返すこと."""
     import json
     from unittest.mock import AsyncMock, MagicMock
 
@@ -278,8 +286,8 @@ async def test_ac11_lmstudio_complete_with_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac11_lmstudio_complete_with_tools_no_tool_call() -> None:
-    """AC11: LMStudioProvider でツール呼び出しなしの場合、通常のテキスト応答を返すこと."""
+async def test_lmstudio_complete_with_tools_returns_text_when_no_tool_call() -> None:
+    """LMStudioProvider でツール呼び出しなしの場合、通常のテキスト応答を返すこと."""
     from unittest.mock import AsyncMock, MagicMock
 
     from src.llm.base import Message, ToolDefinition

@@ -1,6 +1,6 @@
-"""チャット統合テスト: ツール呼び出し対応 (Issue #83, AC12-AC18).
+"""チャット統合テスト: ツール呼び出し対応.
 
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from src.db.models import Base
 from src.llm.base import LLMProvider, LLMResponse, ToolCall, ToolDefinition
-from src.services.chat import TOOL_LOOP_MAX_ITERATIONS, ChatService
+from src.services.chat import TOOL_LOOP_MAX_ITERATIONS, ChatService, RagSource
 
 
 @pytest.fixture
@@ -91,18 +91,20 @@ def _make_mock_mcp_manager(
 
     mock_manager.get_available_tools = AsyncMock(return_value=tools)
     mock_manager.call_tool = AsyncMock(return_value=call_result)
-    # get_response_instruction は同期メソッドなので MagicMock を使用する
+    # get_system_instructions / get_response_instruction は同期メソッドなので MagicMock を使用する
     # AsyncMock のままだと呼び出し時にコルーチンが生成されるが await されず
     # RuntimeWarning: coroutine was never awaited が発生する
+    mock_manager.get_system_instructions = MagicMock(return_value=[])
+    mock_manager.get_auto_context_tools = MagicMock(return_value=[])
     mock_manager.get_response_instruction = MagicMock(return_value="")
     return mock_manager
 
 
 @pytest.mark.asyncio
-async def test_ac12_chat_responds_with_weather_data(
+async def test_chat_responds_with_weather_data(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC12: ユーザーが天気について質問すると、LLMがツールを呼び出して実データで回答すること."""
+    """ユーザーが天気について質問すると、LLMがツールを呼び出して実データで回答すること."""
     tool_calls = [
         ToolCall(id="call_1", name="get_weather", arguments={"location": "東京"}),
     ]
@@ -128,10 +130,10 @@ async def test_ac12_chat_responds_with_weather_data(
 
 
 @pytest.mark.asyncio
-async def test_ac13_chat_backward_compatible(
+async def test_chat_backward_compatible(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC13: ツール呼び出しが不要な通常の質問は、従来通り応答すること（後方互換性）."""
+    """ツール呼び出しが不要な通常の質問は、従来通り応答すること（後方互換性）."""
     mock_llm = _make_mock_llm(text_response="こんにちは！")
 
     # MCPManager なし → 従来通り complete() を使用
@@ -148,10 +150,10 @@ async def test_ac13_chat_backward_compatible(
 
 
 @pytest.mark.asyncio
-async def test_ac14_tool_error_handled_gracefully(
+async def test_tool_error_handled_gracefully(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC14: ツール実行中にエラーが発生した場合、エラー内容をLLMに伝え、適切な応答を生成すること."""
+    """ツール実行中にエラーが発生した場合、エラー内容をLLMに伝え、適切な応答を生成すること."""
     tool_calls = [
         ToolCall(id="call_1", name="get_weather", arguments={"location": "火星"}),
     ]
@@ -176,10 +178,10 @@ async def test_ac14_tool_error_handled_gracefully(
 
 
 @pytest.mark.asyncio
-async def test_ac15_mcp_disabled_mode(
+async def test_mcp_disabled_mode(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC15: MCP無効時（mcp_manager=None）は従来通りの動作をすること."""
+    """MCP無効時（mcp_manager=None）は従来通りの動作をすること."""
     mock_llm = _make_mock_llm(text_response="通常応答です。")
 
     service = ChatService(
@@ -195,8 +197,8 @@ async def test_ac15_mcp_disabled_mode(
 
 
 @pytest.mark.asyncio
-async def test_ac16_mcp_server_config_changes() -> None:
-    """AC16: config/mcp_servers.json でMCPサーバーの追加・変更が可能であること."""
+async def test_mcp_server_config_changes() -> None:
+    """config/mcp_servers.json でMCPサーバーの追加・変更が可能であること."""
     import json
     import tempfile
     from pathlib import Path
@@ -241,16 +243,16 @@ async def test_ac16_mcp_server_config_changes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac16_missing_config_file() -> None:
-    """AC16: 設定ファイルが存在しない場合、空のリストを返すこと."""
+async def test_missing_config_file() -> None:
+    """設定ファイルが存在しない場合、空のリストを返すこと."""
     from src.main import _load_mcp_server_configs
 
     configs = _load_mcp_server_configs("nonexistent_config.json")
     assert configs == []
 
 
-def test_ac17_mcp_enabled_env_control(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AC17: MCP_ENABLED 環境変数でMCP機能のON/OFFを制御できること."""
+def test_mcp_enabled_env_control(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MCP_ENABLED 環境変数でMCP機能のON/OFFを制御できること."""
     from src.config.settings import Settings
 
     # デフォルト: 無効 (_env_file=Noneで.envファイルの影響を排除)
@@ -270,10 +272,10 @@ def test_ac17_mcp_enabled_env_control(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac18_tool_loop_max_iterations(
+async def test_tool_loop_max_iterations(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """AC18: ツール呼び出しが最大反復回数に達した場合、ループを打ち切りテキスト応答を返すこと."""
+    """ツール呼び出しが最大反復回数に達した場合、ループを打ち切りテキスト応答を返すこと."""
     # 常にツール呼び出しを返すLLM（終わらないループ）
     always_tool_response = LLMResponse(
         content="",
@@ -367,3 +369,212 @@ async def test_chat_no_tools_available(
 
     assert result == "ツールなし応答"
     mock_llm.complete.assert_called_once()
+
+
+class TestExtractRagSourcesFromMessages:
+    """_extract_rag_sources_from_messages() のテスト（準Agentic Search, Issue #548）."""
+
+    def test_extracts_source_urls_from_tool_messages(self) -> None:
+        """ツールメッセージから検索エンジン種別・スコア・URLを抽出すること."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(role="user", content="テスト"),
+            Message(role="assistant", content=""),
+            Message(
+                role="tool",
+                content=(
+                    "## ベクトル検索結果 (意味的類似度)\n\n"
+                    "### Result 1 [distance=0.234]\n"
+                    "Source: https://example.com/page1\n"
+                    "テキスト内容1\n\n"
+                    "### Result 2 [distance=0.567]\n"
+                    "Source: https://example.com/page2\n"
+                    "テキスト内容2\n\n"
+                    "## BM25検索結果 (キーワード一致)\n\n"
+                    "### Result 1 [score=4.521]\n"
+                    "Source: https://example.com/page1\n"
+                    "テキスト内容3"
+                ),
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+
+        assert sources == [
+            RagSource(url="https://example.com/page1", engine="vector", score=0.234),
+            RagSource(url="https://example.com/page2", engine="vector", score=0.567),
+            RagSource(url="https://example.com/page1", engine="bm25", score=4.521),
+        ]
+
+    def test_returns_empty_when_no_tool_messages(self) -> None:
+        """ツールメッセージがない場合は空リストを返すこと."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(role="user", content="こんにちは"),
+            Message(role="assistant", content="こんにちは！"),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == []
+
+    def test_returns_empty_when_no_source_in_tool_message(self) -> None:
+        """ツールメッセージに Source: がない場合は空リストを返すこと."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(
+                role="tool",
+                content="東京: 晴れ 最高15°C",
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == []
+
+    def test_deduplicates_same_engine_source_urls(self) -> None:
+        """同一エンジン・同一URLの重複は1つにまとめること."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(
+                role="tool",
+                content=(
+                    "### Result 1 [distance=0.1]\n"
+                    "Source: https://example.com/same\n"
+                    "テキスト1\n\n"
+                    "### Result 2 [distance=0.2]\n"
+                    "Source: https://example.com/same\n"
+                    "テキスト2"
+                ),
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == [
+            RagSource(url="https://example.com/same", engine="vector", score=0.1),
+        ]
+
+    def test_extracts_source_urls_with_hash_prefix(self) -> None:
+        """'## Source: ' プレフィックスも処理できること."""
+        from src.llm.base import Message
+
+        messages = [
+            Message(
+                role="tool",
+                content=(
+                    "### Result 1 [distance=0.123]\n"
+                    "## Source: https://example.com/page\n"
+                    "テキスト内容"
+                ),
+                tool_call_id="call_1",
+            ),
+        ]
+
+        sources = ChatService._extract_rag_sources_from_messages(messages)
+        assert sources == [
+            RagSource(url="https://example.com/page", engine="vector", score=0.123),
+        ]
+
+
+@pytest.mark.asyncio
+async def test_rag_sources_from_tool_loop(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """ツールループで rag_search が呼ばれた場合、ソースURLが抽出されること."""
+    tool_calls = [
+        ToolCall(id="call_1", name="rag_search", arguments={"query": "テスト"}),
+    ]
+    mock_llm = _make_mock_llm(
+        text_response="ナレッジベースによると...",
+        tool_calls=tool_calls,
+    )
+    mock_mcp = _make_mock_mcp_manager(
+        tools=[
+            ToolDefinition(
+                name="rag_search",
+                description="ナレッジベース検索",
+                input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ],
+        call_result=(
+            "## ベクトル検索結果 (意味的類似度)\n\n"
+            "### Result 1 [distance=0.234]\n"
+            "Source: https://example.com/page1\n"
+            "関連テキスト"
+        ),
+    )
+    # rag_show_sources を有効にする
+    from unittest.mock import patch
+
+    mock_settings = MagicMock()
+    mock_settings.rag_show_sources = True
+
+    service = ChatService(
+        llm=mock_llm,
+        session_factory=session_factory,
+        mcp_manager=mock_mcp,
+    )
+
+    with patch("src.services.chat.get_settings", return_value=mock_settings):
+        result = await service.respond("U001", "テスト質問", "ts_rag_001")
+
+    assert "参照元:" in result
+    assert "[vector: distance=0.234]" in result
+    assert "https://example.com/page1" in result
+
+
+@pytest.mark.asyncio
+async def test_rag_sources_bm25_format_in_output(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """ツールループで bm25 結果を含む場合、参照元に [bm25: score=X.XXX] が表示されること."""
+    tool_calls = [
+        ToolCall(id="call_1", name="rag_search", arguments={"query": "テスト"}),
+    ]
+    mock_llm = _make_mock_llm(
+        text_response="ナレッジベースによると...",
+        tool_calls=tool_calls,
+    )
+    mock_mcp = _make_mock_mcp_manager(
+        tools=[
+            ToolDefinition(
+                name="rag_search",
+                description="ナレッジベース検索",
+                input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+            )
+        ],
+        call_result=(
+            "## ベクトル検索結果 (意味的類似度)\n\n"
+            "### Result 1 [distance=0.234]\n"
+            "Source: https://example.com/page1\n"
+            "関連テキスト\n\n"
+            "## BM25検索結果 (キーワード一致)\n\n"
+            "### Result 1 [score=4.521]\n"
+            "Source: https://example.com/page2\n"
+            "BM25テキスト"
+        ),
+    )
+    from unittest.mock import patch
+
+    mock_settings = MagicMock()
+    mock_settings.rag_show_sources = True
+
+    service = ChatService(
+        llm=mock_llm,
+        session_factory=session_factory,
+        mcp_manager=mock_mcp,
+    )
+
+    with patch("src.services.chat.get_settings", return_value=mock_settings):
+        result = await service.respond("U001", "テスト質問", "ts_rag_002")
+
+    assert "参照元:" in result
+    assert "[vector: distance=0.234]" in result
+    assert "[bm25: score=4.521]" in result
+    assert "https://example.com/page1" in result
+    assert "https://example.com/page2" in result

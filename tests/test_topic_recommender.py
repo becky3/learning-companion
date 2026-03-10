@@ -60,8 +60,8 @@ async def _seed_articles(
         await session.commit()
 
 
-async def test_ac1_profile_reflected_in_recommendation(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC1: ユーザープロファイルをDBから取得して提案に反映できる."""
+async def test_profile_reflected_in_recommendation(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """ユーザープロファイルをDBから取得して提案に反映できる."""
     await _seed_profile(
         db_session_factory,
         interests=["Python", "機械学習"],
@@ -86,8 +86,8 @@ async def test_ac1_profile_reflected_in_recommendation(db_session_factory) -> No
     assert "おすすめ学習トピック" in result
 
 
-async def test_ac2_recent_articles_used_as_context(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC2: 最近の収集記事の情報を提案のコンテキストとして使用できる."""
+async def test_recent_articles_used_as_context(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """最近の収集記事の情報を提案のコンテキストとして使用できる."""
     await _seed_profile(
         db_session_factory,
         interests=["Python"],
@@ -111,8 +111,8 @@ async def test_ac2_recent_articles_used_as_context(db_session_factory) -> None: 
     assert "React 19" in user_msg
 
 
-async def test_ac3_generates_3_to_5_topics(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC3: 3〜5個のトピック提案を生成できる（システムプロンプトで指示）."""
+async def test_generates_3_to_5_topics(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """3〜5個のトピック提案を生成できる（システムプロンプトで指示）."""
     await _seed_profile(
         db_session_factory,
         interests=["Python"],
@@ -136,8 +136,8 @@ async def test_ac3_generates_3_to_5_topics(db_session_factory) -> None:  # type:
     assert "トピックA" in result
 
 
-async def test_ac4_includes_relevance_explanation(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC4: 各提案にユーザーのスキル・目標との関連性の説明が含まれる（プロンプトで指示）."""
+async def test_includes_relevance_explanation(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """各提案にユーザーのスキル・目標との関連性の説明が含まれる（プロンプトで指示）."""
     await _seed_profile(
         db_session_factory,
         interests=["データ分析"],
@@ -159,8 +159,8 @@ async def test_ac4_includes_relevance_explanation(db_session_factory) -> None:  
     assert "関連性" in system_msg
 
 
-async def test_ac5_empty_profile_returns_general_recommendation(db_session_factory) -> None:  # type: ignore[no-untyped-def]
-    """AC5: プロファイルが空の場合、一般的なおすすめを返しつつプロファイル充実を促す."""
+async def test_empty_profile_returns_general_recommendation(db_session_factory) -> None:  # type: ignore[no-untyped-def]
+    """プロファイルが空の場合、一般的なおすすめを返しつつプロファイル充実を促す."""
     llm = AsyncMock()
 
     recommender = TopicRecommender(llm=llm, session_factory=db_session_factory)

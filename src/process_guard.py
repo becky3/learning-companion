@@ -1,5 +1,5 @@
 """Bot プロセスガード — 重複起動検知・子プロセスクリーンアップ
-仕様: docs/specs/bot-process-guard.md
+仕様: docs/specs/infrastructure/bot-process-guard.md
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 PID_FILE = Path("bot.pid")
+BOT_READY_SIGNAL = "BOT_READY"
 
 
 # ---------------------------------------------------------------------------

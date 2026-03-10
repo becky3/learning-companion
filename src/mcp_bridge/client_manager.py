@@ -1,5 +1,5 @@
 """MCPクライアント管理
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 
 複数のMCPサーバーを管理し、ツール一覧を統合するクライアントマネージャー。
 """
@@ -13,6 +13,7 @@ from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 from src.llm.base import ToolDefinition
 
@@ -37,13 +38,15 @@ class MCPServerConfig:
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     url: str = ""
+    system_instruction: str = ""  # ツール利用を促すためシステムプロンプトに常時追加する指示
     response_instruction: str = ""  # ツール結果を使った応答時にLLMへ追加する指示
+    auto_context_tool: str = ""  # ユーザークエリで自動呼び出しし結果をコンテキスト注入するツール名
 
 
 class MCPClientManager:
     """MCPサーバーへの接続を管理し、ツール一覧を統合する.
 
-    仕様: docs/specs/f5-mcp-integration.md
+    仕様: docs/specs/infrastructure/mcp-integration.md
     """
 
     def __init__(self) -> None:
@@ -51,26 +54,37 @@ class MCPClientManager:
         self._sessions: dict[str, ClientSession] = {}
         self._tool_to_server: dict[str, str] = {}
         self._tools: list[ToolDefinition] = []
+        self._system_instructions: list[str] = []  # ツール利用を促す常設指示
         self._server_instructions: dict[str, str] = {}  # server_name → response_instruction
+        self._auto_context_tools: list[str] = []  # 自動コンテキスト注入ツール名
 
     async def initialize(self, server_configs: list[MCPServerConfig]) -> None:
         """設定されたMCPサーバーに接続し、利用可能ツールを取得する.
 
         各サーバーへの接続を試み、失敗したサーバーはスキップしてログ出力する。
         """
+        _supported_transports = ("stdio", "http")
         for config in server_configs:
-            if config.transport != "stdio":
+            if config.transport not in _supported_transports:
                 logger.warning(
-                    "MCPサーバー '%s': transport '%s' は未対応です（stdioのみサポート）。スキップします。",
+                    "MCPサーバー '%s': transport '%s' は未対応です（%s をサポート）。スキップします。",
                     config.name,
                     config.transport,
+                    ", ".join(_supported_transports),
                 )
                 continue
 
             try:
-                await self._connect_stdio_server(config)
+                if config.transport == "http":
+                    await self._connect_http_server(config)
+                else:
+                    await self._connect_stdio_server(config)
+                if config.system_instruction:
+                    self._system_instructions.append(config.system_instruction)
                 if config.response_instruction:
                     self._server_instructions[config.name] = config.response_instruction
+                if config.auto_context_tool:
+                    self._auto_context_tools.append(config.auto_context_tool)
                 logger.info("MCPサーバー '%s' に接続しました。", config.name)
             except Exception:
                 logger.exception(
@@ -93,11 +107,32 @@ class MCPClientManager:
         session = await self._exit_stack.enter_async_context(
             ClientSession(read_stream, write_stream)
         )
+        await self._initialize_session(config, session)
+
+    async def _connect_http_server(self, config: MCPServerConfig) -> None:
+        """HTTP（streamable-http）トランスポートでMCPサーバーに接続する."""
+        if not config.url:
+            raise ValueError(
+                f"MCPサーバー '{config.name}': HTTP トランスポートには url の設定が必要です。"
+            )
+
+        http_transport = await self._exit_stack.enter_async_context(
+            streamable_http_client(config.url)
+        )
+        read_stream, write_stream, _ = http_transport
+        session = await self._exit_stack.enter_async_context(
+            ClientSession(read_stream, write_stream)
+        )
+        await self._initialize_session(config, session)
+
+    async def _initialize_session(
+        self, config: MCPServerConfig, session: ClientSession
+    ) -> None:
+        """セッションを初期化し、ツール一覧を登録する."""
         await session.initialize()
 
         self._sessions[config.name] = session
 
-        # ツール一覧を取得
         response = await session.list_tools()
         for tool in response.tools:
             td = ToolDefinition(
@@ -111,6 +146,14 @@ class MCPClientManager:
     async def get_available_tools(self) -> list[ToolDefinition]:
         """全サーバーのツールをプロバイダー非依存形式で返す."""
         return list(self._tools)
+
+    def get_system_instructions(self) -> list[str]:
+        """全サーバーのシステム指示を返す."""
+        return list(self._system_instructions)
+
+    def get_auto_context_tools(self) -> list[str]:
+        """自動コンテキスト注入するツール名のリストを返す."""
+        return list(self._auto_context_tools)
 
     def get_response_instruction(self, tool_name: str) -> str:
         """ツール名に対応するサーバーの応答指示を返す."""
@@ -156,4 +199,6 @@ class MCPClientManager:
         self._sessions.clear()
         self._tool_to_server.clear()
         self._tools.clear()
+        self._system_instructions.clear()
         self._server_instructions.clear()
+        self._auto_context_tools.clear()

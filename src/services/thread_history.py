@@ -1,5 +1,5 @@
 """Slackスレッド履歴取得サービス
-仕様: docs/specs/f8-thread-support.md
+仕様: docs/specs/features/thread-support.md
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class ThreadHistoryService:
     """Slackスレッドから会話履歴を取得するサービス.
 
-    仕様: docs/specs/f8-thread-support.md
+    仕様: docs/specs/features/thread-support.md
     """
 
     def __init__(

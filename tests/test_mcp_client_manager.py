@@ -1,6 +1,6 @@
-"""MCPクライアントマネージャーのテスト (Issue #83, AC4-AC7).
+"""MCPクライアントマネージャーのテスト.
 
-仕様: docs/specs/f5-mcp-integration.md
+仕様: docs/specs/infrastructure/mcp-integration.md
 """
 
 from __future__ import annotations
@@ -49,8 +49,8 @@ def _make_mock_session(tools: list[MagicMock] | None = None) -> AsyncMock:
 
 
 @pytest.mark.asyncio
-async def test_ac4_client_manager_connects_and_lists_tools() -> None:
-    """AC4: MCPClientManager がMCPサーバーに接続し、ToolDefinition リストとしてツール一覧を取得できること."""
+async def test_client_manager_connects_and_lists_tools() -> None:
+    """MCPClientManager がMCPサーバーに接続し、ToolDefinition リストとしてツール一覧を取得できること."""
     manager = MCPClientManager()
 
     mock_session = _make_mock_session()
@@ -73,7 +73,7 @@ async def test_ac4_client_manager_connects_and_lists_tools() -> None:
             name="weather",
             transport="stdio",
             command="python",
-            args=["mcp-servers/weather/server.py"],
+            args=["mcp_servers/weather/server.py"],
         )
         await manager.initialize([config])
 
@@ -87,8 +87,8 @@ async def test_ac4_client_manager_connects_and_lists_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac5_client_manager_calls_tool() -> None:
-    """AC5: MCPClientManager.call_tool() でツールを実行し、結果を取得できること."""
+async def test_client_manager_calls_tool() -> None:
+    """MCPClientManager.call_tool() でツールを実行し、結果を取得できること."""
     manager = MCPClientManager()
 
     mock_session = _make_mock_session()
@@ -109,7 +109,7 @@ async def test_ac5_client_manager_calls_tool() -> None:
             name="weather",
             transport="stdio",
             command="python",
-            args=["mcp-servers/weather/server.py"],
+            args=["mcp_servers/weather/server.py"],
         )
         await manager.initialize([config])
 
@@ -123,8 +123,8 @@ async def test_ac5_client_manager_calls_tool() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac5_call_tool_not_found() -> None:
-    """AC5: 存在しないツールを呼び出すと MCPToolNotFoundError が発生すること."""
+async def test_call_tool_not_found() -> None:
+    """存在しないツールを呼び出すと MCPToolNotFoundError が発生すること."""
     manager = MCPClientManager()
 
     with pytest.raises(MCPToolNotFoundError, match="not_exist"):
@@ -132,8 +132,8 @@ async def test_ac5_call_tool_not_found() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac6_client_manager_handles_multiple_servers() -> None:
-    """AC6: 複数のMCPサーバーを同時に管理できること."""
+async def test_client_manager_handles_multiple_servers() -> None:
+    """複数のMCPサーバーを同時に管理できること."""
     manager = MCPClientManager()
 
     # 2つの異なるサーバーのモックセッション
@@ -181,8 +181,8 @@ async def test_ac6_client_manager_handles_multiple_servers() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac7_graceful_degradation_on_connection_failure() -> None:
-    """AC7: サーバー接続失敗時にエラーログを出力し、ツールなしで続行すること."""
+async def test_graceful_degradation_on_connection_failure() -> None:
+    """サーバー接続失敗時にエラーログを出力し、ツールなしで続行すること."""
     manager = MCPClientManager()
 
     with (
@@ -213,20 +213,82 @@ async def test_ac7_graceful_degradation_on_connection_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_ac7_http_transport_skipped() -> None:
-    """AC7: HTTP トランスポートが指定された場合、warningログを出してスキップすること."""
+async def test_http_transport_connects_and_lists_tools() -> None:
+    """HTTP トランスポートでMCPサーバーに接続し、ツール一覧を取得できること."""
+    manager = MCPClientManager()
+
+    mock_session = _make_mock_session()
+
+    with (
+        patch("src.mcp_bridge.client_manager.streamable_http_client") as mock_http,
+        patch("src.mcp_bridge.client_manager.ClientSession", return_value=mock_session),
+    ):
+        # streamable_http_client は (read, write, get_session_id) の3タプルを返す
+        mock_transport = AsyncMock()
+        mock_transport.__aenter__ = AsyncMock(
+            return_value=(AsyncMock(), AsyncMock(), AsyncMock())
+        )
+        mock_transport.__aexit__ = AsyncMock(return_value=False)
+        mock_http.return_value = mock_transport
+
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        config = MCPServerConfig(
+            name="test_http_server",
+            transport="http",
+            url="http://127.0.0.1:8081/mcp",
+        )
+        await manager.initialize([config])
+
+    tools = await manager.get_available_tools()
+    assert len(tools) == 1
+    assert tools[0].name == "get_weather"
+    assert manager._tool_to_server["get_weather"] == "test_http_server"
+
+    mock_http.assert_called_once_with("http://127.0.0.1:8081/mcp")
+
+    await manager.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_http_transport_missing_url_logs_error() -> None:
+    """HTTP トランスポートで url 未設定の場合、エラーログを出してスキップすること."""
+    manager = MCPClientManager()
+
+    with patch("src.mcp_bridge.client_manager.logger") as mock_logger:
+        config = MCPServerConfig(
+            name="no_url_server",
+            transport="http",
+        )
+        await manager.initialize([config])
+
+    mock_logger.exception.assert_called_once()
+    assert "no_url_server" in str(mock_logger.exception.call_args)
+
+    tools = await manager.get_available_tools()
+    assert tools == []
+
+    await manager.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_unsupported_transport_skipped() -> None:
+    """未対応トランスポートが指定された場合、warningログを出してスキップすること."""
     manager = MCPClientManager()
 
     with patch("src.mcp_bridge.client_manager.logger") as mock_logger:
         config = MCPServerConfig(
             name="remote_server",
-            transport="http",
-            url="http://localhost:8001/mcp",
+            transport="grpc",
+            url="grpc://localhost:50051",
         )
         await manager.initialize([config])
 
     mock_logger.warning.assert_called_once()
-    assert "http" in str(mock_logger.warning.call_args)
+    assert "grpc" in str(mock_logger.warning.call_args)
 
     tools = await manager.get_available_tools()
     assert tools == []
+
+    await manager.cleanup()

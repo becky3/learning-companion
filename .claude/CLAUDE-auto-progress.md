@@ -2,7 +2,7 @@
 
 > このファイルは GitHub Actions 環境（claude-code-action）専用のルール。
 > ローカル対話セッションでは参照不要。
-> 仕様: `docs/specs/auto-progress.md`
+> 仕様: shared-workflows リポジトリの `docs/specs/auto-progress.md`
 
 ## 起動時の判断フロー
 
@@ -43,10 +43,7 @@ GitHub Actions 環境では Skill ツールを使用しない。以下の4ステ
 ### ステップ 1/4: テスト実行
 
 ```bash
-# CRLF → LF 自動変換（Windows 環境の shellcheck SC1017 防止）
-for f in .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh; do [ -f "$f" ] || continue; if grep -q $'\r' "$f" 2>/dev/null; then tmp=$(mktemp) && tr -d '\r' < "$f" > "$tmp" && mv "$tmp" "$f" && echo "[fix] CRLF→LF: $f"; fi; done
-
-uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdownlint-cli2@0.20.0 "CLAUDE.md" "docs/**/*.md" "*.md" ".claude/**/*.md" && uv run shellcheck .github/scripts/auto-fix/*.sh .github/scripts/post-merge/*.sh
+uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdownlint-cli2 "CLAUDE.md" "docs/**/*.md" "*.md" ".claude/**/*.md"
 ```
 
 - Markdown のみの変更の場合、pytest / ruff / mypy / shellcheck はスキップ可（markdownlint のみ実行）
@@ -60,8 +57,11 @@ uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdo
 - エラーハンドリング（except pass の有無）
 - バリデーション漏れ（境界値: 0, 負数, 空文字列）
 - セキュリティ（コマンドインジェクション、XSS等）
+- README.md 更新漏れ（機能追加・環境変数追加・依存関係変更時）
 
 分類（Critical/Warning/Suggestion）は参考情報であり、判断に誤りが含まれる場合もある。各指摘について対応すべきかそれぞれ判断し、修正する。
+
+**検出した問題のスキップ禁止**: テスト失敗・リント違反・型エラー・レビュー指摘を「対応範囲外」「既存問題」としてスキップしてはならない。軽微な問題はその場で修正し、大きな問題は Issue を作成して記録すること。判断に迷う問題は PR/Issue コメントに問題事項を記載し、作業を中断する。
 
 ### ステップ 3/4: ドキュメントレビュー
 
@@ -73,7 +73,7 @@ uv run pytest && uv run ruff check src/ tests/ && uv run mypy src/ && npx markdo
 ### ステップ 4/4: 完了処理（commit / push / PR作成 / Issue完了コメント）
 
 1. `git status --porcelain` で変更確認（空なら停止）
-2. `git add -A`
+2. `git add -A`（GA環境ではリポジトリに機密情報がない前提のため許容）
 3. `git diff --cached --stat` で差分サマリ表示
 4. 変更内容からコミットメッセージ自動生成（優先順位: fix > feat > docs > ci）
 5. `git commit -m "生成したメッセージ"`

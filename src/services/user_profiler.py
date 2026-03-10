@@ -1,5 +1,5 @@
 """ユーザー情報自動抽出サービス
-仕様: docs/specs/f3-user-profiling.md
+仕様: docs/specs/features/user-profiling.md
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ _EXTRACTION_TEMPLATE = """\
 class UserProfiler:
     """ユーザー情報抽出・プロファイル管理サービス.
 
-    仕様: docs/specs/f3-user-profiling.md
+    仕様: docs/specs/features/user-profiling.md
     """
 
     def __init__(

@@ -33,6 +33,7 @@ Thumbs.db
 
 # Claude Code
 .claude/settings.local.json
+.claude/worktrees/**/settings.local.json
 
 # Process guard
 bot.pid

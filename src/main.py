@@ -1,6 +1,6 @@
 """AI Assistant エントリーポイント
-仕様: docs/specs/overview.md, docs/specs/f5-mcp-integration.md, docs/specs/f8-thread-support.md,
-      docs/specs/bot-process-guard.md
+仕様: docs/specs/overview.md, docs/specs/infrastructure/mcp-integration.md, docs/specs/features/thread-support.md,
+      docs/specs/infrastructure/bot-process-guard.md, docs/specs/features/cli-adapter.md
 """
 
 from __future__ import annotations
@@ -10,42 +10,28 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-# ChromaDBテレメトリのエラーログを抑制（常に無効化、ユーザーには不要）
-logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
-
-import src.slack.handlers as handlers_module
 from src.config.settings import get_settings, load_assistant_config
 from src.process_guard import (
+    BOT_READY_SIGNAL,
     check_already_running,
     cleanup_children,
     remove_pid_file,
     write_pid_file,
 )
-from src.db.session import init_db, get_session_factory
-from src.embedding.factory import get_embedding_provider
-from src.llm.factory import get_provider_for_service
-from src.mcp_bridge.client_manager import MCPClientManager, MCPServerConfig
-from src.rag.bm25_index import BM25Index
-from src.rag.vector_store import VectorStore
-from src.services.chat import ChatService
-from src.services.feed_collector import FeedCollector
-from src.services.ogp_extractor import OgpExtractor
-from src.services.rag_knowledge import RAGKnowledgeService
-from src.services.summarizer import Summarizer
-from src.services.thread_history import ThreadHistoryService
-from src.services.topic_recommender import TopicRecommender
-from src.services.user_profiler import UserProfiler
-from src.services.web_crawler import WebCrawler
-from src.services.safe_browsing import create_safe_browsing_client
-from src.slack.app import create_app, socket_mode_handler
+
+if TYPE_CHECKING:
+    from src.mcp_bridge.client_manager import MCPServerConfig
 
 logger = logging.getLogger(__name__)
 
 
 def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
     """MCPサーバー設定ファイルを読み込む."""
+    from src.mcp_bridge.client_manager import MCPServerConfig
+
     path = Path(config_path)
     if not path.exists():
         logger.warning("MCP設定ファイル '%s' が見つかりません。", config_path)
@@ -67,7 +53,9 @@ def _load_mcp_server_configs(config_path: str) -> list[MCPServerConfig]:
             args=server_def.get("args", []),
             env=server_def.get("env", {}),
             url=server_def.get("url", ""),
+            system_instruction=server_def.get("system_instruction", ""),
             response_instruction=server_def.get("response_instruction", ""),
+            auto_context_tool=server_def.get("auto_context_tool", ""),
         ))
     return configs
 
@@ -81,10 +69,25 @@ async def main() -> None:
     check_already_running()
     write_pid_file()
 
+    from src.db.session import get_session_factory, init_db
+    from src.llm.factory import get_provider_for_service
+    from src.mcp_bridge.client_manager import MCPClientManager
+    from src.messaging.router import MessageRouter
+    from src.messaging.slack_adapter import SlackAdapter
+    from src.services.chat import ChatService
+    from src.services.feed_collector import FeedCollector
+    from src.services.ogp_extractor import OgpExtractor
+    from src.services.summarizer import Summarizer
+    from src.services.thread_history import ThreadHistoryService
+    from src.services.topic_recommender import TopicRecommender
+    from src.services.user_profiler import UserProfiler
+    from src.slack.app import create_app, socket_mode_handler
+    from src.slack.handlers import register_handlers
+
     mcp_manager: MCPClientManager | None = None
     try:
         # 起動時刻を記録 (F7)
-        handlers_module.BOT_START_TIME = datetime.now(tz=ZoneInfo(settings.timezone))
+        bot_start_time = datetime.now(tz=ZoneInfo(settings.timezone))
 
         # DB 初期化
         await init_db()
@@ -92,7 +95,7 @@ async def main() -> None:
         # アシスタント設定
         assistant = load_assistant_config()
         system_prompt = assistant.get("personality", "")
-        slack_format = assistant.get("slack_format_instruction", "")
+        slack_format = assistant.get("format_instruction", "")
 
         # サービスごとのLLMプロバイダー（設定に基づいて選択）
         chat_llm = get_provider_for_service(settings, settings.chat_llm_provider)
@@ -109,52 +112,6 @@ async def main() -> None:
             logger.info("MCP有効: %d個のツールが利用可能", len(tools))
         else:
             logger.info("MCP無効: ツール呼び出し機能はオフです")
-
-        # RAG初期化（有効時のみ）
-        rag_service: RAGKnowledgeService | None = None
-        if settings.rag_enabled:
-            embedding = get_embedding_provider(settings, settings.embedding_provider)
-            vector_store = VectorStore(embedding, settings.chromadb_persist_dir)
-            web_crawler = WebCrawler(
-                max_pages=settings.rag_max_crawl_pages,
-                crawl_delay=settings.rag_crawl_delay_sec,
-                respect_robots_txt=settings.rag_respect_robots_txt,
-                robots_txt_cache_ttl=settings.rag_robots_txt_cache_ttl,
-            )
-            # Safe Browsing クライアント（URL安全性チェック）
-            safe_browsing_client = create_safe_browsing_client(settings)
-            if safe_browsing_client:
-                logger.info("URL安全性チェック有効: Google Safe Browsing API")
-
-            # BM25インデックス（ハイブリッド検索用）
-            bm25_index: BM25Index | None = None
-            if settings.rag_hybrid_search_enabled:
-                bm25_index = BM25Index(
-                    k1=settings.rag_bm25_k1,
-                    b=settings.rag_bm25_b,
-                    persist_dir=settings.bm25_persist_dir,
-                )
-                logger.info("BM25インデックス初期化完了")
-
-            rag_service = RAGKnowledgeService(
-                vector_store,
-                web_crawler,
-                chunk_size=settings.rag_chunk_size,
-                chunk_overlap=settings.rag_chunk_overlap,
-                similarity_threshold=settings.rag_similarity_threshold,
-                safe_browsing_client=safe_browsing_client,
-                bm25_index=bm25_index,
-                hybrid_search_enabled=settings.rag_hybrid_search_enabled,
-                vector_weight=settings.rag_vector_weight,
-                min_combined_score=settings.rag_min_combined_score,
-                debug_log_enabled=settings.rag_debug_log_enabled,
-            )
-            if settings.rag_hybrid_search_enabled:
-                logger.info("RAG有効: ハイブリッド検索（ベクトル＋BM25）が利用可能")
-            else:
-                logger.info("RAG有効: ナレッジベース機能が利用可能")
-        else:
-            logger.info("RAG無効: ナレッジベース機能はオフです")
 
         # Slack アプリ（ThreadHistoryService に必要なため先に作成）
         app = create_app(settings)
@@ -177,6 +134,14 @@ async def main() -> None:
             limit=settings.thread_history_limit,
         )
 
+        # SlackAdapter (F11)
+        slack_adapter = SlackAdapter(
+            slack_client=slack_client,
+            bot_user_id=bot_user_id,
+            thread_history_service=thread_history_service,
+            format_instruction=slack_format,
+        )
+
         # チャットサービス
         session_factory = get_session_factory()
         chat_service = ChatService(
@@ -184,9 +149,8 @@ async def main() -> None:
             session_factory=session_factory,
             system_prompt=system_prompt,
             mcp_manager=mcp_manager,
-            thread_history_service=thread_history_service,
-            rag_service=rag_service,
-            slack_format_instruction=slack_format,
+            thread_history_fetcher=slack_adapter.fetch_thread_history,
+            format_instruction=slack_adapter.get_format_instruction(),
         )
 
         # ユーザー情報抽出サービス
@@ -211,26 +175,34 @@ async def main() -> None:
             summarize_timeout=settings.feed_summarize_timeout,
             collect_days=settings.feed_collect_days,
         )
-        handlers_module.register_handlers(
-            app, chat_service,
+
+        # MessageRouter (F11)
+        router = MessageRouter(
+            messaging=slack_adapter,
+            chat_service=chat_service,
             user_profiler=user_profiler,
             topic_recommender=topic_recommender,
             collector=feed_collector,
             session_factory=session_factory,
-            slack_client=slack_client,
             channel_id=settings.slack_news_channel_id,
             max_articles_per_feed=settings.feed_articles_per_feed,
             feed_card_layout=settings.feed_card_layout,
-            auto_reply_channels=settings.get_auto_reply_channels(),
             bot_token=settings.slack_bot_token,
             timezone=settings.timezone,
             env_name=settings.env_name,
-            rag_service=rag_service,
-            rag_crawl_progress_interval=settings.rag_crawl_progress_interval,
+            mcp_manager=mcp_manager,
+            bot_start_time=bot_start_time,
+            slack_client=slack_client,
+        )
+
+        register_handlers(
+            app, router,
+            auto_reply_channels=settings.get_auto_reply_channels(),
         )
 
         # Socket Mode で起動（グレースフルシャットダウン対応）
         async with socket_mode_handler(app, settings) as handler:
+            print(BOT_READY_SIGNAL, flush=True)
             try:
                 await handler.start_async()  # type: ignore[no-untyped-call]
             except asyncio.CancelledError:
@@ -250,4 +222,19 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="AI Assistant Bot")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--start", action="store_true", help="Start the bot")
+    group.add_argument("--restart", action="store_true", help="Restart the bot")
+    group.add_argument("--stop", action="store_true", help="Stop the bot")
+    group.add_argument("--status", action="store_true", help="Show bot status")
+    args = parser.parse_args()
+
+    if args.start or args.restart or args.stop or args.status:
+        from src.bot_manager import handle_command
+
+        handle_command(args)
+    else:
+        asyncio.run(main())

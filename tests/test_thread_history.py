@@ -1,6 +1,6 @@
 """ThreadHistoryService のテスト (Issue #97).
 
-仕様: docs/specs/f8-thread-support.md
+仕様: docs/specs/features/thread-support.md
 """
 
 from __future__ import annotations
@@ -28,10 +28,10 @@ def service(slack_client: AsyncMock) -> ThreadHistoryService:
     )
 
 
-async def test_ac1_fetch_thread_messages_from_slack_api(
+async def test_fetch_thread_messages_from_slack_api(
     service: ThreadHistoryService, slack_client: AsyncMock
 ) -> None:
-    """AC1: Slack API からスレッドメッセージを取得できる."""
+    """Slack API からスレッドメッセージを取得できる."""
     slack_client.conversations_replies.return_value = {
         "messages": [
             {"user": "U1", "text": "hello", "ts": "1000.0"},
@@ -53,10 +53,10 @@ async def test_ac1_fetch_thread_messages_from_slack_api(
     )
 
 
-async def test_ac2_thread_history_respects_limit(
+async def test_thread_history_respects_limit(
     slack_client: AsyncMock,
 ) -> None:
-    """AC2: limit 設定に従って件数が制限される."""
+    """limit 設定に従って件数が制限される."""
     service = ThreadHistoryService(
         slack_client=slack_client,
         bot_user_id=BOT_USER_ID,
@@ -82,10 +82,10 @@ async def test_ac2_thread_history_respects_limit(
     assert "msg4" in result[1].content
 
 
-async def test_ac3_bot_messages_mapped_to_assistant_role(
+async def test_bot_messages_mapped_to_assistant_role(
     service: ThreadHistoryService, slack_client: AsyncMock
 ) -> None:
-    """AC3: ボットのメッセージは assistant ロール、他は user ロール."""
+    """ボットのメッセージは assistant ロール、他は user ロール."""
     slack_client.conversations_replies.return_value = {
         "messages": [
             {"user": "U1", "text": "質問", "ts": "1000.0"},
@@ -107,10 +107,10 @@ async def test_ac3_bot_messages_mapped_to_assistant_role(
     assert "<@U2>:" in result[2].content
 
 
-async def test_ac5_returns_none_on_api_failure(
+async def test_returns_none_on_api_failure(
     service: ThreadHistoryService, slack_client: AsyncMock
 ) -> None:
-    """AC5: Slack API 失敗時に None を返す（フォールバック用）."""
+    """Slack API 失敗時に None を返す（フォールバック用）."""
     slack_client.conversations_replies.side_effect = Exception("API error")
 
     result = await service.fetch_thread_messages(
