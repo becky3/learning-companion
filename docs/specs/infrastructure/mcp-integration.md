@@ -154,5 +154,5 @@ flowchart TB
 
 ## 関連ドキュメント
 
-- [RAG ナレッジ](rag-knowledge.md) — MCP サーバーとして動作する RAG 基盤
+- [RAG ナレッジ](rag-knowledge.md) — RAG 基盤（外部リポジトリに移行済み、MCP サーバーとして接続）
 - [チャット応答](../features/chat-response.md) — ツール呼び出しループを含むチャット応答仕様
