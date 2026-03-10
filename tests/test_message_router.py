@@ -7,8 +7,14 @@ from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
 from src.llm.base import Message
+from src.mcp_bridge.client_manager import MCPToolNotFoundError
 from src.messaging.port import IncomingMessage, MessagingPort
-from src.messaging.router import MessageRouter, _build_status_message, _format_uptime
+from src.messaging.router import (
+    MessageRouter,
+    _build_status_message,
+    _format_uptime,
+    _parse_rag_command,
+)
 
 
 # --- MockAdapter ---
@@ -277,3 +283,127 @@ async def test_topic_error_handling() -> None:
 
     assert len(adapter.sent_messages) == 1
     assert "エラー" in adapter.sent_messages[0][0]
+
+
+# --- _parse_rag_command テスト ---
+
+
+class TestParseRagCommand:
+    """_parse_rag_command のユニットテスト."""
+
+    def test_empty_input(self) -> None:
+        """トークンが1つだけなら空タプルを返す."""
+        assert _parse_rag_command("rag") == ("", "", "", "")
+
+    def test_subcommand_only(self) -> None:
+        """サブコマンドのみ."""
+        sub, url, pat, raw = _parse_rag_command("rag status")
+        assert sub == "status"
+        assert url == ""
+
+    def test_valid_url(self) -> None:
+        """有効な URL が正しくパースされる."""
+        sub, url, pat, raw = _parse_rag_command("rag crawl https://example.com/docs")
+        assert sub == "crawl"
+        assert url == "https://example.com/docs"
+
+    def test_invalid_url_no_netloc(self) -> None:
+        """netloc が無い URL は無効として扱う."""
+        sub, url, pat, raw = _parse_rag_command("rag add not-a-url")
+        assert sub == "add"
+        assert url == ""
+        assert raw == "not-a-url"
+
+    def test_slack_url_format(self) -> None:
+        """Slack の <URL|表示名> 形式が正しく処理される."""
+        sub, url, pat, raw = _parse_rag_command(
+            "rag crawl <https://example.com|example.com>"
+        )
+        assert url == "https://example.com"
+
+    def test_pattern_argument(self) -> None:
+        """パターン引数が取得できる."""
+        sub, url, pat, raw = _parse_rag_command(
+            "rag crawl https://example.com/docs .*\\.html"
+        )
+        assert pat == ".*\\.html"
+
+
+# --- rag コマンドルーティングテスト ---
+
+
+async def test_rag_status_command() -> None:
+    """rag status コマンドで rag_stats ツールが呼ばれる."""
+    mcp_manager = AsyncMock()
+    mcp_manager.call_tool.return_value = "総チャンク数: 100"
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag status"))
+
+    assert len(adapter.sent_messages) == 1
+    assert "総チャンク数: 100" in adapter.sent_messages[0][0]
+    mcp_manager.call_tool.assert_called_once_with("rag_stats", {})
+
+
+async def test_rag_add_command() -> None:
+    """rag add コマンドで rag_add ツールが呼ばれる."""
+    mcp_manager = AsyncMock()
+    mcp_manager.call_tool.return_value = "ページを取り込みました"
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag add https://example.com/page"))
+
+    assert len(adapter.sent_messages) == 1
+    assert "ページを取り込みました" in adapter.sent_messages[0][0]
+    mcp_manager.call_tool.assert_called_once_with(
+        "rag_add", {"url": "https://example.com/page"}
+    )
+
+
+async def test_rag_crawl_command() -> None:
+    """rag crawl コマンドで rag_crawl ツールが呼ばれる."""
+    mcp_manager = AsyncMock()
+    mcp_manager.call_tool.return_value = "完了: 5ページ / 20チャンク / エラー: 0件"
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag crawl https://example.com/docs"))
+
+    assert len(adapter.sent_messages) == 2  # start message + result
+    mcp_manager.call_tool.assert_called_once_with(
+        "rag_crawl", {"url": "https://example.com/docs", "pattern": ""}
+    )
+
+
+async def test_rag_unknown_subcommand_shows_help() -> None:
+    """rag の不明なサブコマンドでヘルプが表示される."""
+    mcp_manager = AsyncMock()
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag"))
+
+    assert len(adapter.sent_messages) == 1
+    assert "使用方法" in adapter.sent_messages[0][0]
+
+
+async def test_rag_tool_not_found() -> None:
+    """MCP ツールが見つからない場合のエラーハンドリング."""
+    mcp_manager = AsyncMock()
+    mcp_manager.call_tool.side_effect = MCPToolNotFoundError("rag_stats")
+    adapter, router = _make_router(mcp_manager=mcp_manager)
+
+    await router.process_message(_make_msg("rag status"))
+
+    assert len(adapter.sent_messages) == 1
+    assert "利用できません" in adapter.sent_messages[0][0]
+
+
+async def test_rag_without_mcp_falls_through_to_chat() -> None:
+    """MCP マネージャーが無い場合は rag がチャットにフォールスルーする."""
+    chat_service = AsyncMock()
+    chat_service.respond.return_value = "チャット応答"
+    adapter, router = _make_router(chat_service=chat_service, mcp_manager=None)
+
+    await router.process_message(_make_msg("rag status"))
+
+    assert len(adapter.sent_messages) == 1
+    chat_service.respond.assert_called_once()
