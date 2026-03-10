@@ -49,6 +49,7 @@ AI Assistantは、Slack上で動作するAIアシスタントである。
 | `PROFILER_LLM_PROVIDER` | UserProfiler | local | ユーザー情報抽出 |
 | `TOPIC_LLM_PROVIDER` | TopicRecommender | local | トピック提案 |
 | `SUMMARIZER_LLM_PROVIDER` | Summarizer | local | 記事要約 |
+
 各設定には `"local"` または `"online"` を指定する。
 `"online"` の場合、`ONLINE_LLM_PROVIDER` の設定（`"openai"` or `"anthropic"`）が使用される。
 
