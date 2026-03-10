@@ -59,7 +59,7 @@ def _parse_rag_command(text: str) -> tuple[str, str, str, str]:
             url_token = url_token.split("|")[0]
         raw_url_token = url_token
         parsed_url = urlparse(url_token)
-        if parsed_url.netloc:
+        if parsed_url.scheme in ("http", "https") and parsed_url.netloc:
             url = url_token
 
     if len(tokens) >= 4:

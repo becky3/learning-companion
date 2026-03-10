@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
-import pytest
-
 from src.llm.base import Message
 from src.mcp_bridge.client_manager import MCPToolNotFoundError
 from src.messaging.port import IncomingMessage, MessagingPort
