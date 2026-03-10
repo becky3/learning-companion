@@ -213,20 +213,82 @@ async def test_graceful_degradation_on_connection_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_http_transport_skipped() -> None:
-    """HTTP トランスポートが指定された場合、warningログを出してスキップすること."""
+async def test_http_transport_connects_and_lists_tools() -> None:
+    """HTTP トランスポートでMCPサーバーに接続し、ツール一覧を取得できること."""
+    manager = MCPClientManager()
+
+    mock_session = _make_mock_session()
+
+    with (
+        patch("src.mcp_bridge.client_manager.streamable_http_client") as mock_http,
+        patch("src.mcp_bridge.client_manager.ClientSession", return_value=mock_session),
+    ):
+        # streamable_http_client は (read, write, get_session_id) の3タプルを返す
+        mock_transport = AsyncMock()
+        mock_transport.__aenter__ = AsyncMock(
+            return_value=(AsyncMock(), AsyncMock(), AsyncMock())
+        )
+        mock_transport.__aexit__ = AsyncMock(return_value=False)
+        mock_http.return_value = mock_transport
+
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        config = MCPServerConfig(
+            name="test_http_server",
+            transport="http",
+            url="http://127.0.0.1:8081/mcp",
+        )
+        await manager.initialize([config])
+
+    tools = await manager.get_available_tools()
+    assert len(tools) == 1
+    assert tools[0].name == "get_weather"
+    assert manager._tool_to_server["get_weather"] == "test_http_server"
+
+    mock_http.assert_called_once_with("http://127.0.0.1:8081/mcp")
+
+    await manager.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_http_transport_missing_url_logs_error() -> None:
+    """HTTP トランスポートで url 未設定の場合、エラーログを出してスキップすること."""
+    manager = MCPClientManager()
+
+    with patch("src.mcp_bridge.client_manager.logger") as mock_logger:
+        config = MCPServerConfig(
+            name="no_url_server",
+            transport="http",
+        )
+        await manager.initialize([config])
+
+    mock_logger.exception.assert_called_once()
+    assert "no_url_server" in str(mock_logger.exception.call_args)
+
+    tools = await manager.get_available_tools()
+    assert tools == []
+
+    await manager.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_unsupported_transport_skipped() -> None:
+    """未対応トランスポートが指定された場合、warningログを出してスキップすること."""
     manager = MCPClientManager()
 
     with patch("src.mcp_bridge.client_manager.logger") as mock_logger:
         config = MCPServerConfig(
             name="remote_server",
-            transport="http",
-            url="http://localhost:8001/mcp",
+            transport="grpc",
+            url="grpc://localhost:50051",
         )
         await manager.initialize([config])
 
     mock_logger.warning.assert_called_once()
-    assert "http" in str(mock_logger.warning.call_args)
+    assert "grpc" in str(mock_logger.warning.call_args)
 
     tools = await manager.get_available_tools()
     assert tools == []
+
+    await manager.cleanup()

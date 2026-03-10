@@ -13,6 +13,7 @@ from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.client.streamable_http import streamable_http_client
 
 from src.llm.base import ToolDefinition
 
@@ -62,17 +63,22 @@ class MCPClientManager:
 
         各サーバーへの接続を試み、失敗したサーバーはスキップしてログ出力する。
         """
+        _supported_transports = ("stdio", "http")
         for config in server_configs:
-            if config.transport != "stdio":
+            if config.transport not in _supported_transports:
                 logger.warning(
-                    "MCPサーバー '%s': transport '%s' は未対応です（stdioのみサポート）。スキップします。",
+                    "MCPサーバー '%s': transport '%s' は未対応です（%s をサポート）。スキップします。",
                     config.name,
                     config.transport,
+                    ", ".join(_supported_transports),
                 )
                 continue
 
             try:
-                await self._connect_stdio_server(config)
+                if config.transport == "http":
+                    await self._connect_http_server(config)
+                else:
+                    await self._connect_stdio_server(config)
                 if config.system_instruction:
                     self._system_instructions.append(config.system_instruction)
                 if config.response_instruction:
@@ -101,11 +107,32 @@ class MCPClientManager:
         session = await self._exit_stack.enter_async_context(
             ClientSession(read_stream, write_stream)
         )
+        await self._initialize_session(config, session)
+
+    async def _connect_http_server(self, config: MCPServerConfig) -> None:
+        """HTTP（streamable-http）トランスポートでMCPサーバーに接続する."""
+        if not config.url:
+            raise ValueError(
+                f"MCPサーバー '{config.name}': HTTP トランスポートには url の設定が必要です。"
+            )
+
+        http_transport = await self._exit_stack.enter_async_context(
+            streamable_http_client(config.url)
+        )
+        read_stream, write_stream, _ = http_transport
+        session = await self._exit_stack.enter_async_context(
+            ClientSession(read_stream, write_stream)
+        )
+        await self._initialize_session(config, session)
+
+    async def _initialize_session(
+        self, config: MCPServerConfig, session: ClientSession
+    ) -> None:
+        """セッションを初期化し、ツール一覧を登録する."""
         await session.initialize()
 
         self._sessions[config.name] = session
 
-        # ツール一覧を取得
         response = await session.list_tools()
         for tool in response.tools:
             td = ToolDefinition(
